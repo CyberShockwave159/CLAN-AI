@@ -1,0 +1,56 @@
+# Changelog
+
+## [Unreleased]
+
+### ✨ New Features
+
+**Custom System Prompt Templates**
+- Added persistent system prompt templates that can be created, edited, and deleted from Settings
+- Templates are stored locally and survive app restarts
+- Click a template chip to apply it to the current thread and global default
+- Existing built-in presets (Default, Code Architect, Concise Expert, Creative Writer) are loaded as default templates
+- Conversations remember their system prompt independently — switching between threads loads each thread's saved prompt
+
+**Server Connection Profiles**
+- Added multi-profile server configuration for switching between networks (e.g., local LAN vs cellular/public IP)
+- Profiles store `baseUrl`, `apiKey`, and `protocol` — model, hyperparameters, and system prompts remain global
+- Profile selector with dropdown and clickable chip list in Settings
+- Long-press a profile chip to edit; × to delete
+- Tap a chip or use the dropdown to switch profiles (auto-tests the connection)
+- Existing config automatically migrates to a "Default" profile on first launch
+
+### 🔧 Changes
+
+**Generation Parameters**
+- Default `maxTokens` increased from 2048 to 4096
+- `maxTokens = 0` now means unlimited (no cap on generation length)
+- `contextSize` max increased to 1,000,000 tokens (was 32,768)
+- Max Generation Tokens UI changed to a text input + slider (range 0–8192)
+- Context Window UI changed to a text input with suffix "tokens"
+- Best-effort context fit: when a model reports its context length, the app automatically caps `contextSize` to fit (reserves tokens for output)
+- If model context info is unavailable, the user's requested value is used as-is
+- Existing context limit error handling (`ContextLimitExceededException`) catches overflows gracefully
+
+### 🏗 Architecture
+
+**New Files**
+- `lib/data/models/system_prompt_template.dart` — Template model for saved system prompts
+- `lib/data/models/server_profile.dart` — Profile model storing baseUrl, apiKey, protocol
+- `lib/data/repositories/system_prompt_templates_repository.dart` — CRUD for templates (SharedPreferences)
+
+**Modified Files**
+- `lib/data/datasources/local_storage.dart` — Added template and profile persistence methods
+- `lib/data/repositories/server_repository.dart` — Added profile CRUD; config loading/saving is now profile-aware
+- `lib/data/repositories/chat_repository.dart` — Added `modelContextLength` param for best-effort context fit
+- `lib/data/models/generation_params.dart` — Updated defaults, 0=unlimited maxTokens, toOpenAiPayload omits max_tokens when 0
+- `lib/data/datasources/llama_api_service.dart` — Added context fit logic; adjusted params before sending
+- `lib/ui/features/settings/view_models/settings_view_model.dart` — Added templates list, profile management, `getSelectedModelContextLength()`
+- `lib/ui/features/settings/views/settings_screen.dart` — Rewrote with Server Profiles section, saved templates chips, add/edit/delete dialogs
+- `lib/ui/features/settings/views/parameter_tuning_sheet.dart` — New input UI for max tokens and context window
+- `lib/ui/features/chat/view_models/chat_view_model.dart` — Added `updateActiveThreadSystemPrompt()`, `modelContextLength` param to streaming methods
+- `lib/ui/features/chat/views/chat_screen.dart` — Passes model context length to all streaming operations
+- `lib/ui/features/drawer/views/chat_drawer.dart` — New chats inherit the current global system prompt
+
+### 🐛 Bug Fixes
+- Fixed `DropdownButtonFormField` deprecated `value` parameter (changed to `initialValue`)
+- Fixed `tryRead` non-existent method (changed to `read`)

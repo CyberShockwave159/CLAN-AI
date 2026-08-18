@@ -1,0 +1,801 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:clan_ai/core/constants/app_theme.dart';
+import 'package:clan_ai/data/models/server_config.dart';
+import 'package:clan_ai/data/models/server_profile.dart';
+import 'package:clan_ai/data/models/system_prompt_template.dart';
+import 'package:clan_ai/ui/features/chat/view_models/chat_view_model.dart';
+import 'package:clan_ai/ui/features/settings/view_models/settings_view_model.dart';
+import 'package:clan_ai/ui/features/settings/views/parameter_tuning_sheet.dart';
+import 'package:clan_ai/ui/shared/connection_badge.dart';
+
+class SettingsScreen extends StatefulWidget {
+  const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  late TextEditingController _urlController;
+  late TextEditingController _apiKeyController;
+  late TextEditingController _systemPromptController;
+  bool _obscureApiKey = true;
+
+  @override
+  void initState() {
+    super.initState();
+    final settingsVM = context.read<SettingsViewModel>();
+    _urlController = TextEditingController(text: settingsVM.config.baseUrl);
+    _apiKeyController = TextEditingController(text: settingsVM.config.apiKey ?? '');
+
+    final chatVM = context.read<ChatViewModel>();
+    String initialPrompt;
+    if (chatVM.activeThread != null) {
+      final threadPrompt = chatVM.activeThread!.systemPrompt;
+      initialPrompt = threadPrompt ?? settingsVM.config.systemPrompt ?? 'You are a helpful, brilliant, and honest AI assistant.';
+    } else {
+      initialPrompt = settingsVM.config.systemPrompt ?? 'You are a helpful, brilliant, and honest AI assistant.';
+    }
+    _systemPromptController = TextEditingController(text: initialPrompt);
+  }
+
+  void _applySystemPromptTemplate(String template) {
+    _systemPromptController.text = template;
+    context.read<SettingsViewModel>().updateSystemPrompt(template);
+  }
+
+  void _openParameterSheet(BuildContext context, SettingsViewModel vm) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => ParameterTuningSheet(
+        initialParams: vm.config.defaultParams,
+        onSave: (newParams) => vm.updateDefaultParams(newParams),
+      ),
+    );
+  }
+
+  void _showAddTemplateDialog() {
+    final nameController = TextEditingController();
+    final contentController = TextEditingController();
+    final settingsVM = context.read<SettingsViewModel>();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('New System Prompt Template'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Template Name',
+                  hintText: 'e.g. Academic Researcher',
+                ),
+                autofocus: true,
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: contentController,
+                maxLines: 6,
+                decoration: const InputDecoration(
+                  labelText: 'System Prompt',
+                  hintText: 'Enter the system instructions...',
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final name = nameController.text.trim();
+              final content = contentController.text.trim();
+              if (name.isEmpty || content.isEmpty) return;
+              settingsVM.addTemplate(name, content);
+              Navigator.of(ctx).pop();
+            },
+            child: const Text('Create'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _deleteTemplate(int index) {
+    final settingsVM = context.read<SettingsViewModel>();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Template?'),
+        content: Text(
+            'Are you sure you want to delete "${settingsVM.templates[index].name}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppTheme.statusError),
+            onPressed: () {
+              settingsVM.deleteTemplate(index);
+              Navigator.of(ctx).pop();
+            },
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _applyTemplateToPrompt(SystemPromptTemplate template) {
+    _systemPromptController.text = template.content;
+    context.read<SettingsViewModel>().updateSystemPrompt(template.content);
+    final chatVM = context.read<ChatViewModel>();
+    if (chatVM.activeThread != null) {
+      chatVM.updateActiveThreadSystemPrompt(template.content);
+    }
+  }
+
+  void _showCreateProfileDialog() {
+    final nameController = TextEditingController(text: 'New Profile');
+    final urlController = TextEditingController(text: context.read<SettingsViewModel>().config.baseUrl);
+    final apiKeyController = TextEditingController(text: context.read<SettingsViewModel>().config.apiKey ?? '');
+    final settingsVM = context.read<SettingsViewModel>();
+    ApiProtocol selectedProtocol = settingsVM.config.protocol;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          title: const Text('Create Server Profile'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Profile Name',
+                    hintText: 'e.g. Home WiFi, Office, Cellular',
+                  ),
+                  autofocus: true,
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: urlController,
+                  decoration: const InputDecoration(
+                    labelText: 'Server Base URL',
+                    hintText: 'http://192.168.x.x:8080',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: apiKeyController,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: 'API Key (Optional)',
+                    hintText: 'sk-...',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SegmentedButton<ApiProtocol>(
+                  segments: const [
+                    ButtonSegment(value: ApiProtocol.openAi, label: Text('OpenAI')),
+                    ButtonSegment(value: ApiProtocol.llamaNative, label: Text('llama.cpp')),
+                  ],
+                  selected: {selectedProtocol},
+                  onSelectionChanged: (selected) {
+                    setState(() => selectedProtocol = selected.first);
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final name = nameController.text.trim();
+                final baseUrl = urlController.text.trim();
+                if (name.isEmpty || baseUrl.isEmpty) return;
+                settingsVM.createProfile(
+                  name: name,
+                  baseUrl: baseUrl,
+                  apiKey: apiKeyController.text.trim().isEmpty ? null : apiKeyController.text.trim(),
+                  protocol: selectedProtocol,
+                );
+                Navigator.of(ctx).pop();
+              },
+              child: const Text('Create'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showEditProfileDialog(ServerProfile profile) {
+    final nameController = TextEditingController(text: profile.name);
+    final urlController = TextEditingController(text: profile.baseUrl);
+    final apiKeyController = TextEditingController(text: profile.apiKey ?? '');
+    final settingsVM = context.read<SettingsViewModel>();
+    ApiProtocol selectedProtocol = profile.protocol;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          title: const Text('Edit Server Profile'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(labelText: 'Profile Name'),
+                  autofocus: true,
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: urlController,
+                  decoration: const InputDecoration(labelText: 'Server Base URL'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: apiKeyController,
+                  obscureText: true,
+                  decoration: const InputDecoration(labelText: 'API Key (Optional)'),
+                ),
+                const SizedBox(height: 12),
+                SegmentedButton<ApiProtocol>(
+                  segments: const [
+                    ButtonSegment(value: ApiProtocol.openAi, label: Text('OpenAI')),
+                    ButtonSegment(value: ApiProtocol.llamaNative, label: Text('llama.cpp')),
+                  ],
+                  selected: {selectedProtocol},
+                  onSelectionChanged: (selected) {
+                    setState(() => selectedProtocol = selected.first);
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final name = nameController.text.trim();
+                final baseUrl = urlController.text.trim();
+                if (name.isEmpty || baseUrl.isEmpty) return;
+                final updatedProfile = profile.copyWith(
+                  name: name,
+                  baseUrl: baseUrl,
+                  apiKey: apiKeyController.text.trim().isEmpty ? null : apiKeyController.text.trim(),
+                  protocol: selectedProtocol,
+                );
+                settingsVM.updateProfile(updatedProfile);
+                Navigator.of(ctx).pop();
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showDeleteProfileDialog(String profileId, String profileName) {
+    final settingsVM = context.read<SettingsViewModel>();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Profile?'),
+        content: Text('Are you sure you want to delete "$profileName"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppTheme.statusError),
+            onPressed: () {
+              settingsVM.deleteProfile(profileId);
+              Navigator.of(ctx).pop();
+            },
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final settingsVM = context.watch<SettingsViewModel>();
+    final chatVM = context.watch<ChatViewModel>();
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Server Settings', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 18)),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: ConnectionBadge(
+              status: settingsVM.config.healthStatus,
+              latencyMs: settingsVM.config.latencyMs,
+              onTap: () => settingsVM.testConnection(),
+            ),
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          // Profile Selector
+          _buildSectionHeader('Server Profiles', Icons.storage_rounded),
+          const SizedBox(height: 10),
+
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  initialValue: settingsVM.activeProfileId,
+                  decoration: InputDecoration(
+                    labelText: 'Active Profile',
+                    prefixIcon: const Icon(Icons.fingerprint_rounded, size: 20),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                  items: settingsVM.profiles.map((profile) {
+                    return DropdownMenuItem(
+                      value: profile.id,
+                      child: Text(
+                        profile.name,
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (val) {
+                    if (val != null) {
+                      settingsVM.switchProfile(val);
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: const Icon(Icons.add_rounded),
+                tooltip: 'New Profile',
+                onPressed: _showCreateProfileDialog,
+              ),
+            ],
+          ),
+
+          if (settingsVM.profiles.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                'No profiles yet. Click + to create one.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                ),
+              ),
+            )
+          else
+            SizedBox(
+              height: 44,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: settingsVM.profiles.length,
+                itemBuilder: (context, profileIndex) {
+                  final profile = settingsVM.profiles[profileIndex];
+                  final isActive = profile.id == settingsVM.activeProfileId;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: GestureDetector(
+                      onTap: () => settingsVM.switchProfile(profile.id),
+                      onLongPress: () => _showEditProfileDialog(profile),
+                      child: Chip(
+                        avatar: Icon(
+                          Icons.fingerprint_rounded,
+                          size: 16,
+                          color: isActive ? AppTheme.accentPrimary : (isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted),
+                        ),
+                        label: Text(
+                          profile.name,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                          ),
+                        ),
+                        onDeleted: () => _showDeleteProfileDialog(profile.id, profile.name),
+                        deleteIconColor: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          side: BorderSide(
+                            color: isActive
+                                ? AppTheme.accentPrimary.withValues(alpha: 0.5)
+                                : (isDark ? AppTheme.darkBorder : AppTheme.lightBorder),
+                            width: isActive ? 1.5 : 1,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+
+          const SizedBox(height: 24),
+
+          // Section 1: Server Connection Configuration
+          _buildSectionHeader('Server Connection', Icons.dns_rounded),
+          const SizedBox(height: 10),
+
+          // Server URL Input
+          TextField(
+            controller: _urlController,
+            decoration: InputDecoration(
+              labelText: 'Server Base URL',
+              hintText: 'http://127.0.0.1:8080 or http://192.168.1.100:8080',
+              prefixIcon: const Icon(Icons.link_rounded),
+              suffixIcon: IconButton(
+                icon: const Icon(Icons.check_rounded),
+                onPressed: () {
+                  settingsVM.updateBaseUrl(_urlController.text.trim());
+                  settingsVM.testConnection();
+                },
+                tooltip: 'Apply & Test',
+              ),
+            ),
+            onSubmitted: (val) {
+              settingsVM.updateBaseUrl(val.trim());
+              settingsVM.testConnection();
+            },
+          ),
+
+          const SizedBox(height: 12),
+
+          // API Key Input
+          TextField(
+            controller: _apiKeyController,
+            obscureText: _obscureApiKey,
+            decoration: InputDecoration(
+              labelText: 'API Authentication Key (Optional)',
+              hintText: 'sk-llama-cpp-key...',
+              prefixIcon: const Icon(Icons.key_rounded),
+              suffixIcon: IconButton(
+                icon: Icon(_obscureApiKey ? Icons.visibility_off_rounded : Icons.visibility_rounded),
+                onPressed: () => setState(() => _obscureApiKey = !_obscureApiKey),
+              ),
+            ),
+            onChanged: (val) => settingsVM.updateApiKey(val.trim().isEmpty ? null : val.trim()),
+          ),
+
+          const SizedBox(height: 12),
+
+          // Protocol Selector
+          Row(
+            children: [
+              Expanded(
+                child: SegmentedButton<ApiProtocol>(
+                  segments: const [
+                    ButtonSegment(
+                      value: ApiProtocol.openAi,
+                      label: Text('OpenAI API'),
+                      icon: Icon(Icons.api_rounded, size: 16),
+                    ),
+                    ButtonSegment(
+                      value: ApiProtocol.llamaNative,
+                      label: Text('llama.cpp Native'),
+                      icon: Icon(Icons.memory_rounded, size: 16),
+                    ),
+                  ],
+                  selected: {settingsVM.config.protocol},
+                  onSelectionChanged: (selected) {
+                    settingsVM.updateProtocol(selected.first);
+                  },
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 14),
+
+          // Test Connection Button & Error Banner
+          FilledButton.icon(
+            icon: settingsVM.isTestingConnection
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Icon(Icons.network_check_rounded, size: 18),
+            label: Text(
+              settingsVM.isTestingConnection ? 'Testing Server...' : 'Test Connection & Ping',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: settingsVM.isTestingConnection
+                ? null
+                : () {
+                    settingsVM.updateBaseUrl(_urlController.text.trim());
+                    settingsVM.testConnection();
+                  },
+          ),
+
+          if (settingsVM.testConnectionError != null)
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppTheme.statusError.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppTheme.statusError.withValues(alpha: 0.3)),
+              ),
+              child: Text(
+                'Connection Error: ${settingsVM.testConnectionError}',
+                style: const TextStyle(color: AppTheme.statusError, fontSize: 12.5),
+              ),
+            ),
+
+          const SizedBox(height: 24),
+
+          // Section 2: Model Selection & Context
+          _buildSectionHeader('Model Selection', Icons.smart_toy_rounded),
+          const SizedBox(height: 10),
+
+          if (settingsVM.availableModels.isNotEmpty)
+            DropdownButtonFormField<String>(
+              initialValue: settingsVM.config.selectedModel ?? settingsVM.availableModels.first.id,
+              decoration: const InputDecoration(
+                labelText: 'Active Model',
+                prefixIcon: Icon(Icons.model_training_rounded),
+              ),
+              items: settingsVM.availableModels.map((m) {
+                return DropdownMenuItem(
+                  value: m.id,
+                  child: Text(m.name, overflow: TextOverflow.ellipsis),
+                );
+              }).toList(),
+              onChanged: (val) {
+                if (val != null) {
+                  settingsVM.updateSelectedModel(val);
+                }
+              },
+            )
+          else
+            Text(
+              'No models fetched yet. Click "Test Connection" while the server is running to query available models.',
+              style: TextStyle(
+                color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                fontSize: 13,
+              ),
+            ),
+
+          const SizedBox(height: 24),
+
+          // Section 3: System Prompt Configuration
+          _buildSectionHeader('System Prompt Customization', Icons.psychology_rounded),
+          const SizedBox(height: 10),
+
+          // Active thread indicator
+          if (chatVM.activeThread != null)
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: isDark ? AppTheme.darkSurfaceVariant : AppTheme.lightSurfaceVariant,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.chat_bubble_outline_rounded, size: 16, color: AppTheme.accentPrimary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      chatVM.activeThread!.systemPrompt != null
+                          ? 'Editing prompt for: ${chatVM.activeThread!.title}'
+                          : 'Editing global default prompt',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          TextField(
+            controller: _systemPromptController,
+            maxLines: 4,
+            minLines: 2,
+            decoration: const InputDecoration(
+              hintText: 'Enter global system instructions...',
+            ),
+            onChanged: (val) {
+              final trimmed = val.trim();
+              settingsVM.updateSystemPrompt(trimmed);
+
+              // If active thread has a system prompt, update the thread too
+              if (chatVM.activeThread != null && chatVM.activeThread!.systemPrompt != null) {
+                chatVM.updateActiveThreadSystemPrompt(trimmed);
+              }
+            },
+          ),
+
+          const SizedBox(height: 8),
+
+          // Saved Templates Section
+          Row(
+            children: [
+              Text(
+                'Saved Templates',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                ),
+              ),
+              const Spacer(),
+              TextButton.icon(
+                onPressed: _showAddTemplateDialog,
+                icon: const Icon(Icons.add_rounded, size: 16),
+                label: const Text('New'),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 6),
+
+          if (settingsVM.templates.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                'No saved templates yet. Click "New" to create one.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                ),
+              ),
+            )
+          else
+            SizedBox(
+              height: 44,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: settingsVM.templates.length,
+                itemBuilder: (context, templateIndex) {
+                  final template = settingsVM.templates[templateIndex];
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: GestureDetector(
+                      onTap: () => _applyTemplateToPrompt(template),
+                      child: Chip(
+                        avatar: Icon(Icons.psychology_rounded, size: 16, color: AppTheme.accentPrimary),
+                        label: Text(template.name, style: const TextStyle(fontSize: 12)),
+                        onDeleted: () => _deleteTemplate(templateIndex),
+                        deleteIconColor: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          side: BorderSide(
+                            color: AppTheme.accentPrimary.withValues(alpha: 0.3),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+
+          // Preset Chips (inline with delete support for custom, or just display)
+          const SizedBox(height: 8),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildTemplateChip('Default', 'You are a helpful, brilliant, and honest AI assistant.'),
+                _buildTemplateChip('Code Architect', 'You are an elite software architect and senior engineer. Write clean, modular, and optimized code with complete explanations.'),
+                _buildTemplateChip('Concise Expert', 'You are a concise expert. Answer directly and precisely without conversational filler.'),
+                _buildTemplateChip('Creative Writer', 'You are a creative writer with rich vocabulary and engaging prose.'),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // Section 4: Hyperparameters
+          _buildSectionHeader('Generation Sampling Defaults', Icons.tune_rounded),
+          const SizedBox(height: 10),
+
+          OutlinedButton.icon(
+            icon: const Icon(Icons.tune_rounded),
+            label: const Text('Configure Sampling Parameters (Temp, Top-P, Top-K, Context)'),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () => _openParameterSheet(context, settingsVM),
+          ),
+
+          const SizedBox(height: 24),
+
+          // Section 5: Safety & Convenience
+          _buildSectionHeader('Safety & Convenience', Icons.security_rounded),
+          const SizedBox(height: 10),
+
+          SwitchListTile(
+            title: const Text('Confirm Message Deletion'),
+            subtitle: const Text('Show a confirmation dialog before deleting a message and all subsequent messages.'),
+            value: settingsVM.config.confirmDeleteMessage,
+            onChanged: (value) => settingsVM.toggleConfirmDeleteMessage(value),
+            contentPadding: EdgeInsets.zero,
+          ),
+
+          const SizedBox(height: 40),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title, IconData icon) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: AppTheme.accentPrimary),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+            letterSpacing: -0.2,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTemplateChip(String label, String template) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: ActionChip(
+        label: Text(label, style: const TextStyle(fontSize: 12)),
+        onPressed: () => _applySystemPromptTemplate(template),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _urlController.dispose();
+    _apiKeyController.dispose();
+    _systemPromptController.dispose();
+    super.dispose();
+  }
+}
