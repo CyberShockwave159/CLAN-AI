@@ -61,7 +61,4 @@ flutter run            # default platform; add -d <device-id> to target
 - **Health polling:** `SettingsViewModel` runs a 15s timer. Fallback chain: `/health` → `/props` → `/v1/models`.
 - **Error handling:** 6 exception types (`ContextLimitExceededException`, `ServerOOMException`, `HostUnreachableException`, `NetworkException`, `RequestCancelledException`, `SseParseException`) with `recoverySuggestion` fields. HTTP status codes map inline (400→context limit, 500→OOM).
 - **Android networking:** `127.0.0.1` in default `baseUrl` is device loopback. Use `10.0.2.2` for emulator or LAN IP for physical devices.
-- **Send on enter:** Input bar uses `TextInputAction.send` — Enter sends, Shift+Enter inserts a line break.
 - **SQLite schema version 3:** `threads` table includes `branch_from_thread_id`. Migrations are idempotent (check column existence before `ALTER TABLE`).
-- **maxTokens = 0** means unlimited in both OpenAI (omitted) and llama.cpp (`n_predict: 0`) payloads.
-- **Context fit:** When a model reports its context length, the API service automatically caps `contextSize` to fit. No user action needed.
