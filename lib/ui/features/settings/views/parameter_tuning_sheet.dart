@@ -25,6 +25,7 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
   late int _maxTokens;
   late int _contextSize;
   late TextEditingController _contextSizeController;
+  late TextEditingController _maxTokensController;
 
   @override
   void initState() {
@@ -36,11 +37,13 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
     _repeatPenalty = widget.initialParams.repeatPenalty;
     _maxTokens = widget.initialParams.maxTokens;
     _contextSize = widget.initialParams.contextSize;
+    _maxTokensController = TextEditingController(text: _maxTokens.toString());
     _contextSizeController = TextEditingController(text: _contextSize.toString());
   }
 
   @override
   void dispose() {
+    _maxTokensController.dispose();
     _contextSizeController.dispose();
     super.dispose();
   }
@@ -54,6 +57,7 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
       _repeatPenalty = 1.1;
       _maxTokens = 4096;
       _contextSize = 4096;
+      _maxTokensController.text = '4096';
       _contextSizeController.text = '4096';
     });
   }
@@ -66,13 +70,20 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
       parsedContext = parsed;
     }
 
+    // Parse max tokens from controller
+    int parsedMaxTokens = _maxTokens;
+    final parsedMax = int.tryParse(_maxTokensController.text.trim());
+    if (parsedMax != null && parsedMax >= 0 && parsedMax <= 8192) {
+      parsedMaxTokens = parsedMax;
+    }
+
     final updated = widget.initialParams.copyWith(
       temperature: _temperature,
       topP: _topP,
       topK: _topK,
       minP: _minP,
       repeatPenalty: _repeatPenalty,
-      maxTokens: _maxTokens,
+      maxTokens: parsedMaxTokens,
       contextSize: parsedContext,
     );
     widget.onSave(updated);
@@ -125,6 +136,28 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
                     child: const Text('Reset Defaults'),
                   ),
                 ],
+              ),
+
+              const SizedBox(height: 12),
+
+              // Max Tokens Input
+              _buildNumberInput(
+                title: 'Max Generation Tokens',
+                subtitle: 'Max tokens per response (0 = unlimited)',
+                controller: _maxTokensController,
+                value: _maxTokens,
+                min: 0,
+                max: 8192,
+                onChanged: (v) => setState(() => _maxTokens = v),
+              ),
+
+              // Context Window Size with custom input
+              _buildContextSizeInput(
+                title: 'Context Window (n_ctx)',
+                subtitle: 'Max tokens the model can process (up to 1,000,000)',
+                value: _contextSize,
+                controller: _contextSizeController,
+                onChanged: (v) => setState(() => _contextSize = v),
               ),
 
               const SizedBox(height: 12),
@@ -182,25 +215,6 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
                 max: 100,
                 displayValue: _topK.toString(),
                 onChanged: (v) => setState(() => _topK = v.round()),
-              ),
-
-              // Max Tokens Input
-              _buildNumberInput(
-                title: 'Max Generation Tokens',
-                subtitle: 'Max tokens per response (0 = unlimited)',
-                value: _maxTokens,
-                min: 0,
-                max: 8192,
-                onChanged: (v) => setState(() => _maxTokens = v),
-              ),
-
-              // Context Window Size with custom input
-              _buildContextSizeInput(
-                title: 'Context Window (n_ctx)',
-                subtitle: 'Max tokens the model can process (up to 1,000,000)',
-                value: _contextSize,
-                controller: _contextSizeController,
-                onChanged: (v) => setState(() => _contextSize = v),
               ),
 
               const SizedBox(height: 16),
@@ -287,13 +301,13 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
   Widget _buildNumberInput({
     required String title,
     required String subtitle,
+    required TextEditingController controller,
     required int value,
     required int min,
     required int max,
     required ValueChanged<int> onChanged,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final controller = TextEditingController(text: value.toString());
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),

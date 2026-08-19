@@ -231,8 +231,12 @@ class SettingsViewModel extends ChangeNotifier {
         _testConnectionError = null;
         // Fetch models
         _availableModels = await _serverRepository.fetchModels(_config.baseUrl, apiKey: _config.apiKey);
-        if (_availableModels.isNotEmpty && (_config.selectedModel == null || _config.selectedModel!.isEmpty)) {
-          _config = _config.copyWith(selectedModel: _availableModels.first.id);
+        if (_availableModels.isNotEmpty) {
+          if (_config.selectedModel == null || _config.selectedModel!.isEmpty) {
+            _config = _config.copyWith(selectedModel: _availableModels.first.id);
+          } else if (!_availableModels.any((m) => m.id == _config.selectedModel)) {
+            _config = _config.copyWith(selectedModel: _availableModels.first.id);
+          }
         }
       } else {
         _testConnectionError = pingRes.errorMessage ?? 'Server unreachable';

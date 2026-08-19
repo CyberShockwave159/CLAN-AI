@@ -49,3 +49,30 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# macOS ephemeral
+macos/Flutter/ephemeral/
+
+# Linux ephemeral
+linux/flutter/ephemeral/
+
+# Windows ephemeral
+windows/flutter/ephemeral/
+
+# iOS ephemeral (plugin symlinks and generated files)
+ios/Flutter/ephemeral/
+ios/Runner/GeneratedPluginRegistrant.*
+
+# macOS ephemeral (generated plugin swift package)
+macos/Flutter/ephemeral/
+macos/Runner/GeneratedPluginRegistrant.swift
+
+# Xcode user data
+*.xcuserdata
+
+# Android keystore
+*.jks
+*.keystore
+
+# VS Code (optional - uncomment to enable)
+# .vscode/
