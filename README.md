@@ -32,7 +32,7 @@ Frontier-class cross-platform llama.cpp client. A Flutter app that connects to a
 
 ```bash
 # Clone and fetch dependencies
-git clone https://github.com/cybershockwave159/CLAN-AI.git
+git clone https://github.com/CyberShockwave159/CLAN-AI.git
 cd clan_ai
 flutter pub get
 
