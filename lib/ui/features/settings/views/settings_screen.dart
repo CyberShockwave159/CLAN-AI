@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:clan_ai/core/constants/app_theme.dart';
+import 'package:clan_ai/data/models/app_mode.dart';
 import 'package:clan_ai/data/models/server_config.dart';
 import 'package:clan_ai/data/models/server_profile.dart';
 import 'package:clan_ai/data/models/system_prompt_template.dart';
@@ -64,48 +65,55 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('New System Prompt Template'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Template Name',
-                  hintText: 'e.g. Academic Researcher',
+      builder: (ctx) => WillPopScope(
+        onWillPop: () async {
+          nameController.dispose();
+          contentController.dispose();
+          return true;
+        },
+        child: AlertDialog(
+          title: const Text('New System Prompt Template'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Template Name',
+                    hintText: 'e.g. Academic Researcher',
+                  ),
+                  autofocus: true,
                 ),
-                autofocus: true,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: contentController,
-                maxLines: 6,
-                decoration: const InputDecoration(
-                  labelText: 'System Prompt',
-                  hintText: 'Enter the system instructions...',
+                const SizedBox(height: 12),
+                TextField(
+                  controller: contentController,
+                  maxLines: 6,
+                  decoration: const InputDecoration(
+                    labelText: 'System Prompt',
+                    hintText: 'Enter the system instructions...',
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final name = nameController.text.trim();
+                final content = contentController.text.trim();
+                if (name.isEmpty || content.isEmpty) return;
+                settingsVM.addTemplate(name, content);
+                Navigator.of(ctx).pop();
+              },
+              child: const Text('Create'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final name = nameController.text.trim();
-              final content = contentController.text.trim();
-              if (name.isEmpty || content.isEmpty) return;
-              settingsVM.addTemplate(name, content);
-              Navigator.of(ctx).pop();
-            },
-            child: const Text('Create'),
-          ),
-        ],
       ),
     );
   }
@@ -155,72 +163,80 @@ class _SettingsScreenState extends State<SettingsScreen> {
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setState) => AlertDialog(
-          title: const Text('Create Server Profile'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Profile Name',
-                    hintText: 'e.g. Home WiFi, Office, Cellular',
+        builder: (ctx, setState) => WillPopScope(
+          onWillPop: () async {
+            nameController.dispose();
+            urlController.dispose();
+            apiKeyController.dispose();
+            return true;
+          },
+          child: AlertDialog(
+            title: const Text('Create Server Profile'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Profile Name',
+                      hintText: 'e.g. Home WiFi, Office, Cellular',
+                    ),
+                    autofocus: true,
                   ),
-                  autofocus: true,
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: urlController,
-                  decoration: const InputDecoration(
-                    labelText: 'Server Base URL',
-                    hintText: 'http://192.168.x.x:8080',
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: urlController,
+                    decoration: const InputDecoration(
+                      labelText: 'Server Base URL',
+                      hintText: 'http://192.168.x.x:8080',
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: apiKeyController,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'API Key (Optional)',
-                    hintText: 'sk-...',
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: apiKeyController,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'API Key (Optional)',
+                      hintText: 'sk-...',
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                SegmentedButton<ApiProtocol>(
-                  segments: const [
-                    ButtonSegment(value: ApiProtocol.openAi, label: Text('OpenAI')),
-                    ButtonSegment(value: ApiProtocol.llamaNative, label: Text('llama.cpp')),
-                  ],
-                  selected: {selectedProtocol},
-                  onSelectionChanged: (selected) {
-                    setState(() => selectedProtocol = selected.first);
-                  },
-                ),
-              ],
+                  const SizedBox(height: 12),
+                  SegmentedButton<ApiProtocol>(
+                    segments: const [
+                      ButtonSegment(value: ApiProtocol.openAi, label: Text('OpenAI')),
+                      ButtonSegment(value: ApiProtocol.llamaNative, label: Text('llama.cpp')),
+                    ],
+                    selected: {selectedProtocol},
+                    onSelectionChanged: (selected) {
+                      setState(() => selectedProtocol = selected.first);
+                    },
+                  ),
+                ],
+              ),
             ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final name = nameController.text.trim();
+                  final baseUrl = urlController.text.trim();
+                  if (name.isEmpty || baseUrl.isEmpty) return;
+                  settingsVM.createProfile(
+                    name: name,
+                    baseUrl: baseUrl,
+                    apiKey: apiKeyController.text.trim().isEmpty ? null : apiKeyController.text.trim(),
+                    protocol: selectedProtocol,
+                  );
+                  Navigator.of(ctx).pop();
+                },
+                child: const Text('Create'),
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final name = nameController.text.trim();
-                final baseUrl = urlController.text.trim();
-                if (name.isEmpty || baseUrl.isEmpty) return;
-                settingsVM.createProfile(
-                  name: name,
-                  baseUrl: baseUrl,
-                  apiKey: apiKeyController.text.trim().isEmpty ? null : apiKeyController.text.trim(),
-                  protocol: selectedProtocol,
-                );
-                Navigator.of(ctx).pop();
-              },
-              child: const Text('Create'),
-            ),
-          ],
         ),
       ),
     );
@@ -236,64 +252,72 @@ class _SettingsScreenState extends State<SettingsScreen> {
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setState) => AlertDialog(
-          title: const Text('Edit Server Profile'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameController,
-                  decoration: const InputDecoration(labelText: 'Profile Name'),
-                  autofocus: true,
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: urlController,
-                  decoration: const InputDecoration(labelText: 'Server Base URL'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: apiKeyController,
-                  obscureText: true,
-                  decoration: const InputDecoration(labelText: 'API Key (Optional)'),
-                ),
-                const SizedBox(height: 12),
-                SegmentedButton<ApiProtocol>(
-                  segments: const [
-                    ButtonSegment(value: ApiProtocol.openAi, label: Text('OpenAI')),
-                    ButtonSegment(value: ApiProtocol.llamaNative, label: Text('llama.cpp')),
-                  ],
-                  selected: {selectedProtocol},
-                  onSelectionChanged: (selected) {
-                    setState(() => selectedProtocol = selected.first);
-                  },
-                ),
-              ],
+        builder: (ctx, setState) => WillPopScope(
+          onWillPop: () async {
+            nameController.dispose();
+            urlController.dispose();
+            apiKeyController.dispose();
+            return true;
+          },
+          child: AlertDialog(
+            title: const Text('Edit Server Profile'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(labelText: 'Profile Name'),
+                    autofocus: true,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: urlController,
+                    decoration: const InputDecoration(labelText: 'Server Base URL'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: apiKeyController,
+                    obscureText: true,
+                    decoration: const InputDecoration(labelText: 'API Key (Optional)'),
+                  ),
+                  const SizedBox(height: 12),
+                  SegmentedButton<ApiProtocol>(
+                    segments: const [
+                      ButtonSegment(value: ApiProtocol.openAi, label: Text('OpenAI')),
+                      ButtonSegment(value: ApiProtocol.llamaNative, label: Text('llama.cpp')),
+                    ],
+                    selected: {selectedProtocol},
+                    onSelectionChanged: (selected) {
+                      setState(() => selectedProtocol = selected.first);
+                    },
+                  ),
+                ],
+              ),
             ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final name = nameController.text.trim();
+                  final baseUrl = urlController.text.trim();
+                  if (name.isEmpty || baseUrl.isEmpty) return;
+                  final updatedProfile = profile.copyWith(
+                    name: name,
+                    baseUrl: baseUrl,
+                    apiKey: apiKeyController.text.trim().isEmpty ? null : apiKeyController.text.trim(),
+                    protocol: selectedProtocol,
+                  );
+                  settingsVM.updateProfile(updatedProfile);
+                  Navigator.of(ctx).pop();
+                },
+                child: const Text('Save'),
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final name = nameController.text.trim();
-                final baseUrl = urlController.text.trim();
-                if (name.isEmpty || baseUrl.isEmpty) return;
-                final updatedProfile = profile.copyWith(
-                  name: name,
-                  baseUrl: baseUrl,
-                  apiKey: apiKeyController.text.trim().isEmpty ? null : apiKeyController.text.trim(),
-                  protocol: selectedProtocol,
-                );
-                settingsVM.updateProfile(updatedProfile);
-                Navigator.of(ctx).pop();
-              },
-              child: const Text('Save'),
-            ),
-          ],
         ),
       ),
     );
@@ -595,136 +619,138 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           const SizedBox(height: 24),
 
-          // Section 3: System Prompt Configuration
-          _buildSectionHeader('System Prompt Customization', Icons.psychology_rounded),
-          const SizedBox(height: 10),
+          if (settingsVM.appMode == AppMode.assistant) ...[
+            // Section 3: System Prompt Configuration
+            _buildSectionHeader('System Prompt Customization', Icons.psychology_rounded),
+            const SizedBox(height: 10),
 
-          // Active thread indicator
-          if (chatVM.activeThread != null)
-            Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: isDark ? AppTheme.darkSurfaceVariant : AppTheme.lightSurfaceVariant,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.chat_bubble_outline_rounded, size: 16, color: AppTheme.accentPrimary),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      chatVM.activeThread!.systemPrompt != null
-                          ? 'Editing prompt for: ${chatVM.activeThread!.title}'
-                          : 'Editing global default prompt',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+            // Active thread indicator
+            if (chatVM.activeThread != null)
+              Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: isDark ? AppTheme.darkSurfaceVariant : AppTheme.lightSurfaceVariant,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.chat_bubble_outline_rounded, size: 16, color: AppTheme.accentPrimary),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        chatVM.activeThread!.systemPrompt != null
+                            ? 'Editing prompt for: ${chatVM.activeThread!.title}'
+                            : 'Editing global default prompt',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                      ),
                     ),
+                  ],
+                ),
+              ),
+
+            TextField(
+              controller: _systemPromptController,
+              maxLines: 4,
+              minLines: 2,
+              decoration: const InputDecoration(
+                hintText: 'Enter global system instructions...',
+              ),
+              onChanged: (val) {
+                final trimmed = val.trim();
+                settingsVM.updateSystemPrompt(trimmed);
+
+                // If active thread has a system prompt, update the thread too
+                if (chatVM.activeThread != null && chatVM.activeThread!.systemPrompt != null) {
+                  chatVM.updateActiveThreadSystemPrompt(trimmed);
+                }
+              },
+            ),
+
+            const SizedBox(height: 8),
+
+            // Saved Templates Section
+            Row(
+              children: [
+                Text(
+                  'Saved Templates',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
                   ),
-                ],
-              ),
+                ),
+                const Spacer(),
+                TextButton.icon(
+                  onPressed: _showAddTemplateDialog,
+                  icon: const Icon(Icons.add_rounded, size: 16),
+                  label: const Text('New'),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  ),
+                ),
+              ],
             ),
 
-          TextField(
-            controller: _systemPromptController,
-            maxLines: 4,
-            minLines: 2,
-            decoration: const InputDecoration(
-              hintText: 'Enter global system instructions...',
-            ),
-            onChanged: (val) {
-              final trimmed = val.trim();
-              settingsVM.updateSystemPrompt(trimmed);
+            const SizedBox(height: 6),
 
-              // If active thread has a system prompt, update the thread too
-              if (chatVM.activeThread != null && chatVM.activeThread!.systemPrompt != null) {
-                chatVM.updateActiveThreadSystemPrompt(trimmed);
-              }
-            },
-          ),
-
-          const SizedBox(height: 8),
-
-          // Saved Templates Section
-          Row(
-            children: [
-              Text(
-                'Saved Templates',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+            if (settingsVM.templates.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  'No saved templates yet. Click "New" to create one.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                  ),
                 ),
-              ),
-              const Spacer(),
-              TextButton.icon(
-                onPressed: _showAddTemplateDialog,
-                icon: const Icon(Icons.add_rounded, size: 16),
-                label: const Text('New'),
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 6),
-
-          if (settingsVM.templates.isEmpty)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(
-                'No saved templates yet. Click "New" to create one.',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
-                ),
-              ),
-            )
-          else
-            SizedBox(
-              height: 44,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: settingsVM.templates.length,
-                itemBuilder: (context, templateIndex) {
-                  final template = settingsVM.templates[templateIndex];
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: GestureDetector(
-                      onTap: () => _applyTemplateToPrompt(template),
-                      child: Chip(
-                        avatar: Icon(Icons.psychology_rounded, size: 16, color: AppTheme.accentPrimary),
-                        label: Text(template.name, style: const TextStyle(fontSize: 12)),
-                        onDeleted: () => _deleteTemplate(templateIndex),
-                        deleteIconColor: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          side: BorderSide(
-                            color: AppTheme.accentPrimary.withValues(alpha: 0.3),
+              )
+            else
+              SizedBox(
+                height: 44,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: settingsVM.templates.length,
+                  itemBuilder: (context, templateIndex) {
+                    final template = settingsVM.templates[templateIndex];
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: GestureDetector(
+                        onTap: () => _applyTemplateToPrompt(template),
+                        child: Chip(
+                          avatar: Icon(Icons.psychology_rounded, size: 16, color: AppTheme.accentPrimary),
+                          label: Text(template.name, style: const TextStyle(fontSize: 12)),
+                          onDeleted: () => _deleteTemplate(templateIndex),
+                          deleteIconColor: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            side: BorderSide(
+                              color: AppTheme.accentPrimary.withValues(alpha: 0.3),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
+              ),
+
+            // Preset Chips (inline with delete support for custom, or just display)
+            const SizedBox(height: 8),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _buildTemplateChip('Default', 'You are a helpful, brilliant, and honest AI assistant.'),
+                  _buildTemplateChip('Code Architect', 'You are an elite software architect and senior engineer. Write clean, modular, and optimized code with complete explanations.'),
+                  _buildTemplateChip('Concise Expert', 'You are a concise expert. Answer directly and precisely without conversational filler.'),
+                  _buildTemplateChip('Creative Writer', 'You are a creative writer with rich vocabulary and engaging prose.'),
+                ],
               ),
             ),
-
-          // Preset Chips (inline with delete support for custom, or just display)
-          const SizedBox(height: 8),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _buildTemplateChip('Default', 'You are a helpful, brilliant, and honest AI assistant.'),
-                _buildTemplateChip('Code Architect', 'You are an elite software architect and senior engineer. Write clean, modular, and optimized code with complete explanations.'),
-                _buildTemplateChip('Concise Expert', 'You are a concise expert. Answer directly and precisely without conversational filler.'),
-                _buildTemplateChip('Creative Writer', 'You are a creative writer with rich vocabulary and engaging prose.'),
-              ],
-            ),
-          ),
+          ],
 
           const SizedBox(height: 24),
 
@@ -753,6 +779,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
             subtitle: const Text('Show a confirmation dialog before deleting a message and all subsequent messages.'),
             value: settingsVM.config.confirmDeleteMessage,
             onChanged: (value) => settingsVM.toggleConfirmDeleteMessage(value),
+            contentPadding: EdgeInsets.zero,
+          ),
+
+          const SizedBox(height: 40),
+
+          // Section 6: App Mode
+          _buildSectionHeader('App Mode', Icons.view_agenda_rounded),
+          const SizedBox(height: 10),
+
+          SwitchListTile(
+            title: const Text('Roleplay Mode'),
+            subtitle: const Text('Enable character roleplay with persistent memory.'),
+            value: settingsVM.appMode == AppMode.roleplay,
+            onChanged: (value) {
+              settingsVM.updateAppMode(
+                value ? AppMode.roleplay : AppMode.assistant,
+              );
+              Navigator.of(context).pop();
+            },
             contentPadding: EdgeInsets.zero,
           ),
 

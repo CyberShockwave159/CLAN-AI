@@ -33,8 +33,8 @@ class SystemPromptTemplate {
 
   factory SystemPromptTemplate.fromMap(Map<String, dynamic> map) {
     return SystemPromptTemplate(
-      name: map['name'] as String,
-      content: map['content'] as String,
+      name: map['name'] as String? ?? 'Untitled',
+      content: map['content'] as String? ?? '',
       createdAt: map['created_at'] != null
           ? DateTime.tryParse(map['created_at'] as String) ?? DateTime.now()
           : DateTime.now(),

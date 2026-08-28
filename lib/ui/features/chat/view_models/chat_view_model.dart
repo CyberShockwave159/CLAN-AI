@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import 'package:clan_ai/core/errors/app_exception.dart';
 import 'package:clan_ai/core/network/sse_client.dart';
+import 'package:clan_ai/core/utils/conversation_export.dart';
+import 'package:clan_ai/core/utils/file_saver.dart';
 import 'package:clan_ai/data/models/chat_message.dart';
 import 'package:clan_ai/data/models/chat_thread.dart';
 import 'package:clan_ai/data/models/server_config.dart';
@@ -34,6 +36,11 @@ class ChatViewModel extends ChangeNotifier {
   Timer? _uiThrottleTimer;
   String _pendingStreamBuffer = '';
 
+  // Undo support for message deletion
+  ChatMessage? _undoneMessage;
+  DateTime? _undoTimestamp;
+  static const _undoTimeout = Duration(seconds: 5);
+
   ChatViewModel({ChatRepository? chatRepository})
       : _chatRepository = chatRepository ?? ChatRepository() {
     loadThreads();
@@ -50,7 +57,7 @@ class ChatViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _threads = await _chatRepository.getThreads();
+      _threads = await _chatRepository.getAssistantThreads();
       if (_threads.isNotEmpty && _activeThread == null) {
         await selectThread(_threads.first);
       } else if (_threads.isEmpty) {
@@ -162,6 +169,12 @@ class ChatViewModel extends ChangeNotifier {
     // Keep messages before the deleted one
     _messages = _messages.sublist(0, messageIndex);
 
+    // Store for undo (only user messages, not AI responses that trigger regeneration)
+    if (isUserMessage) {
+      _undoneMessage = deletedMsg;
+      _undoTimestamp = DateTime.now();
+    }
+
     // If the deleted message was an AI response, generate a new one
     if (!isUserMessage && _messages.isNotEmpty) {
       // Find the last user message in the remaining history
@@ -195,6 +208,59 @@ class ChatViewModel extends ChangeNotifier {
 
     notifyListeners();
     return false;
+  }
+
+  /// Undo the last user message deletion.
+  Future<void> undoDelete() async {
+    if (_undoneMessage == null || _undoTimestamp == null) return;
+    if (DateTime.now().difference(_undoTimestamp!) > _undoTimeout) {
+      _undoneMessage = null;
+      _undoTimestamp = null;
+      return;
+    }
+    if (_activeThread == null) {
+      _undoneMessage = null;
+      _undoTimestamp = null;
+      return;
+    }
+
+    await _chatRepository.saveMessage(_undoneMessage!);
+    _messages = await _chatRepository.getMessagesForThread(_activeThread!.id);
+    _undoneMessage = null;
+    _undoTimestamp = null;
+    notifyListeners();
+  }
+
+  /// Check if undo is available and not expired.
+  bool get canUndo {
+    return _undoneMessage != null && 
+           _undoTimestamp != null && 
+           DateTime.now().difference(_undoTimestamp!) <= _undoTimeout;
+  }
+
+  /// Exports the active thread to a file in the given format.
+  /// Returns the path to the exported file, or null on error/cancel.
+  Future<String?> exportThread(ExportFormat format) async {
+    if (_activeThread == null) return null;
+
+    try {
+      final content = format == ExportFormat.txt
+          ? ConversationExport.toTxt(_activeThread!, _messages)
+          : ConversationExport.toJson(_activeThread!, _messages);
+
+      final sanitizedTitle = _activeThread!.title.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+      final extension = format == ExportFormat.txt ? 'txt' : 'json';
+      final filename = 'clan_ai_$sanitizedTitle.$extension';
+      final mimeType = format == ExportFormat.json ? 'application/json' : 'text/plain';
+
+      return await FileSaver.saveFile(
+        filename: filename,
+        content: content,
+        mimeType: mimeType,
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Sends a user message and streams the assistant response.
@@ -441,8 +507,8 @@ class ChatViewModel extends ChangeNotifier {
     );
     await _chatRepository.updateThread(branchThreadWithLink);
 
-    // Refresh threads list
-    _threads = await _chatRepository.getThreads();
+    // Refresh threads list (getAssistantThreads filters out roleplay threads)
+    _threads = await _chatRepository.getAssistantThreads();
 
     // Select the new thread
     await selectThread(branchThreadWithLink);
@@ -510,24 +576,20 @@ class ChatViewModel extends ChangeNotifier {
     _pendingStreamBuffer = '';
     notifyListeners();
 
-    final msgIndex = _messages.indexWhere((m) => m.id == assistantMessageId);
-    if (msgIndex == -1) {
-      _isGenerating = false;
-      notifyListeners();
-      return;
-    }
-
     final historySlice = upToIndex != null
         ? _messages.sublist(0, upToIndex)
-        : _messages.sublist(0, msgIndex);
+        : _messages.sublist(0, _messages.indexWhere((m) => m.id == assistantMessageId));
 
     final effectiveSystemPrompt = _activeThread?.systemPrompt ?? serverConfig.systemPrompt;
 
     // Setup 60fps UI throttle timer (16ms) to avoid Flutter frame drops during rapid streaming
     _uiThrottleTimer = Timer.periodic(const Duration(milliseconds: 20), (_) {
-      if (_pendingStreamBuffer.isNotEmpty && msgIndex < _messages.length) {
-        final currentMsg = _messages[msgIndex];
-        _messages[msgIndex] = currentMsg.copyWith(
+      final currentMsgIndex = _messages.indexWhere((m) => m.id == assistantMessageId);
+      if (_pendingStreamBuffer.isNotEmpty &&
+          currentMsgIndex >= 0 &&
+          currentMsgIndex < _messages.length) {
+        final currentMsg = _messages[currentMsgIndex];
+        _messages[currentMsgIndex] = currentMsg.copyWith(
           content: currentMsg.content + _pendingStreamBuffer,
         );
         _pendingStreamBuffer = '';
@@ -568,8 +630,9 @@ class ChatViewModel extends ChangeNotifier {
       _uiThrottleTimer = null;
 
       // Flush any remaining characters in the buffer
-      if (msgIndex < _messages.length) {
-        final currentMsg = _messages[msgIndex];
+      final finalMsgIndex = _messages.indexWhere((m) => m.id == assistantMessageId);
+      if (finalMsgIndex >= 0 && finalMsgIndex < _messages.length) {
+        final currentMsg = _messages[finalMsgIndex];
         final finalContent = currentMsg.content + _pendingStreamBuffer;
         _pendingStreamBuffer = '';
 
@@ -585,7 +648,7 @@ class ChatViewModel extends ChangeNotifier {
           generationTimeSec: finalMetrics?.generationTimeSec,
         );
 
-        _messages[msgIndex] = completedMsg;
+        _messages[finalMsgIndex] = completedMsg;
         await _chatRepository.saveMessage(completedMsg);
       }
 

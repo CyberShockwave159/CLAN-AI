@@ -62,7 +62,7 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
           tooltip: 'Settings',
         ),
 
-        const SizedBox(width: 6),
+        const SizedBox(width: 4),
       ],
     );
   }

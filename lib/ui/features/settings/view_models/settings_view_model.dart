@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:clan_ai/core/utils/latency_meter.dart';
+import 'package:clan_ai/data/datasources/local_storage.dart';
+import 'package:clan_ai/data/models/app_mode.dart';
 import 'package:clan_ai/data/models/model_info.dart';
 import 'package:clan_ai/data/models/server_config.dart';
 import 'package:clan_ai/data/models/server_profile.dart';
@@ -15,6 +17,9 @@ class SettingsViewModel extends ChangeNotifier {
 
   ServerConfig _config = const ServerConfig();
   ServerConfig get config => _config;
+
+  AppMode _appMode = AppMode.assistant;
+  AppMode get appMode => _appMode;
 
   List<ModelInfo> _availableModels = [];
   List<ModelInfo> get availableModels => _availableModels;
@@ -74,6 +79,7 @@ class SettingsViewModel extends ChangeNotifier {
     }
 
     _templates = await _templateRepository.loadTemplates();
+    _appMode = await LocalDatabase.instance.loadAppMode();
     notifyListeners();
     // Test initial connection & fetch models
     await testConnection();
@@ -85,6 +91,20 @@ class SettingsViewModel extends ChangeNotifier {
     _healthPollTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       pingActiveServer();
     });
+  }
+
+  Future<void> updateAppMode(AppMode mode) async {
+    _appMode = mode;
+    await LocalDatabase.instance.saveAppMode(mode);
+    notifyListeners();
+  }
+
+  Future<void> saveLastRoleplayThreadId(String? threadId) async {
+    await LocalDatabase.instance.saveLastRoleplayThreadId(threadId);
+  }
+
+  Future<String?> loadLastRoleplayThreadId() async {
+    return await LocalDatabase.instance.loadLastRoleplayThreadId();
   }
 
   Future<void> updateBaseUrl(String url) async {

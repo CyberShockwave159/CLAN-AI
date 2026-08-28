@@ -4,12 +4,27 @@
 
 ### ✨ New Features
 
-**Custom System Prompt Templates**
-- Added persistent system prompt templates that can be created, edited, and deleted from Settings
-- Templates are stored locally and survive app restarts
-- Click a template chip to apply it to the current thread and global default
-- Existing built-in presets (Default, Code Architect, Concise Expert, Creative Writer) are loaded as default templates
-- Conversations remember their system prompt independently — switching between threads loads each thread's saved prompt
+**Mobile File Save (Platform Channels)**
+- Conversations export opens native save dialogs on mobile (Android SAF, iOS UIDocumentPicker) so users choose the destination folder
+- `lib/core/utils/file_saver.dart` — Dart-side platform channel wrapper; falls back to app documents directory on desktop
+- `MainActivity.kt` — Android `ACTION_CREATE_DOCUMENT` handler; decodes base64, writes to user-selected URI
+- `AppDelegate.swift` — iOS `UIDocumentPickerViewController(forExporting:asCopy:)` handler; writes to caches, presents picker, moves file on confirm
+
+**AI Roleplay Mode**
+- Toggle between assistant and roleplay modes in Settings
+- Roleplay mode mirrors assistant mode UI/UX — same layout, same drawer, same chat bubbles
+- Character creation wizard (3 steps: name/personality/first message, setting/world, user persona)
+- Optional character avatar upload (defaults to initials in colored circle)
+- Per-character isolated chat sessions with no bleed between characters
+- Auto-resumes last active roleplay session when switching back from assistant mode
+- Assistant mode threads and roleplay mode sessions are strictly separated (thread `characterId` filter)
+
+**Client-Side RAG Memory System**
+- Pure Dart feature hashing embeddings (256-dim, character trigrams) — zero ML dependencies
+- SQLite-backed vector store with cosine similarity search
+- Per-character memory isolation: embeddings stored with `character_id` filter, no cross-character leakage
+- Roleplay prompt formatter injects top-3 relevant memories into system prompt before each generation
+- Non-blocking embedding save after each message completion (fire-and-forget)
 
 **Server Connection Profiles**
 - Added multi-profile server configuration for switching between networks (e.g., local LAN vs cellular/public IP)
@@ -18,6 +33,12 @@
 - Long-press a profile chip to edit; × to delete
 - Tap a chip or use the dropdown to switch profiles (auto-tests the connection)
 - Existing config automatically migrates to a "Default" profile on first launch
+
+**Persistent System Prompt Templates**
+- Created, edited, and deleted from Settings; stored locally and survive app restarts
+- Click a template chip to apply it to the current thread and global default
+- Built-in presets (Default, Code Architect, Concise Expert, Creative Writer) load as default templates
+- Conversations remember their system prompt independently — switching threads loads each thread's saved prompt
 
 ### 🔧 Changes
 
@@ -28,28 +49,55 @@
 - Max Generation Tokens UI changed to a text input + slider (range 0–8192)
 - Context Window UI changed to a text input with suffix "tokens"
 - Best-effort context fit: when a model reports its context length, the app automatically caps `contextSize` to fit (reserves tokens for output)
-- If model context info is unavailable, the user's requested value is used as-is
-- Existing context limit error handling (`ContextLimitExceededException`) catches overflows gracefully
+
+**Export UX**
+- Removed export popup from header bar; export is now only available via context menus in the chat drawer and character drawer
+- `ChatViewModel.exportThread()` and `RoleplayViewModel.exportThread()` now delegate to `FileSaver.saveFile()` instead of writing to a temp directory
+
+**Roleplay Settings**
+- System Prompt Customization section in Settings is hidden when `appMode == AppMode.roleplay` (line 622 of settings_screen.dart)
+- Roleplay system prompt is fully managed by the RAG context builder
 
 ### 🏗 Architecture
 
 **New Files**
+- `lib/data/models/app_mode.dart` — AppMode enum (assistant/roleplay)
+- `lib/data/models/character_profile.dart` — Character model with optional avatar
 - `lib/data/models/system_prompt_template.dart` — Template model for saved system prompts
 - `lib/data/models/server_profile.dart` — Profile model storing baseUrl, apiKey, protocol
+- `lib/data/repositories/character_repository.dart` — CRUD for characters (SharedPreferences)
 - `lib/data/repositories/system_prompt_templates_repository.dart` — CRUD for templates (SharedPreferences)
+- `lib/core/utils/hash_embedding.dart` — Pure Dart 256-dim feature hashing via char trigrams
+- `lib/core/utils/file_saver.dart` — Platform channel file saver (SAF on Android, UIDocumentPicker on iOS)
+- `lib/data/datasources/vector_store.dart` — SQLite vector store with cosine similarity
+- `lib/data/datasources/embedding_service.dart` — Embedding service layer (hash-based)
+- `lib/core/utils/roleplay_prompt_formatter.dart` — System prompt with RAG memories
+- `lib/core/utils/roleplay_context_builder.dart` — RAG pipeline orchestration
+- `lib/ui/features/roleplay/views/roleplay_screen.dart` — Roleplay chat screen
+- `lib/ui/features/roleplay/views/roleplay_drawer.dart` — Character list sidebar
+- `lib/ui/features/roleplay/widgets/character_creation_wizard.dart` — 3-step character creation
+- `lib/ui/features/roleplay/view_models/roleplay_view_model.dart` — Roleplay state with RAG integration
 
 **Modified Files**
-- `lib/data/datasources/local_storage.dart` — Added template and profile persistence methods
-- `lib/data/repositories/server_repository.dart` — Added profile CRUD; config loading/saving is now profile-aware
-- `lib/data/repositories/chat_repository.dart` — Added `modelContextLength` param for best-effort context fit
-- `lib/data/models/generation_params.dart` — Updated defaults, 0=unlimited maxTokens, toOpenAiPayload omits max_tokens when 0
-- `lib/data/datasources/llama_api_service.dart` — Added context fit logic; adjusted params before sending
-- `lib/ui/features/settings/view_models/settings_view_model.dart` — Added templates list, profile management, `getSelectedModelContextLength()`
-- `lib/ui/features/settings/views/settings_screen.dart` — Rewrote with Server Profiles section, saved templates chips, add/edit/delete dialogs
+- `pubspec.yaml` — Added `image_picker` dependency
+- `lib/main.dart` — Added `_initSqliteFfi()` (called once), 3 root providers, mode-based home route
+- `lib/data/models/chat_thread.dart` — Added `characterId` field
+- `lib/data/models/server_config.dart` — Added `appMode` field
+- `lib/data/datasources/local_storage.dart` — Added appMode, characters, vector store persistence; schema v3→v4
+- `lib/ui/features/settings/view_models/settings_view_model.dart` — Added appMode state, save/load last roleplay thread ID
+- `lib/ui/features/settings/views/settings_screen.dart` — Added "Roleplay Mode" toggle; hidden system prompt section in roleplay; rewrote with Server Profiles and saved templates chips
+- `lib/ui/features/chat/view_models/chat_view_model.dart` — Filters out roleplay threads; uses FileSaver for export
+- `lib/ui/features/roleplay/view_models/roleplay_view_model.dart` — New roleplay viewmodel with RAG; uses FileSaver for export
+- `lib/ui/shared/app_header.dart` — Removed header export popup
+- `lib/ui/features/drawer/views/chat_drawer.dart` — Export context menu item
+- `lib/ui/features/roleplay/views/roleplay_drawer.dart` — Export context menu item
+- `lib/data/repositories/server_repository.dart` — Added profile CRUD
+- `lib/data/repositories/chat_repository.dart` — Added `modelContextLength` param
+- `lib/data/models/generation_params.dart` — Updated defaults, 0=unlimited maxTokens
+- `lib/data/datasources/llama_api_service.dart` — Added context fit logic
 - `lib/ui/features/settings/views/parameter_tuning_sheet.dart` — New input UI for max tokens and context window
-- `lib/ui/features/chat/view_models/chat_view_model.dart` — Added `updateActiveThreadSystemPrompt()`, `modelContextLength` param to streaming methods
 - `lib/ui/features/chat/views/chat_screen.dart` — Passes model context length to all streaming operations
-- `lib/ui/features/drawer/views/chat_drawer.dart` — New chats inherit the current global system prompt
+- `lib/ui/features/drawer/views/chat_drawer.dart` — New chats inherit current global system prompt
 
 ### 🐛 Bug Fixes
 - Fixed `DropdownButtonFormField` deprecated `value` parameter (changed to `initialValue`)

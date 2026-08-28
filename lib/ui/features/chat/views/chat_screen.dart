@@ -73,6 +73,24 @@ class _ChatScreenState extends State<ChatScreen> {
     );
     if (shouldDeleteThread) {
       _scrollToBottom(false);
+    } else if (chatVM.canUndo) {
+      final deletedMsg = chatVM.messages.length > messageIndex
+          ? null
+          : null; // Already deleted, show undo for any user message deletion
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Message deleted'),
+          action: SnackBarAction(
+            label: 'Undo',
+            onPressed: () async {
+              await chatVM.undoDelete();
+              _scrollToBottom();
+            },
+          ),
+          duration: const Duration(seconds: 5),
+        ),
+      );
     }
   }
 

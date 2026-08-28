@@ -95,8 +95,9 @@ class GenerationParams {
       'n_ctx': contextSize,
     };
 
-    // n_predict: 0 means unlimited in llama.cpp
-    if (maxTokens >= 0) {
+    // n_predict: 0 means unlimited in llama.cpp.
+    // Only include when > 0 (omitted for 0/unlimited, matching OpenAI branch).
+    if (maxTokens > 0) {
       payload['n_predict'] = maxTokens;
     }
 

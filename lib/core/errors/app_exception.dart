@@ -79,13 +79,3 @@ class RequestCancelledException extends AppException {
     super.message = 'Generation stopped by user',
   }) : super(isRetryable: false);
 }
-
-class SseParseException extends AppException {
-  const SseParseException({
-    required super.message,
-    super.details,
-  }) : super(
-          isRetryable: true,
-          recoverySuggestion: 'Malformed streaming response from server. Check server logs.',
-        );
-}

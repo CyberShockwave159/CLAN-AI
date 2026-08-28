@@ -57,7 +57,7 @@ class ServerProfile {
 
   factory ServerProfile.fromMap(Map<String, dynamic> map) {
     return ServerProfile(
-      id: map['id'] as String,
+      id: map['id'] as String? ?? const Uuid().v4(),
       name: map['name'] as String? ?? 'Unnamed',
       baseUrl: map['baseUrl'] as String? ?? '',
       apiKey: map['apiKey'] as String?,

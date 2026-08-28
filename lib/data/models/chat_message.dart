@@ -44,6 +44,8 @@ class ChatMessage {
   final int totalVariants;
   final List<String> siblingIds;
   final DateTime createdAt;
+  final bool isEdited;
+  final DateTime? updatedAt;
 
   ChatMessage({
     String? id,
@@ -61,6 +63,8 @@ class ChatMessage {
     this.totalVariants = 1,
     this.siblingIds = const [],
     DateTime? createdAt,
+    this.isEdited = false,
+    this.updatedAt,
   })  : id = id ?? const Uuid().v4(),
         createdAt = createdAt ?? DateTime.now();
 
@@ -80,6 +84,8 @@ class ChatMessage {
     int? totalVariants,
     List<String>? siblingIds,
     DateTime? createdAt,
+    bool? isEdited,
+    DateTime? updatedAt,
   }) {
     return ChatMessage(
       id: id ?? this.id,
@@ -97,6 +103,8 @@ class ChatMessage {
       totalVariants: totalVariants ?? this.totalVariants,
       siblingIds: siblingIds ?? this.siblingIds,
       createdAt: createdAt ?? this.createdAt,
+      isEdited: isEdited ?? this.isEdited,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 
@@ -117,6 +125,8 @@ class ChatMessage {
       'total_variants': totalVariants,
       'sibling_ids': siblingIds.join(','),
       'created_at': createdAt.toIso8601String(),
+      'is_edited': isEdited ? 1 : 0,
+      'updated_at': updatedAt?.toIso8601String(),
     };
   }
 
@@ -125,7 +135,7 @@ class ChatMessage {
     final siblingIds = siblingsStr.isNotEmpty ? siblingsStr.split(',') : <String>[];
 
     return ChatMessage(
-      id: map['id'] as String,
+      id: map['id'] as String? ?? const Uuid().v4(),
       threadId: map['thread_id'] as String,
       parentId: map['parent_id'] as String?,
       role: MessageRole.fromString(map['role'] as String? ?? 'user'),
@@ -145,6 +155,10 @@ class ChatMessage {
       createdAt: map['created_at'] != null
           ? DateTime.tryParse(map['created_at'] as String) ?? DateTime.now()
           : DateTime.now(),
+      isEdited: (map['is_edited'] as num?)?.toInt() == 1,
+      updatedAt: map['updated_at'] != null
+          ? DateTime.tryParse(map['updated_at'] as String)
+          : null,
     );
   }
 

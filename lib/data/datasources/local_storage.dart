@@ -1,19 +1,22 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:clan_ai/core/utils/mutex.dart';
 import 'package:clan_ai/data/models/chat_message.dart';
 import 'package:clan_ai/data/models/chat_thread.dart';
+import 'package:clan_ai/data/models/character_profile.dart';
 import 'package:clan_ai/data/models/server_config.dart';
 import 'package:clan_ai/data/models/server_profile.dart';
 import 'package:clan_ai/data/models/system_prompt_template.dart';
+import 'package:clan_ai/data/models/app_mode.dart';
 
 class LocalDatabase {
   static final LocalDatabase instance = LocalDatabase._init();
+  static final _mutex = Mutex();
   static Database? _database;
   SharedPreferences? _prefs;
 
@@ -31,10 +34,8 @@ class LocalDatabase {
   }
 
   Future<Database> _initDB(String filePath) async {
-    if (!kIsWeb && (Platform.isLinux || Platform.isWindows || Platform.isMacOS)) {
-      sqfliteFfiInit();
-      databaseFactory = databaseFactoryFfi;
-    }
+    // SQLite FFI factory is initialized once in main.dart
+    // This check is a defensive guard in case _initDB is called before main()
 
     String path;
     if (kIsWeb) {
@@ -46,19 +47,48 @@ class LocalDatabase {
 
     return await openDatabase(
       path,
-      version: 3,
+      version: 5,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
     );
   }
 
   Future<void> _upgradeDB(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      final columns = await db.rawQuery("PRAGMA table_info(threads)");
+      final hasColumn = (columns as List<dynamic>)
+          .any((col) => (col as Map<String, dynamic>)['name'] == 'custom_params');
+      if (!hasColumn) {
+        await db.execute('ALTER TABLE threads ADD COLUMN custom_params TEXT');
+      }
+    }
     if (oldVersion < 3) {
       final columns = await db.rawQuery("PRAGMA table_info(threads)");
       final hasColumn = (columns as List<dynamic>)
           .any((col) => (col as Map<String, dynamic>)['name'] == 'branch_from_thread_id');
       if (!hasColumn) {
         await db.execute('ALTER TABLE threads ADD COLUMN branch_from_thread_id TEXT');
+      }
+    }
+    if (oldVersion < 4) {
+      final columns = await db.rawQuery("PRAGMA table_info(threads)");
+      final hasColumn = (columns as List<dynamic>)
+          .any((col) => (col as Map<String, dynamic>)['name'] == 'character_id');
+      if (!hasColumn) {
+        await db.execute('ALTER TABLE threads ADD COLUMN character_id TEXT');
+      }
+    }
+    if (oldVersion < 5) {
+      final columns = await db.rawQuery("PRAGMA table_info(messages)");
+      final hasIsEdited = (columns as List<dynamic>)
+          .any((col) => (col as Map<String, dynamic>)['name'] == 'is_edited');
+      if (!hasIsEdited) {
+        await db.execute('ALTER TABLE messages ADD COLUMN is_edited INTEGER NOT NULL DEFAULT 0');
+      }
+      final hasUpdatedAt = (columns as List<dynamic>)
+          .any((col) => (col as Map<String, dynamic>)['name'] == 'updated_at');
+      if (!hasUpdatedAt) {
+        await db.execute('ALTER TABLE messages ADD COLUMN updated_at TEXT');
       }
     }
   }
@@ -74,6 +104,7 @@ class LocalDatabase {
         custom_params TEXT,
         is_pinned INTEGER NOT NULL DEFAULT 0,
         branch_from_thread_id TEXT,
+        character_id TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       )
@@ -145,6 +176,60 @@ class LocalDatabase {
     return null;
   }
 
+  // --- Character Database Operations ---
+
+  Future<List<CharacterProfile>> getAllCharacters() async {
+    final p = await prefs;
+    final jsonStr = p.getString(_keyCharacters);
+    if (jsonStr != null && jsonStr.isNotEmpty) {
+      try {
+        final List<dynamic> jsonList = jsonDecode(jsonStr) as List<dynamic>;
+        return jsonList
+            .map((e) => CharacterProfile.fromMap(e as Map<String, dynamic>))
+            .toList();
+      } catch (_) {}
+    }
+    return [];
+  }
+
+  Future<CharacterProfile?> getCharacterById(String id) async {
+    final characters = await getAllCharacters();
+    for (final c in characters) {
+      if (c.id == id) return c;
+    }
+    return null;
+  }
+
+  Future<void> insertCharacter(CharacterProfile character) async {
+    return _mutex.run(() async {
+      final p = await prefs;
+      final profiles = await getAllCharacters();
+      profiles.add(character);
+      await p.setString(_keyCharacters, jsonEncode(profiles.map((c) => c.toMap()).toList()));
+    });
+  }
+
+  Future<void> updateCharacter(CharacterProfile character) async {
+    return _mutex.run(() async {
+      final p = await prefs;
+      final profiles = await getAllCharacters();
+      final index = profiles.indexWhere((c) => c.id == character.id);
+      if (index != -1) {
+        profiles[index] = character;
+        await p.setString(_keyCharacters, jsonEncode(profiles.map((c) => c.toMap()).toList()));
+      }
+    });
+  }
+
+  Future<void> deleteCharacter(String id) async {
+    return _mutex.run(() async {
+      final p = await prefs;
+      final profiles = await getAllCharacters();
+      profiles.removeWhere((c) => c.id == id);
+      await p.setString(_keyCharacters, jsonEncode(profiles.map((c) => c.toMap()).toList()));
+    });
+  }
+
   // --- Message Database Operations ---
 
   Future<void> insertMessage(ChatMessage message) async {
@@ -190,7 +275,6 @@ class LocalDatabase {
       if (parent == null || parent.branchFromThreadId == null) break;
       lineage.add(parent);
       currentId = parent.branchFromThreadId!;
-      depth++;
     }
 
     return lineage;
@@ -206,6 +290,9 @@ class LocalDatabase {
 
   static const String _keyActiveServer = 'clan_active_server_config';
   static const String _keyThemeMode = 'clan_theme_mode';
+  static const String _keyAppMode = 'clan_app_mode';
+  static const String _keyCharacters = 'clan_characters';
+  static const String _keyLastRoleplayThread = 'clan_last_roleplay_thread_id';
 
   Future<void> saveActiveServerConfig(ServerConfig config) async {
     final p = await prefs;
@@ -231,6 +318,47 @@ class LocalDatabase {
   Future<String> loadThemeMode() async {
     final p = await prefs;
     return p.getString(_keyThemeMode) ?? 'dark';
+  }
+
+  // --- App Mode Persistence ---
+
+  Future<void> saveAppMode(AppMode mode) async {
+    final p = await prefs;
+    await p.setString(_keyAppMode, mode.name);
+  }
+
+  Future<AppMode> loadAppMode() async {
+    final p = await prefs;
+    final modeStr = p.getString(_keyAppMode);
+    if (modeStr != null && modeStr.isNotEmpty) {
+      try {
+        return AppMode.values.firstWhere((m) => m.name == modeStr);
+      } catch (_) {}
+    }
+    return AppMode.assistant;
+  }
+
+  // --- Last Roleplay Thread Persistence ---
+
+  Future<void> saveLastRoleplayThreadId(String? threadId) async {
+    final p = await prefs;
+    if (threadId != null) {
+      await p.setString(_keyLastRoleplayThread, threadId);
+    } else {
+      await p.remove(_keyLastRoleplayThread);
+    }
+  }
+
+  Future<String?> loadLastRoleplayThreadId() async {
+    final p = await prefs;
+    return p.getString(_keyLastRoleplayThread);
+  }
+
+  // --- Character Persistence ---
+
+  Future<void> saveCharacters(List<CharacterProfile> characters) async {
+    final p = await prefs;
+    await p.setString(_keyCharacters, jsonEncode(characters.map((c) => c.toMap()).toList()));
   }
 
   // --- System Prompt Template Persistence ---

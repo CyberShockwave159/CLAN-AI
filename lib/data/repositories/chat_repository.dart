@@ -23,6 +23,32 @@ class ChatRepository {
     return await _localDb.getAllThreads();
   }
 
+  /// Returns only assistant-mode threads (characterId == null).
+  /// Use this instead of getThreads() in assistant-mode contexts to
+  /// prevent roleplay threads from leaking into the assistant UI.
+  Future<List<ChatThread>> getAssistantThreads() async {
+    return (await _localDb.getAllThreads())
+        .where((t) => t.characterId == null)
+        .toList();
+  }
+
+  /// Returns only roleplay-mode threads (characterId != null).
+  Future<List<ChatThread>> getRoleplayThreads() async {
+    return (await _localDb.getAllThreads())
+        .where((t) => t.characterId != null)
+        .toList();
+  }
+
+  /// Returns all threads belonging to a specific character, sorted by
+  /// updated_at descending (most recent first).
+  Future<List<ChatThread>> getThreadsForCharacter(String characterId) async {
+    final threads = await _localDb.getAllThreads();
+    return threads
+        .where((t) => t.characterId == characterId)
+        .toList()
+      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+  }
+
   Future<ChatThread> createThread({
     String title = 'New Chat',
     String? systemPrompt,
@@ -55,6 +81,10 @@ class ChatRepository {
 
   Future<void> saveMessage(ChatMessage message) async {
     await _localDb.insertMessage(message);
+  }
+
+  Future<void> updateMessage(ChatMessage message) async {
+    await _localDb.updateMessage(message);
   }
 
   Future<void> deleteMessage(String id) async {

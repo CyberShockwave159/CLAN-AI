@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:clan_ai/core/utils/latency_meter.dart';
+import 'package:clan_ai/core/utils/mutex.dart';
 import 'package:clan_ai/data/datasources/llama_api_service.dart';
 import 'package:clan_ai/data/datasources/local_storage.dart';
 import 'package:clan_ai/data/models/model_info.dart';
@@ -9,6 +10,7 @@ import 'package:clan_ai/data/models/server_profile.dart';
 class ServerRepository {
   final LlamaApiService _apiService;
   final LocalDatabase _localDb;
+  static final _mutex = Mutex();
 
   ServerRepository({
     LlamaApiService? apiService,
@@ -39,41 +41,57 @@ class ServerRepository {
     String? apiKey,
     required ApiProtocol protocol,
   }) async {
-    final profiles = await loadProfiles();
-    final profile = ServerProfile(
-      name: name,
-      baseUrl: baseUrl,
-      apiKey: apiKey,
-      protocol: protocol,
-    );
-    profiles.add(profile);
-    await saveProfiles(profiles);
-    await setActiveProfileId(profile.id);
-    return profile;
+    ServerProfile? result;
+    try {
+      await _mutex.run(() async {
+        final profiles = await loadProfiles();
+        final profile = ServerProfile(
+          name: name,
+          baseUrl: baseUrl,
+          apiKey: apiKey,
+          protocol: protocol,
+        );
+        profiles.add(profile);
+        await saveProfiles(profiles);
+        await setActiveProfileId(profile.id);
+        result = profile;
+      });
+    } catch (_) {}
+    return result ?? ServerProfile(name: name, baseUrl: baseUrl, protocol: protocol);
   }
 
   Future<ServerProfile> updateProfile(ServerProfile profile) async {
-    final profiles = await loadProfiles();
-    final index = profiles.indexWhere((p) => p.id == profile.id);
-    if (index != -1) {
-      profiles[index] = profile.copyWith(updatedAt: DateTime.now());
-      await saveProfiles(profiles);
-    }
-    return profiles[index];
+    ServerProfile? result;
+    try {
+      await _mutex.run(() async {
+        final profiles = await loadProfiles();
+        final index = profiles.indexWhere((p) => p.id == profile.id);
+        if (index != -1) {
+          profiles[index] = profile.copyWith(updatedAt: DateTime.now());
+          await saveProfiles(profiles);
+          result = profiles[index];
+        } else {
+          result = profile;
+        }
+      });
+    } catch (_) {}
+    return result ?? profile;
   }
 
   Future<void> deleteProfile(String profileId) async {
-    final profiles = await loadProfiles();
-    profiles.removeWhere((p) => p.id == profileId);
-    await saveProfiles(profiles);
-    final activeId = await getActiveProfileId();
-    if (activeId == profileId) {
-      if (profiles.isNotEmpty) {
-        await setActiveProfileId(profiles.first.id);
-      } else {
-        await _localDb.setActiveProfileId('');
+    await _mutex.run(() async {
+      final profiles = await loadProfiles();
+      profiles.removeWhere((p) => p.id == profileId);
+      await saveProfiles(profiles);
+      final activeId = await getActiveProfileId();
+      if (activeId == profileId) {
+        if (profiles.isNotEmpty) {
+          await setActiveProfileId(profiles.first.id);
+        } else {
+          await _localDb.setActiveProfileId('');
+        }
       }
-    }
+    });
   }
 
   Future<ServerProfile?> getActiveProfile() async {
@@ -90,10 +108,7 @@ class ServerRepository {
   // --- Config Loading/Saving (Profile-aware) ---
 
   Future<ServerConfig> loadActiveConfig() async {
-    // Start with global defaults (from legacy storage or defaults)
     ServerConfig globalConfig = await _localDb.loadActiveServerConfig();
-
-    // Apply profile settings on top (baseUrl, apiKey, protocol)
     final profile = await getActiveProfile();
     if (profile != null) {
       globalConfig = globalConfig.copyWith(
@@ -102,12 +117,10 @@ class ServerRepository {
         protocol: profile.protocol,
       );
     }
-
     return globalConfig;
   }
 
   Future<void> saveActiveConfig(ServerConfig config) async {
-    // Update the active profile's baseUrl, apiKey, protocol
     final activeId = await getActiveProfileId();
     if (activeId != null && activeId.isNotEmpty) {
       final profiles = await loadProfiles();
@@ -122,8 +135,6 @@ class ServerRepository {
         return;
       }
     }
-
-    // Fall back to legacy storage (for non-profile settings)
     await _localDb.saveActiveServerConfig(config);
   }
 

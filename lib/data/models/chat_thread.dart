@@ -10,6 +10,7 @@ class ChatThread {
   final GenerationParams? customParams;
   final bool isPinned;
   final String? branchFromThreadId;
+  final String? characterId;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -21,6 +22,7 @@ class ChatThread {
     this.customParams,
     this.isPinned = false,
     this.branchFromThreadId,
+    this.characterId,
     DateTime? createdAt,
     DateTime? updatedAt,
   })  : id = id ?? const Uuid().v4(),
@@ -35,6 +37,7 @@ class ChatThread {
     GenerationParams? customParams,
     bool? isPinned,
     String? branchFromThreadId,
+    String? characterId,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -46,6 +49,7 @@ class ChatThread {
       customParams: customParams ?? this.customParams,
       isPinned: isPinned ?? this.isPinned,
       branchFromThreadId: branchFromThreadId ?? this.branchFromThreadId,
+      characterId: characterId ?? this.characterId,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -60,6 +64,7 @@ class ChatThread {
       'custom_params': customParams != null ? jsonEncode(customParams!.toMap()) : null,
       'is_pinned': isPinned ? 1 : 0,
       'branch_from_thread_id': branchFromThreadId,
+      'character_id': characterId,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
@@ -81,12 +86,13 @@ class ChatThread {
       customParams: customParams,
       isPinned: (map['is_pinned'] as int?) == 1,
       branchFromThreadId: map['branch_from_thread_id'] as String?,
+      characterId: map['character_id'] as String?,
       createdAt: map['created_at'] != null
           ? DateTime.tryParse(map['created_at'] as String) ?? DateTime.now()
           : DateTime.now(),
-      updatedAt: map['updated_at'] != null
+     updatedAt: map['updated_at'] != null
           ? DateTime.tryParse(map['updated_at'] as String) ?? DateTime.now()
-          : DateTime.now(),
+      : DateTime.now(),
     );
   }
 }

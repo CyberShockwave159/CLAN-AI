@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:clan_ai/core/constants/app_theme.dart';
+import 'package:clan_ai/core/utils/conversation_export.dart';
 import 'package:clan_ai/data/datasources/local_storage.dart';
 import 'package:clan_ai/data/models/chat_thread.dart';
 import 'package:clan_ai/ui/features/chat/view_models/chat_view_model.dart';
@@ -306,9 +307,44 @@ class _ChatDrawerState extends State<ChatDrawer> {
                                                   _showRenameDialog(context, thread, chatVM);
                                                 } else if (action == 'delete') {
                                                   _showDeleteDialog(context, thread, chatVM);
+                                                } else if (action == 'export_txt' || action == 'export_json') {
+                                                  final format = action == 'export_txt' ? ExportFormat.txt : ExportFormat.json;
+                                                  chatVM.exportThread(format).then((p) {
+                                                    if (p != null && context.mounted) {
+                                                      // ignore: use_build_context_synchronously
+                                                      ScaffoldMessenger.of(context).showSnackBar(
+                                                        SnackBar(
+                                                          content: Text('Exported to $p'),
+                                                          duration: const Duration(seconds: 3),
+                                                          behavior: SnackBarBehavior.floating,
+                                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                                        ),
+                                                      );
+                                                    }
+                                                  });
                                                 }
                                               },
                                               itemBuilder: (ctx) => [
+                                                const PopupMenuItem(
+                                                  value: 'export_txt',
+                                                  child: Row(
+                                                    children: [
+                                                      Icon(Icons.file_copy_outlined, size: 18),
+                                                      SizedBox(width: 8),
+                                                      Text('Export as TXT'),
+                                                    ],
+                                                  ),
+                                                ),
+                                                const PopupMenuItem(
+                                                  value: 'export_json',
+                                                  child: Row(
+                                                    children: [
+                                                      Icon(Icons.code_outlined, size: 18),
+                                                      SizedBox(width: 8),
+                                                      Text('Export as JSON'),
+                                                    ],
+                                                  ),
+                                                ),
                                                 const PopupMenuItem(
                                                   value: 'rename',
                                                   child: Row(
