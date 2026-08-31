@@ -1,7 +1,12 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:clan_ai/core/constants/app_theme.dart';
 import 'package:clan_ai/core/utils/conversation_export.dart';
+import 'package:clan_ai/core/utils/silly_tavern_card_parser.dart';
 import 'package:clan_ai/data/models/chat_thread.dart';
 import 'package:clan_ai/data/models/character_profile.dart';
 import 'package:clan_ai/data/repositories/character_repository.dart';
@@ -33,77 +38,78 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
     });
   }
 
-  void _showEditDialog(BuildContext context, CharacterProfile character) {
-    final nameController = TextEditingController(text: character.name);
-    final personalityController = TextEditingController(text: character.personality);
-    final firstMessageController = TextEditingController(text: character.firstMessage);
-    final settingController = TextEditingController(text: character.setting ?? '');
-    final userPersonaController = TextEditingController(text: character.userPersona ?? '');
-
-    showDialog(
+  Future<CharacterProfile> _showEditDialog(BuildContext context, CharacterProfile character, CharacterRepository repo) {
+    return showDialog<CharacterProfile>(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setState) => AlertDialog(
-          title: const Text('Edit Character'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameController,
-                  decoration: const InputDecoration(labelText: 'Name'),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: personalityController,
-                  maxLines: 4,
-                  decoration: const InputDecoration(labelText: 'Personality'),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: firstMessageController,
-                  maxLines: 3,
-                  decoration: const InputDecoration(labelText: 'First Message'),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: settingController,
-                  maxLines: 2,
-                  decoration: const InputDecoration(labelText: 'Setting (Optional)'),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: userPersonaController,
-                  maxLines: 2,
-                  decoration: const InputDecoration(labelText: 'User Persona (Optional)'),
-                ),
-              ],
+        builder: (ctx, setState) {
+          final nameCtrl = TextEditingController(text: character.name);
+          final personalityCtrl = TextEditingController(text: character.personality);
+          final firstMsgCtrl = TextEditingController(text: character.firstMessage);
+          final settingCtrl = TextEditingController(text: character.setting ?? '');
+          final userPersonaCtrl = TextEditingController(text: character.userPersona ?? '');
+
+          return AlertDialog(
+            title: const Text('Edit Character'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameCtrl,
+                    decoration: const InputDecoration(labelText: 'Name'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: personalityCtrl,
+                    maxLines: 4,
+                    decoration: const InputDecoration(labelText: 'Personality'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: firstMsgCtrl,
+                    maxLines: 3,
+                    decoration: const InputDecoration(labelText: 'First Message'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: settingCtrl,
+                    maxLines: 2,
+                    decoration: const InputDecoration(labelText: 'Setting (Optional)'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: userPersonaCtrl,
+                    maxLines: 2,
+                    decoration: const InputDecoration(labelText: 'User Persona (Optional)'),
+                  ),
+                ],
+              ),
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final repo = context.read<CharacterRepository>();
-                final updated = character.copyWith(
-                  name: nameController.text.trim().isEmpty ? character.name : nameController.text.trim(),
-                  personality: personalityController.text.trim(),
-                  firstMessage: firstMessageController.text.trim(),
-                  setting: settingController.text.trim().isEmpty ? null : settingController.text.trim(),
-                  userPersona: userPersonaController.text.trim().isEmpty ? null : userPersonaController.text.trim(),
-                );
-                repo.updateCharacter(updated);
-                Navigator.of(ctx).pop();
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(character),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final updated = character.copyWith(
+                    name: nameCtrl.text.trim().isEmpty ? character.name : nameCtrl.text.trim(),
+                    personality: personalityCtrl.text.trim(),
+                    firstMessage: firstMsgCtrl.text.trim(),
+                    setting: settingCtrl.text.trim().isEmpty ? null : settingCtrl.text.trim(),
+                    userPersona: userPersonaCtrl.text.trim().isEmpty ? null : userPersonaCtrl.text.trim(),
+                  );
+                  repo.updateCharacter(updated);
+                  Navigator.of(ctx).pop(updated);
+                },
+                child: const Text('Save'),
+              ),
+            ],
+          );
+        },
       ),
-    );
+    ).then((value) => value ?? character);
   }
 
   void _showDeleteDialog(BuildContext context, CharacterProfile character) {
@@ -202,6 +208,77 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
                       serverConfig: settingsVM.config,
                       modelContextLength: settingsVM.getSelectedModelContextLength(),
                     );
+                  }
+                },
+              ),
+            ),
+
+            // Import SillyTavern Card button
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.import_export_rounded, size: 20),
+                label: const Text('Import ST Card', style: TextStyle(fontWeight: FontWeight.w600)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  side: BorderSide(color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder),
+                ),
+                onPressed: () async {
+                  final result = await FilePicker.platform.pickFiles(
+                    type: FileType.custom,
+                    allowedExtensions: ['json'],
+                    allowMultiple: false,
+                  );
+                  if (result == null || result.files.isEmpty || result.files.first.path == null) return;
+
+                  Navigator.of(context).pop();
+
+                  try {
+                    final content = await File(result.files.first.path!).readAsString();
+                    final json = jsonDecode(content) as Map<String, dynamic>;
+                    final parsed = ParsedCharacterCard.fromJson(json);
+
+                    if (!parsed.isValid) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Not a valid SillyTavern character card (chara_card_v2)')),
+                      );
+                      return;
+                    }
+
+                    final character = CharacterProfile(
+                      name: parsed.name,
+                      personality: parsed.personality,
+                      firstMessage: parsed.firstMessage,
+                      setting: parsed.setting,
+                      userPersona: parsed.userPersona,
+                    );
+
+                    await context.read<CharacterRepository>().createCharacter(character);
+
+                     // Auto-open edit dialog for the imported character
+                     final charRepo = context.read<CharacterRepository>();
+                     final updated = await _showEditDialog(context, character, charRepo);
+
+                    final settingsVM = context.read<SettingsViewModel>();
+                    await context.read<RoleplayViewModel>().startRoleplay(
+                      updated,
+                      serverConfig: settingsVM.config,
+                      modelContextLength: settingsVM.getSelectedModelContextLength(),
+                    );
+
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Character imported')),
+                      );
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Import failed: $e')),
+                      );
+                    }
                   }
                 },
               ),
@@ -383,7 +460,7 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
                                       ),
                                       onSelected: (action) {
                                         if (action == 'edit') {
-                                          _showEditDialog(context, character);
+                                          _showEditDialog(context, character, context.read<CharacterRepository>());
                                         } else if (action == 'delete') {
                                           _showDeleteDialog(context, character);
                                         } else if (action == 'toggle_favorite') {

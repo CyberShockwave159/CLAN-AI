@@ -18,6 +18,7 @@ Frontier-class cross-platform llama.cpp client. A Flutter app that connects to a
 - Real-time streaming chat with both OpenAI-compatible and native llama.cpp endpoints
 - **AI Roleplay Mode** — Toggle from Settings; mirrors assistant mode UI with per-character isolated sessions and client-side RAG memory
 - **Character Creation** — 3-step wizard (personality, setting/world, user persona) with optional avatar upload
+- **SillyTavern Import** — Import `.json` character cards (`chara_card_v2` format) with auto-edit dialog
 - **Client-Side RAG** — Pure Dart feature hashing embeddings (256-dim, char trigrams) with SQLite cosine similarity; zero ML dependencies
 - **Conversation branching** — Regenerate and edit responses to create sibling variants
 - SQLite local persistence with full thread/message history
@@ -66,10 +67,11 @@ On first launch, open Settings from the side drawer and configure your llama.cpp
 Toggle "Roleplay Mode" in Settings to switch to character roleplay:
 
 1. Open the sidebar (hamburger menu)
-2. Tap "New Roleplay" → fill in the 3-step character creation wizard
-3. Characters are listed in the sidebar; tap a character to start a session
-4. Conversations persist across mode switches; the last active session auto-loads
-5. RAG memory is client-side only (no embedding endpoint required on the server)
+2. Tap "New Roleplay" to create a character manually, or "Import ST Card" to import a SillyTavern `.json` character card
+3. SillyTavern cards (`chara_card_v2` spec) are automatically parsed — `{{char}}` and `{{user}}` tokens are replaced with the character name and user persona
+4. Characters are listed in the sidebar; tap a character to start a session
+5. Conversations persist across mode switches; the last active session auto-loads
+6. RAG memory is client-side only (no embedding endpoint required on the server)
 
 ## Architecture
 
@@ -81,6 +83,8 @@ Toggle "Roleplay Mode" in Settings to switch to character roleplay:
 - **Streaming** via Server-Sent Events with 20ms UI throttling to prevent frame drops
 - **Thread isolation**: `ChatThread.characterId` distinguishes assistant vs roleplay threads
 - **FileSaver**: Native mobile save dialogs via platform channels (Android SAF, iOS UIDocumentPicker); desktop falls back to app documents directory
+- **SillyTavern Import**: `lib/core/utils/silly_tavern_card_parser.dart` parses `chara_card_v2` JSON; `lib/core/utils/st_avatar_downloader.dart` fetches avatars; auto-edit dialog for imported characters
+- **`{{char}}` / `{{user}}` replacement**: Parser automatically substitutes these tokens with the character name and user persona in all fields
 
 ## Development
 

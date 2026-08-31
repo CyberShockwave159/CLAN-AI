@@ -102,3 +102,35 @@
 ### 🐛 Bug Fixes
 - Fixed `DropdownButtonFormField` deprecated `value` parameter (changed to `initialValue`)
 - Fixed `tryRead` non-existent method (changed to `read`)
+- Fixed type cast error in edit dialog return type (`as Future<CharacterProfile>` → `.then((value) => value ?? character)`)
+- Fixed `ScaffoldMessenger.of(context)` "deactivated widget ancestor" errors by adding `context.mounted` guards
+
+## [v1.0.1] - SillyTavern Character Import
+
+### ✨ New Features
+
+**SillyTavern `.json` Character Card Import**
+- Import button in roleplay drawer sidebar opens file picker filtered to `.json` files
+- `lib/core/utils/silly_tavern_card_parser.dart` — Parses SillyTavern `chara_card_v2` (spec_version 2.0) JSON files
+- Maps `.data.description` → personality, `.data.first_mes` → firstMessage, `.data.scenario` → setting
+- `{{char}}` → replaced with character name; `{{user}}` → replaced with user persona (or "User" fallback)
+- Personality truncated to 4000 chars; mes_example appended if non-empty
+- Auto-edit dialog opens after import so users can review/adjust fields before starting roleplay
+- `lib/core/utils/st_avatar_downloader.dart` — Downloads avatar bytes from URL with 30s timeout; validates PNG/JPEG/WebP magic bytes
+- `lib/ui/features/roleplay/widgets/silly_tavern_import_dialog.dart` — Preview/edit dialog for imported characters with text editors for all fields
+- `lib/ui/features/roleplay/views/roleplay_drawer.dart` — Import flow: pick JSON → parse → save → auto-open edit dialog → start roleplay
+- `_showEditDialog` returns `Future<CharacterProfile>`; passes `CharacterRepository` as parameter to avoid context issues
+
+### 🔧 Dependencies
+- Added `file_picker: ^8.1.2` for JSON file selection
+- Uses existing `http` package for avatar downloads
+
+### 🏗 New Files
+- `lib/core/utils/silly_tavern_card_parser.dart`
+- `lib/core/utils/st_avatar_downloader.dart`
+- `lib/ui/features/roleplay/widgets/silly_tavern_import_dialog.dart`
+
+### 🐛 Bug Fixes
+- Fixed type cast error when edit dialog returns null
+- Fixed "deactivated widget ancestor" errors in async import flow
+- Fixed edit dialog `context.read<CharacterRepository>()` issues by passing repo as parameter
