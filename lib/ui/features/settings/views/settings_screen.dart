@@ -1,14 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:clan_ai/core/constants/app_theme.dart';
+import 'package:clan_ai/data/datasources/vector_store.dart';
 import 'package:clan_ai/data/models/app_mode.dart';
+import 'package:clan_ai/data/models/character_profile.dart';
+import 'package:clan_ai/data/models/persona_template.dart';
 import 'package:clan_ai/data/models/server_config.dart';
 import 'package:clan_ai/data/models/server_profile.dart';
 import 'package:clan_ai/data/models/system_prompt_template.dart';
+import 'package:clan_ai/data/repositories/character_repository.dart';
 import 'package:clan_ai/ui/features/chat/view_models/chat_view_model.dart';
 import 'package:clan_ai/ui/features/settings/view_models/settings_view_model.dart';
 import 'package:clan_ai/ui/features/settings/views/parameter_tuning_sheet.dart';
 import 'package:clan_ai/ui/shared/connection_badge.dart';
+import 'package:clan_ai/ui/features/roleplay/view_models/persona_template_view_model.dart';
+import 'package:clan_ai/ui/features/roleplay/widgets/persona_template_dialog.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -784,7 +790,191 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           const SizedBox(height: 40),
 
-          // Section 6: App Mode
+          // Section 6: RAG Memory Management (roleplay only)
+          if (settingsVM.appMode == AppMode.roleplay) ...[
+            _buildSectionHeader('RAG Memory', Icons.auto_stories_rounded),
+            const SizedBox(height: 10),
+
+            FutureBuilder<List<CharacterProfile>>(
+              future: context.read<CharacterRepository>().getAllCharacters(),
+              builder: (ctx, charSnapshot) {
+                if (charSnapshot.connectionState == ConnectionState.waiting) {
+                  return const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                }
+                if (!charSnapshot.hasData || charSnapshot.data!.isEmpty) {
+                  return Text(
+                    'No characters with memories yet.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                    ),
+                  );
+                }
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: charSnapshot.data!.map((character) {
+                    final charId = character.id;
+                    final charName = character.name;
+                    return FutureBuilder<int>(
+                      future: VectorStore().getEmbeddingCount(charId),
+                      builder: (ctx2, countSnapshot) {
+                        if (countSnapshot.connectionState != ConnectionState.done) {
+                          return const SizedBox.shrink();
+                        }
+                        final count = countSnapshot.data ?? 0;
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            children: [
+                              Icon(Icons.memory_rounded, size: 16, color: AppTheme.accentPrimary),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  '$charName: $count memory${count == 1 ? '' : 's'}',
+                                  style: const TextStyle(fontSize: 13),
+                                ),
+                              ),
+                              if (count > 0)
+                                TextButton(
+                                  onPressed: () async {
+                                    await VectorStore().deleteCharacterEmbeddings(charId);
+                                    if (mounted) setState(() {});
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Cleared $count memories for $charName'),
+                                          duration: const Duration(seconds: 2),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                  style: TextButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  ),
+                                  child: const Text('Clear', style: TextStyle(fontSize: 12)),
+                                ),
+                            ],
+                          ),
+                        );
+                      },
+                    );
+                  }).toList(),
+                );
+              },
+            ),
+
+            const SizedBox(height: 8),
+
+            OutlinedButton.icon(
+              onPressed: () async {
+                final chars = await context.read<CharacterRepository>().getAllCharacters();
+                for (final char in chars) {
+                  await VectorStore().deleteCharacterEmbeddings(char.id);
+                }
+                if (mounted) {
+                  setState(() {});
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('All memories cleared'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                }
+              },
+              icon: const Icon(Icons.clear_all_rounded, size: 16),
+              label: const Text('Clear All Memories'),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                side: BorderSide(color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder),
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 40),
+
+          // Section: Persona Templates (roleplay mode only)
+          if (settingsVM.appMode == AppMode.roleplay) ...[
+            _buildSectionHeader('Persona Templates', Icons.person_outline_rounded),
+            const SizedBox(height: 10),
+
+  FutureBuilder<List<PersonaTemplate>>(
+            future: _loadPersonaTemplates(),
+            builder: (ctx, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+              final templates = snapshot.data ?? [];
+
+              if (templates.isEmpty) {
+                return Text(
+                  'No persona templates yet. Click "New" to create one.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                  ),
+                );
+              }
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    height: 44,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: templates.length,
+                      itemBuilder: (context, templateIndex) {
+                        final template = templates[templateIndex];
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: GestureDetector(
+                            onTap: () => _showEditPersonaTemplateDialog(template),
+                            child: Chip(
+                              avatar: Icon(Icons.person_outline_rounded, size: 16, color: AppTheme.accentPrimary),
+                              label: Text(template.name, style: const TextStyle(fontSize: 12)),
+                              onDeleted: () => _deletePersonaTemplate(template.id),
+                              deleteIconColor: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                side: BorderSide(
+                                  color: AppTheme.accentPrimary.withValues(alpha: 0.3),
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+
+          const SizedBox(height: 12),
+
+          FilledButton.icon(
+            icon: const Icon(Icons.add_rounded, size: 18),
+            label: const Text('New Persona Template'),
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () => _showEditPersonaTemplateDialog(null),
+          ),
+          ],
+
+          const SizedBox(height: 40),
+
+          // Section: App Mode
           _buildSectionHeader('App Mode', Icons.view_agenda_rounded),
           const SizedBox(height: 10),
 
@@ -832,6 +1022,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
       child: ActionChip(
         label: Text(label, style: const TextStyle(fontSize: 12)),
         onPressed: () => _applySystemPromptTemplate(template),
+      ),
+    );
+  }
+
+  Future<List<PersonaTemplate>> _loadPersonaTemplates() async {
+    return context.watch<PersonaTemplateViewModel>().templates;
+  }
+
+  void _showEditPersonaTemplateDialog(PersonaTemplate? template) {
+    showDialog<void>(
+      context: context,
+      builder: (_) => PersonaTemplateDialog(existingTemplate: template),
+    );
+  }
+
+  void _deletePersonaTemplate(String id) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Template?'),
+        content: Text('Are you sure you want to delete this persona template?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppTheme.statusError),
+            onPressed: () {
+              context.read<PersonaTemplateViewModel>().deleteTemplate(id);
+              Navigator.of(ctx).pop();
+            },
+            child: const Text('Delete'),
+          ),
+        ],
       ),
     );
   }

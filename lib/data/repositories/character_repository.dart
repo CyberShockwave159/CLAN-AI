@@ -21,6 +21,28 @@ class CharacterRepository {
   }
 
   Future<CharacterProfile> createCharacter(CharacterProfile character) async {
+    // Check for duplicate names and merge memories if found
+    final existing = await getAllCharacters();
+    final existingByName = existing.where((c) =>
+        c.name.toLowerCase().trim() == character.name.toLowerCase().trim() && c.id != character.id).toList();
+
+    if (existingByName.isNotEmpty) {
+      final duplicate = existingByName.first;
+      // Keep the existing character (with its memories), but update fields from new one
+      final merged = duplicate.copyWith(
+        personality: character.personality.isNotEmpty ? character.personality : duplicate.personality,
+        firstMessage: character.firstMessage.isNotEmpty ? character.firstMessage : duplicate.firstMessage,
+        setting: character.setting ?? duplicate.setting,
+        userPersona: character.userPersona ?? duplicate.userPersona,
+        avatarData: character.avatarData ?? duplicate.avatarData,
+        systemPrompt: character.systemPrompt ?? duplicate.systemPrompt,
+        postHistoryInstructions: character.postHistoryInstructions ?? duplicate.postHistoryInstructions,
+        alternateGreetings: character.alternateGreetings.isNotEmpty ? character.alternateGreetings : duplicate.alternateGreetings,
+      );
+      await updateCharacter(merged);
+      return merged;
+    }
+
     await _localDb.insertCharacter(character);
     return character;
   }

@@ -16,6 +16,59 @@ class RoleplayPromptFormatter {
     String? setting,
     String? userPersona,
     required List<String> retrievedMemories,
+    String? characterSystemPrompt,
+    String? postHistoryInstructions,
+  }) {
+    final parts = <String>[];
+
+    // Character system prompt override (replaces entire prompt if present)
+    if (characterSystemPrompt != null && characterSystemPrompt.isNotEmpty) {
+      // Support {{original}} prefix - insert standard prompt before custom prompt
+      if (characterSystemPrompt.startsWith('{{original}}')) {
+        final standardPrompt = _buildStandardPrompt(
+          characterName: characterName,
+          personality: personality,
+          setting: setting,
+          userPersona: userPersona,
+          memories: retrievedMemories,
+        );
+        final customPrompt = characterSystemPrompt.substring('{{original}}'.length).trim();
+        parts.add('$standardPrompt\n\n$customPrompt');
+      } else {
+        parts.add(characterSystemPrompt);
+      }
+
+      // Append post history instructions if present
+      if (postHistoryInstructions != null && postHistoryInstructions.isNotEmpty) {
+        parts.add('\n\n$postHistoryInstructions');
+      }
+
+      return parts.join('\n');
+    }
+
+    // Standard prompt building
+    parts.add(_buildStandardPrompt(
+      characterName: characterName,
+      personality: personality,
+      setting: setting,
+      userPersona: userPersona,
+      memories: retrievedMemories,
+    ));
+
+    // Append post history instructions if present
+    if (postHistoryInstructions != null && postHistoryInstructions.isNotEmpty) {
+      parts.add('\n\n$postHistoryInstructions');
+    }
+
+    return parts.join('\n');
+  }
+
+  static String _buildStandardPrompt({
+    required String characterName,
+    required String personality,
+    String? setting,
+    String? userPersona,
+    required List<String> memories,
   }) {
     final parts = <String>[];
 
@@ -52,9 +105,9 @@ class RoleplayPromptFormatter {
     }
 
     // Retrieved memories (limited)
-    if (retrievedMemories.isNotEmpty) {
+    if (memories.isNotEmpty) {
       parts.add('\n\n[Character Memories — relevant facts from prior conversation]:');
-      final limitedMemories = retrievedMemories.take(_maxMemoriesInPrompt);
+      final limitedMemories = memories.take(_maxMemoriesInPrompt);
       for (final memory in limitedMemories) {
         if (memory.length > _maxMemoryLength) {
           parts.add('  - ${memory.substring(0, _maxMemoryLength)}... [truncated]');
@@ -74,6 +127,8 @@ class RoleplayPromptFormatter {
     String? setting,
     String? userPersona,
     required List<String> retrievedMemories,
+    String? characterSystemPrompt,
+    String? postHistoryInstructions,
   }) {
     return {
       'role': 'system',
@@ -83,6 +138,8 @@ class RoleplayPromptFormatter {
         setting: setting,
         userPersona: userPersona,
         retrievedMemories: retrievedMemories,
+        characterSystemPrompt: characterSystemPrompt,
+        postHistoryInstructions: postHistoryInstructions,
       ),
     };
   }

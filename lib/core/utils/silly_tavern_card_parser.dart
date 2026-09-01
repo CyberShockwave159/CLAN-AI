@@ -9,6 +9,9 @@ class ParsedCharacterCard {
   final String? setting;
   final String? userPersona;
   final String? avatarUrl;
+  final String? systemPrompt;
+  final String? postHistoryInstructions;
+  final List<String> alternateGreetings;
   final bool isValid;
 
   const ParsedCharacterCard({
@@ -18,6 +21,9 @@ class ParsedCharacterCard {
     this.setting,
     this.userPersona,
     this.avatarUrl,
+    this.systemPrompt,
+    this.postHistoryInstructions,
+    this.alternateGreetings = const [],
     this.isValid = true,
   });
 
@@ -54,7 +60,30 @@ class ParsedCharacterCard {
     final avatar = (data['avatar'] as String?)?.trim();
     final mesExample = (data['mes_example'] as String?) ?? '';
 
-    // Build personality from description (ST packs personality/appearance/background here)
+    // System prompt with {{original}} prefix support
+    final rawSystemPrompt = (data['system_prompt'] as String?)?.trim();
+    String? systemPrompt;
+    if (rawSystemPrompt != null && rawSystemPrompt.isNotEmpty) {
+      systemPrompt = rawSystemPrompt;
+    }
+
+    // Post history instructions
+    final rawPostHistory = (data['post_history_instructions'] as String?)?.trim();
+    String? postHistoryInstructions;
+    if (rawPostHistory != null && rawPostHistory.isNotEmpty) {
+      postHistoryInstructions = rawPostHistory;
+    }
+
+    // Alternate greetings
+    List<String> alternateGreetings = [];
+    final altGreetingsRaw = data['alternate_greetings'] as List<dynamic>?;
+    if (altGreetingsRaw != null) {
+      alternateGreetings = altGreetingsRaw
+          .map((e) => (e as String).trim())
+          .where((g) => g.isNotEmpty)
+          .toList();
+    }
+
     // Replace {{char}} with actual character name, {{user}} with user persona
     final userName = userPersona?.trim().isNotEmpty == true ? userPersona!.trim().split('\n').first.trim() : 'User';
     String combinedPersonality = description.trim();
@@ -91,7 +120,7 @@ class ParsedCharacterCard {
       cleanAvatarUrl = avatar;
     }
 
-    // Clean up optional fields
+    // Clean up optional fields - replace {{char}}/{{user}}
     String? cleanSetting;
     if (scenario != null && scenario.isNotEmpty) {
       cleanSetting = scenario.replaceAll('{{char}}', name).replaceAll('{{user}}', userName);
@@ -105,6 +134,11 @@ class ParsedCharacterCard {
     // Replace {{char}}/{{user}} in first message too
     final firstMesClean = firstMes.replaceAll('{{char}}', name).replaceAll('{{user}}', userName);
 
+    // Clean up alternate greetings
+    final cleanAltGreetings = alternateGreetings
+        .map((g) => g.replaceAll('{{char}}', name).replaceAll('{{user}}', userName))
+        .toList();
+
     final isValid = name.isNotEmpty &&
         combinedPersonality.isNotEmpty &&
         firstMesClean.isNotEmpty;
@@ -116,6 +150,9 @@ class ParsedCharacterCard {
       setting: cleanSetting,
       userPersona: cleanUserPersona,
       avatarUrl: cleanAvatarUrl,
+      systemPrompt: systemPrompt != null && systemPrompt.isNotEmpty ? systemPrompt : null,
+      postHistoryInstructions: postHistoryInstructions != null && postHistoryInstructions.isNotEmpty ? postHistoryInstructions : null,
+      alternateGreetings: cleanAltGreetings,
       isValid: isValid,
     );
   }

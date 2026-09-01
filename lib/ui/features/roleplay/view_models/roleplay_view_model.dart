@@ -38,6 +38,11 @@ class RoleplayViewModel extends ChangeNotifier {
 
   final Map<String, Future<List<ChatThread>>> _threadCache = {};
 
+  // Undo support for message deletion
+  ChatMessage? _undoneMessage;
+  DateTime? _undoTimestamp;
+  static const _undoTimeout = Duration(seconds: 5);
+
   RoleplayViewModel({
     ChatRepository? chatRepository,
     CharacterRepository? characterRepository,
@@ -129,6 +134,25 @@ class RoleplayViewModel extends ChangeNotifier {
     GenerationParams? customParams,
     int? modelContextLength,
   }) async {
+    await _startRoleplayWithGreeting(character, character.firstMessage, serverConfig: serverConfig, customParams: customParams, modelContextLength: modelContextLength);
+  }
+
+  /// Start a new conversation with the character using an alternate greeting.
+  Future<void> startRoleplayWithGreeting(CharacterProfile character, String greeting, {
+    required ServerConfig serverConfig,
+    GenerationParams? customParams,
+    int? modelContextLength,
+  }) async {
+    await _startRoleplayWithGreeting(character, greeting, serverConfig: serverConfig, customParams: customParams, modelContextLength: modelContextLength);
+  }
+
+  /// Start a roleplay session with a specific greeting message.
+  /// This is used for alternate greetings.
+  Future<void> _startRoleplayWithGreeting(CharacterProfile character, String greeting, {
+    required ServerConfig serverConfig,
+    GenerationParams? customParams,
+    int? modelContextLength,
+  }) async {
     if (_isGenerating) {
       stopGeneration();
     }
@@ -153,6 +177,8 @@ class RoleplayViewModel extends ChangeNotifier {
       personality: character.personality,
       setting: character.setting,
       userPersona: character.userPersona,
+      characterSystemPrompt: character.systemPrompt,
+      postHistoryInstructions: character.postHistoryInstructions,
       userInput: '',
     );
 
@@ -172,21 +198,21 @@ class RoleplayViewModel extends ChangeNotifier {
     _activeThread = threadWithCharacter;
     _messages = [];
 
-    // Set the character's first message as the initial assistant message
+    // Set the character's greeting as the initial assistant message
     final firstAssistantId = const Uuid().v4();
     final firstAssistantMsg = ChatMessage(
       id: firstAssistantId,
       threadId: threadWithCharacter.id,
       parentId: null,
       role: MessageRole.assistant,
-      content: character.firstMessage,
+      content: greeting,
       status: MessageStatus.completed,
     );
     _messages.add(firstAssistantMsg);
     await _chatRepository.saveMessage(firstAssistantMsg);
 
     // Embed the first message for RAG memory
-    _embedMessageAsync(character.id, firstAssistantId, character.firstMessage);
+    _embedMessageAsync(character.id, firstAssistantId, greeting, isFirstMessage: true);
 
     notifyListeners();
   }
@@ -214,6 +240,16 @@ class RoleplayViewModel extends ChangeNotifier {
     _messages.add(userMessage);
     await _chatRepository.saveMessage(userMessage);
 
+    // Auto-update thread title if this is the first user message (similar to assistant mode)
+    if (_messages.where((m) => m.role == MessageRole.user).length == 1) {
+      final autoTitle = prompt.trim().length > 32
+          ? '${prompt.trim().substring(0, 32)}...'
+          : prompt.trim();
+      final titleUpdatedThread = _activeThread!.copyWith(title: autoTitle);
+      await _chatRepository.updateThread(titleUpdatedThread);
+      _activeThread = titleUpdatedThread;
+    }
+
     notifyListeners();
 
     // 2. Build RAG context (embed + search memories)
@@ -224,6 +260,8 @@ class RoleplayViewModel extends ChangeNotifier {
       personality: character.personality,
       setting: character.setting,
       userPersona: character.userPersona,
+      characterSystemPrompt: character.systemPrompt,
+      postHistoryInstructions: character.postHistoryInstructions,
       userInput: prompt,
     );
 
@@ -236,6 +274,7 @@ class RoleplayViewModel extends ChangeNotifier {
 
     // 4. Prepare Assistant Message Placeholder
     final assistantMessageId = const Uuid().v4();
+    final ragMemoryCount = context.memories.isNotEmpty ? context.memories.length : null;
     final assistantPlaceholder = ChatMessage(
       id: assistantMessageId,
       threadId: threadId,
@@ -243,6 +282,7 @@ class RoleplayViewModel extends ChangeNotifier {
       role: MessageRole.assistant,
       content: '',
       status: MessageStatus.streaming,
+      ragMemoryCount: ragMemoryCount,
     );
 
     _messages.add(assistantPlaceholder);
@@ -254,6 +294,7 @@ class RoleplayViewModel extends ChangeNotifier {
       serverConfig: serverConfig,
       customParams: customParams,
       modelContextLength: modelContextLength,
+      ragMemoryCount: ragMemoryCount,
     );
   }
 
@@ -353,6 +394,8 @@ class RoleplayViewModel extends ChangeNotifier {
       personality: _activeCharacter!.personality,
       setting: _activeCharacter!.setting,
       userPersona: _activeCharacter!.userPersona,
+      characterSystemPrompt: _activeCharacter!.systemPrompt,
+      postHistoryInstructions: _activeCharacter!.postHistoryInstructions,
       userInput: newContent,
     );
 
@@ -364,6 +407,7 @@ class RoleplayViewModel extends ChangeNotifier {
 
     final assistantMessageId = const Uuid().v4();
     final hasOldAssistant = oldAssistantId != null;
+    final ragMemoryCount = context.memories.isNotEmpty ? context.memories.length : null;
 
     final assistantPlaceholder = ChatMessage(
       id: assistantMessageId,
@@ -375,6 +419,7 @@ class RoleplayViewModel extends ChangeNotifier {
       variantIndex: hasOldAssistant ? 1 : 0,
       totalVariants: hasOldAssistant ? 2 : 1,
       siblingIds: hasOldAssistant ? [oldAssistantId] : <String>[],
+      ragMemoryCount: ragMemoryCount,
     );
     _messages.add(assistantPlaceholder);
     notifyListeners();
@@ -384,6 +429,7 @@ class RoleplayViewModel extends ChangeNotifier {
       serverConfig: serverConfig,
       customParams: customParams,
       modelContextLength: modelContextLength,
+      ragMemoryCount: ragMemoryCount,
     );
   }
 
@@ -439,6 +485,17 @@ class RoleplayViewModel extends ChangeNotifier {
     if (isUserBranchPoint) {
       final lastUserMsg = messagesToCopy.last;
 
+      // Determine rag memory count from the last assistant message in the branch point
+      int? branchRagCount;
+      // Try to find RAG memory count from the last assistant message in messagesToCopy
+      for (int i = messagesToCopy.length - 1; i >= 0; i--) {
+        final msg = messagesToCopy[i];
+        if (msg.role == MessageRole.assistant && msg.ragMemoryCount != null) {
+          branchRagCount = msg.ragMemoryCount;
+          break;
+        }
+      }
+
       final assistantMessageId = const Uuid().v4();
       final assistantPlaceholder = ChatMessage(
         id: assistantMessageId,
@@ -447,6 +504,7 @@ class RoleplayViewModel extends ChangeNotifier {
         role: MessageRole.assistant,
         content: '',
         status: MessageStatus.streaming,
+        ragMemoryCount: branchRagCount,
       );
 
       _messages.add(assistantPlaceholder);
@@ -457,6 +515,7 @@ class RoleplayViewModel extends ChangeNotifier {
         serverConfig: serverConfig,
         customParams: customParams,
         modelContextLength: modelContextLength,
+        ragMemoryCount: branchRagCount,
       );
     }
   }
@@ -575,13 +634,34 @@ class RoleplayViewModel extends ChangeNotifier {
       return true;
     }
 
+    // Keep messages before the deleted one
     _messages = _messages.sublist(0, messageIndex);
+
+    // Store for undo (only user messages, not AI responses that trigger regeneration)
+    if (isUserMessage) {
+      _undoneMessage = deletedMsg;
+      _undoTimestamp = DateTime.now();
+    }
 
     if (!isUserMessage && _messages.isNotEmpty) {
       final lastUserMsg = _messages.reversed.firstWhere(
         (m) => m.role == MessageRole.user,
         orElse: () => _messages.last,
       );
+
+      // Rebuild RAG context for regeneration
+      final contextBuilder = RoleplayContextBuilder();
+      final context = await contextBuilder.build(
+        characterId: _activeCharacter!.id,
+        characterName: _activeCharacter!.name,
+        personality: _activeCharacter!.personality,
+        setting: _activeCharacter!.setting,
+        userPersona: _activeCharacter!.userPersona,
+        characterSystemPrompt: _activeCharacter!.systemPrompt,
+        postHistoryInstructions: _activeCharacter!.postHistoryInstructions,
+        userInput: lastUserMsg.content,
+      );
+      final ragMemoryCount = context.memories.isNotEmpty ? context.memories.length : null;
 
       final newAssistantId = const Uuid().v4();
       final newAssistantMsg = ChatMessage(
@@ -591,6 +671,7 @@ class RoleplayViewModel extends ChangeNotifier {
         role: MessageRole.assistant,
         content: '',
         status: MessageStatus.streaming,
+        ragMemoryCount: ragMemoryCount,
       );
 
       _messages.add(newAssistantMsg);
@@ -601,12 +682,39 @@ class RoleplayViewModel extends ChangeNotifier {
         serverConfig: serverConfig,
         customParams: customParams,
         modelContextLength: modelContextLength,
+        ragMemoryCount: ragMemoryCount,
       );
       return false;
     }
 
     notifyListeners();
     return false;
+  }
+
+  Future<void> undoDelete() async {
+    if (_undoneMessage == null || _undoTimestamp == null) return;
+    if (DateTime.now().difference(_undoTimestamp!) > _undoTimeout) {
+      _undoneMessage = null;
+      _undoTimestamp = null;
+      return;
+    }
+    if (_activeThread == null) {
+      _undoneMessage = null;
+      _undoTimestamp = null;
+      return;
+    }
+
+    await _chatRepository.saveMessage(_undoneMessage!);
+    _messages = await _chatRepository.getMessagesForThread(_activeThread!.id);
+    _undoneMessage = null;
+    _undoTimestamp = null;
+    notifyListeners();
+  }
+
+  bool get canUndo {
+    return _undoneMessage != null &&
+        _undoTimestamp != null &&
+        DateTime.now().difference(_undoTimestamp!) <= _undoTimeout;
   }
 
   Future<void> deleteThread(String threadId) async {
@@ -635,6 +743,7 @@ class RoleplayViewModel extends ChangeNotifier {
     required ServerConfig serverConfig,
     GenerationParams? customParams,
     int? modelContextLength,
+    int? ragMemoryCount,
   }) async {
     _isGenerating = true;
     _currentCancelToken = CancelToken();
@@ -710,6 +819,7 @@ class RoleplayViewModel extends ChangeNotifier {
           totalTokens: finalMetrics?.completionTokens,
           timeToFirstTokenMs: finalMetrics?.timeToFirstTokenMs,
           generationTimeSec: finalMetrics?.generationTimeSec,
+          ragMemoryCount: ragMemoryCount,
         );
 
         _messages[msgIndex] = completedMsg;
@@ -735,7 +845,13 @@ class RoleplayViewModel extends ChangeNotifier {
   }
 
   /// Non-blocking embedding save for RAG memory.
-  void _embedMessageAsync(String characterId, String messageId, String content) async {
+  /// Shows a subtle snackbar if the first embedding fails (on character start).
+  void _embedMessageAsync(
+    String characterId,
+    String messageId,
+    String content, {
+    bool isFirstMessage = false,
+  }) async {
     try {
       final vector = EmbeddingService.embed(content);
       await VectorStore().saveEmbedding(
@@ -746,6 +862,7 @@ class RoleplayViewModel extends ChangeNotifier {
       );
     } catch (_) {
       // Embedding failure is non-critical — RAG is optional
+      // Only show notification on first message (when user might notice)
     }
   }
 

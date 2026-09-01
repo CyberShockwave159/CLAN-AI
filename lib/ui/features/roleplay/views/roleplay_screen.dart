@@ -9,6 +9,7 @@ import 'package:clan_ai/ui/features/settings/view_models/settings_view_model.dar
 import 'package:clan_ai/ui/features/settings/views/parameter_tuning_sheet.dart';
 import 'package:clan_ai/ui/features/settings/views/settings_screen.dart';
 import 'package:clan_ai/ui/shared/connection_badge.dart';
+import 'package:clan_ai/ui/features/roleplay/widgets/alternate_greeting_selector.dart';
 
 class RoleplayScreen extends StatefulWidget {
   const RoleplayScreen({super.key});
@@ -74,6 +75,18 @@ class _RoleplayScreenState extends State<RoleplayScreen> {
     );
     if (shouldDeleteThread) {
       _scrollToBottom(false);
+    }
+    // Show undo snackbar if undo is available
+    if (roleplayVM.canUndo) {
+      final snackBar = SnackBar(
+        content: const Text('Message deleted'),
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: roleplayVM.undoDelete,
+        ),
+        duration: const Duration(seconds: 5),
+      );
+      ScaffoldMessenger.of(context).showSnackBar(snackBar);
     }
   }
 
@@ -163,11 +176,15 @@ class _RoleplayScreenState extends State<RoleplayScreen> {
                         itemCount: roleplayVM.messages.length,
                         itemBuilder: (context, index) {
                           final message = roleplayVM.messages[index];
+                          final avatar = roleplayVM.activeCharacter?.avatarData;
+                          final name = roleplayVM.activeCharacter?.name;
                           return MessageBubble(
                             key: ValueKey(message.id),
                             message: message,
                             messageIndex: index,
                             isLastMessage: index == roleplayVM.messages.length - 1,
+                            characterAvatar: avatar,
+                            characterName: name,
                             onRegenerate: () {
                               roleplayVM.regenerateMessage(
                                 messageIndex: index,
@@ -237,6 +254,22 @@ class _RoleplayScreenState extends State<RoleplayScreen> {
               ],
             ),
           ),
+
+            // Alternate Greeting Selector
+          if (roleplayVM.activeCharacter != null &&
+              roleplayVM.activeCharacter!.alternateGreetings.isNotEmpty)
+            AlternateGreetingSelector(
+              greetings: roleplayVM.activeCharacter!.alternateGreetings,
+              onSelectGreeting: () {
+                // Start a new conversation with the selected character
+                // (The drawer closes when selecting a different character)
+                roleplayVM.startRoleplay(
+                  roleplayVM.activeCharacter!,
+                  serverConfig: settingsVM.config,
+                  modelContextLength: settingsVM.getSelectedModelContextLength(),
+                );
+              },
+            ),
 
           // Bottom Prompt Input Bar
           PromptInputBar(

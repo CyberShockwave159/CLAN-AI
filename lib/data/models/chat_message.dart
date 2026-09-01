@@ -46,6 +46,7 @@ class ChatMessage {
   final DateTime createdAt;
   final bool isEdited;
   final DateTime? updatedAt;
+  final int? ragMemoryCount;
 
   ChatMessage({
     String? id,
@@ -65,6 +66,7 @@ class ChatMessage {
     DateTime? createdAt,
     this.isEdited = false,
     this.updatedAt,
+    this.ragMemoryCount,
   })  : id = id ?? const Uuid().v4(),
         createdAt = createdAt ?? DateTime.now();
 
@@ -86,6 +88,7 @@ class ChatMessage {
     DateTime? createdAt,
     bool? isEdited,
     DateTime? updatedAt,
+    int? ragMemoryCount,
   }) {
     return ChatMessage(
       id: id ?? this.id,
@@ -105,6 +108,7 @@ class ChatMessage {
       createdAt: createdAt ?? this.createdAt,
       isEdited: isEdited ?? this.isEdited,
       updatedAt: updatedAt ?? this.updatedAt,
+      ragMemoryCount: ragMemoryCount ?? this.ragMemoryCount,
     );
   }
 
@@ -127,6 +131,7 @@ class ChatMessage {
       'created_at': createdAt.toIso8601String(),
       'is_edited': isEdited ? 1 : 0,
       'updated_at': updatedAt?.toIso8601String(),
+      'rag_memory_count': ragMemoryCount,
     };
   }
 
@@ -159,6 +164,7 @@ class ChatMessage {
       updatedAt: map['updated_at'] != null
           ? DateTime.tryParse(map['updated_at'] as String)
           : null,
+      ragMemoryCount: (map['rag_memory_count'] as num?)?.toInt(),
     );
   }
 

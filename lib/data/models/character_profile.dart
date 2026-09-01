@@ -11,6 +11,9 @@ class CharacterProfile {
   final String? userPersona;
   final Uint8List? avatarData;
   final bool isFavorite;
+  final String? systemPrompt;
+  final String? postHistoryInstructions;
+  final List<String> alternateGreetings;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -23,11 +26,15 @@ class CharacterProfile {
     this.userPersona,
     this.avatarData,
     this.isFavorite = false,
+    this.systemPrompt,
+    this.postHistoryInstructions,
+    List<String>? alternateGreetings,
     DateTime? createdAt,
     DateTime? updatedAt,
   })  : id = id ?? const Uuid().v4(),
         createdAt = createdAt ?? DateTime.now(),
-        updatedAt = updatedAt ?? DateTime.now();
+        updatedAt = updatedAt ?? DateTime.now(),
+        alternateGreetings = alternateGreetings ?? [];
 
   CharacterProfile copyWith({
     String? id,
@@ -38,6 +45,9 @@ class CharacterProfile {
     String? userPersona,
     Uint8List? avatarData,
     bool? isFavorite,
+    String? systemPrompt,
+    String? postHistoryInstructions,
+    List<String>? alternateGreetings,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -50,6 +60,9 @@ class CharacterProfile {
       userPersona: userPersona ?? this.userPersona,
       avatarData: avatarData ?? this.avatarData,
       isFavorite: isFavorite ?? this.isFavorite,
+      systemPrompt: systemPrompt ?? this.systemPrompt,
+      postHistoryInstructions: postHistoryInstructions ?? this.postHistoryInstructions,
+      alternateGreetings: alternateGreetings ?? this.alternateGreetings,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -65,12 +78,24 @@ class CharacterProfile {
       'user_persona': userPersona,
       'avatar_data': avatarData != null ? base64Encode(avatarData!) : null,
       'is_favorite': isFavorite ? 1 : 0,
+      'system_prompt': systemPrompt,
+      'post_history_instructions': postHistoryInstructions,
+      'alternate_greetings': jsonEncode(alternateGreetings),
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
   }
 
   factory CharacterProfile.fromMap(Map<String, dynamic> map) {
+    List<String> altGreetings = [];
+    final greetingsJson = map['alternate_greetings'] as String?;
+    if (greetingsJson != null && greetingsJson.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(greetingsJson) as List<dynamic>;
+        altGreetings = decoded.map((e) => e.toString()).toList();
+      } catch (_) {}
+    }
+
     return CharacterProfile(
       id: map['id'] as String? ?? const Uuid().v4(),
       name: map['name'] as String? ?? 'Unknown',
@@ -82,6 +107,9 @@ class CharacterProfile {
           ? base64Decode(map['avatar_data'] as String)
           : null,
       isFavorite: (map['is_favorite'] as int?) == 1,
+      systemPrompt: map['system_prompt'] as String?,
+      postHistoryInstructions: map['post_history_instructions'] as String?,
+      alternateGreetings: altGreetings,
       createdAt: DateTime.tryParse(map['created_at'] as String) ?? DateTime.now(),
       updatedAt: DateTime.tryParse(map['updated_at'] as String) ?? DateTime.now(),
     );

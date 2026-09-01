@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:clan_ai/core/constants/app_theme.dart';
 import 'package:clan_ai/core/utils/conversation_export.dart';
@@ -11,6 +13,9 @@ import 'package:clan_ai/data/models/chat_thread.dart';
 import 'package:clan_ai/data/models/character_profile.dart';
 import 'package:clan_ai/data/repositories/character_repository.dart';
 import 'package:clan_ai/ui/features/roleplay/widgets/character_creation_wizard.dart';
+import 'package:clan_ai/ui/features/roleplay/widgets/silly_tavern_import_dialog.dart';
+import 'package:clan_ai/ui/features/roleplay/widgets/persona_template_dialog.dart';
+import 'package:clan_ai/ui/features/roleplay/view_models/persona_template_view_model.dart';
 import 'package:clan_ai/ui/features/roleplay/view_models/roleplay_view_model.dart';
 import 'package:clan_ai/ui/features/settings/view_models/settings_view_model.dart';
 import 'package:clan_ai/ui/features/settings/views/settings_screen.dart';
@@ -27,6 +32,7 @@ class RoleplayDrawer extends StatefulWidget {
 class _RoleplayDrawerState extends State<RoleplayDrawer> {
   String _searchQuery = '';
   final Set<String> _expandedCharacters = {};
+  bool _showFavoritesOnly = false;
 
   void _toggleCharacterExpansion(String characterId) {
     setState(() {
@@ -43,18 +49,83 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setState) {
+          final isDark = Theme.of(ctx).brightness == Brightness.dark;
           final nameCtrl = TextEditingController(text: character.name);
           final personalityCtrl = TextEditingController(text: character.personality);
           final firstMsgCtrl = TextEditingController(text: character.firstMessage);
           final settingCtrl = TextEditingController(text: character.setting ?? '');
           final userPersonaCtrl = TextEditingController(text: character.userPersona ?? '');
+          final systemPromptCtrl = TextEditingController(text: character.systemPrompt ?? '');
+          final postHistoryCtrl = TextEditingController(text: character.postHistoryInstructions ?? '');
+          final alternateGreetingsCtrl = TextEditingController(text: character.alternateGreetings.join('\n'));
+           final personaVM = ctx.watch<PersonaTemplateViewModel>();
+          String? selectedTemplateId;
+          Uint8List? avatarPreview;
+          final displayAvatar = avatarPreview ?? character.avatarData;
 
-          return AlertDialog(
-            title: const Text('Edit Character'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
+           return AlertDialog(
+             title: const Text('Edit Character'),
+             content: SingleChildScrollView(
+               child: Column(
+                 mainAxisSize: MainAxisSize.min,
+                 crossAxisAlignment: CrossAxisAlignment.start,
+                 children: [
+                   Row(
+                     children: [
+                       GestureDetector(
+                         onTap: () async {
+                           final XFile? image = await ImagePicker().pickImage(source: ImageSource.gallery);
+                           if (image != null) {
+                             final bytes = await image.readAsBytes();
+                             setState(() => avatarPreview = bytes);
+                           }
+                         },
+                         child: Container(
+                           width: 48,
+                           height: 48,
+                           decoration: BoxDecoration(
+                             shape: BoxShape.circle,
+                             color: _avatarColor(displayAvatar, isDark),
+                             border: Border.all(color: AppTheme.accentPrimary.withValues(alpha: 0.4), width: 2),
+                           ),
+                           child: displayAvatar != null
+                               ? ClipOval(child: Image.memory(displayAvatar, width: 48, height: 48, fit: BoxFit.cover))
+                               : const Icon(Icons.camera_alt_rounded, size: 20, color: AppTheme.accentPrimary),
+                         ),
+                       ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            ElevatedButton.icon(
+                              onPressed: () async {
+                                final XFile? image = await ImagePicker().pickImage(source: ImageSource.gallery);
+                                if (image != null) {
+                                  final bytes = await image.readAsBytes();
+                                  setState(() => avatarPreview = bytes);
+                                }
+                              },
+                              icon: const Icon(Icons.image_rounded, size: 14),
+                              label: const Text('Change'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: isDark ? AppTheme.darkSurfaceVariant : AppTheme.lightSurfaceVariant,
+                                foregroundColor: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              ),
+                            ),
+                            if (avatarPreview != null || character.avatarData != null)
+                              TextButton(
+                                onPressed: () => setState(() => avatarPreview = null),
+                                style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                                child: const Text('Remove', style: TextStyle(fontSize: 11)),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
                   TextField(
                     controller: nameCtrl,
                     decoration: const InputDecoration(labelText: 'Name'),
@@ -79,9 +150,96 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
                   ),
                   const SizedBox(height: 8),
                   TextField(
-                    controller: userPersonaCtrl,
-                    maxLines: 2,
-                    decoration: const InputDecoration(labelText: 'User Persona (Optional)'),
+                    controller: alternateGreetingsCtrl,
+                    maxLines: 4,
+                    decoration: const InputDecoration(
+                      labelText: 'Alternate Greetings (One per line, Optional)',
+                      hintText: 'One greeting per line',
+                    ),
+                  ),
+                   const SizedBox(height: 8),
+                    ValueListenableBuilder<TextEditingValue>(
+                      valueListenable: userPersonaCtrl,
+                      builder: (context, value, child) {
+                        return TextField(
+                          controller: userPersonaCtrl,
+                          maxLines: 3,
+                          decoration: const InputDecoration(
+                            labelText: 'Your Persona (Optional)',
+                            hintText: 'Describe your role in this roleplay',
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                   Row(
+                     children: [
+                       Expanded(
+                         child: DropdownButtonFormField<String>(
+                           value: selectedTemplateId,
+                           decoration: InputDecoration(
+                             labelText: 'Load Persona Template',
+                             prefixIcon: const Icon(Icons.tag_rounded),
+                             border: OutlineInputBorder(
+                               borderRadius: BorderRadius.circular(12),
+                             ),
+                           ),
+                           hint: const Text('Select a template...'),
+                           items: [
+                             const DropdownMenuItem<String>(
+                               value: '',
+                               child: Text('-- None --'),
+                             ),
+                              ...personaVM.templates.map((template) {
+                               return DropdownMenuItem<String>(
+                                 value: template.id,
+                                 child: Text(template.name),
+                               );
+                             }),
+                           ],
+                              onChanged: (value) {
+                              setState(() => selectedTemplateId = value);
+                              if (value != null && value.isNotEmpty) {
+                                final template = personaVM.getTemplateById(value);
+                                if (template != null) {
+                                  userPersonaCtrl.text = template.description;
+                                  setState(() {});
+                                }
+                              }
+                            },
+                         ),
+                       ),
+                       const SizedBox(width: 8),
+                       IconButton(
+                         tooltip: 'Create new template',
+                         icon: const Icon(Icons.add_circle_rounded),
+                         onPressed: () async {
+                           await showDialog<void>(
+                             context: ctx,
+                             builder: (_) => const PersonaTemplateDialog(),
+                           );
+                           setState(() {});
+                         },
+                       ),
+                     ],
+                   ),
+                   const SizedBox(height: 8),
+                   TextField(
+                     controller: systemPromptCtrl,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      labelText: 'System Prompt Override (Optional)',
+                      hintText: 'Use {{original}} to prepend to default prompt',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: postHistoryCtrl,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      labelText: 'Post History Instructions (Optional)',
+                      hintText: 'Additional instructions appended after AI responses',
+                    ),
                   ),
                 ],
               ),
@@ -93,12 +251,26 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
               ),
               FilledButton(
                 onPressed: () {
+                  List<String> alternateGreetings = [];
+                  final greetingsText = alternateGreetingsCtrl.text.trim();
+                  if (greetingsText.isNotEmpty) {
+                    alternateGreetings = greetingsText
+                        .split('\n')
+                        .map((g) => g.trim())
+                        .where((g) => g.isNotEmpty)
+                        .toList();
+                  }
+
                   final updated = character.copyWith(
                     name: nameCtrl.text.trim().isEmpty ? character.name : nameCtrl.text.trim(),
                     personality: personalityCtrl.text.trim(),
                     firstMessage: firstMsgCtrl.text.trim(),
                     setting: settingCtrl.text.trim().isEmpty ? null : settingCtrl.text.trim(),
                     userPersona: userPersonaCtrl.text.trim().isEmpty ? null : userPersonaCtrl.text.trim(),
+                    avatarData: avatarPreview,
+                    systemPrompt: systemPromptCtrl.text.trim().isEmpty ? null : systemPromptCtrl.text.trim(),
+                    postHistoryInstructions: postHistoryCtrl.text.trim().isEmpty ? null : postHistoryCtrl.text.trim(),
+                    alternateGreetings: alternateGreetings,
                   );
                   repo.updateCharacter(updated);
                   Navigator.of(ctx).pop(updated);
@@ -151,6 +323,10 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
     return colors[idx];
   }
 
+  Color _avatarColor(Uint8List? avatar, bool isDark) {
+    return avatar != null ? Colors.transparent : (isDark ? AppTheme.darkSurfaceVariant : AppTheme.lightSurfaceVariant);
+  }
+
   String _getInitials(String name) {
     final parts = name.trim().split(RegExp(r'\s+'));
     if (parts.isEmpty) return '?';
@@ -192,24 +368,21 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
                   side: BorderSide(color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder),
                 ),
                 onPressed: () async {
-                  Navigator.of(context).pop();
-                  final newCharacter = await showDialog<CharacterProfile>(
-                    context: context,
-                    builder: (_) => const CharacterCreationWizard(),
-                  );
-                  if (mounted && newCharacter != null) {
-                    // ignore: use_build_context_synchronously
-                    final settingsVM = context.read<SettingsViewModel>();
-                    // ignore: use_build_context_synchronously
-                    final roleplayVM = context.read<RoleplayViewModel>();
-                    // ignore: use_build_context_synchronously
-                    roleplayVM.startRoleplay(
-                      newCharacter,
-                      serverConfig: settingsVM.config,
-                      modelContextLength: settingsVM.getSelectedModelContextLength(),
-                    );
-                  }
-                },
+                   final settingsVM = context.read<SettingsViewModel>();
+                   final roleplayVM = context.read<RoleplayViewModel>();
+                   Navigator.of(context).pop();
+                   final newCharacter = await showDialog<CharacterProfile>(
+                     context: context,
+                     builder: (_) => const CharacterCreationWizard(),
+                   );
+                    if (mounted && newCharacter != null) {
+                      await roleplayVM.startRoleplay(
+                        newCharacter,
+                        serverConfig: settingsVM.config,
+                        modelContextLength: settingsVM.getSelectedModelContextLength(),
+                      );
+                    }
+                 },
               ),
             ),
 
@@ -226,74 +399,102 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
                   side: BorderSide(color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder),
                 ),
                 onPressed: () async {
-                  final result = await FilePicker.platform.pickFiles(
-                    type: FileType.custom,
-                    allowedExtensions: ['json'],
-                    allowMultiple: false,
-                  );
-                  if (result == null || result.files.isEmpty || result.files.first.path == null) return;
+                   final charRepo = context.read<CharacterRepository>();
+                   final settingsVM = context.read<SettingsViewModel>();
+                   final roleplayVM = context.read<RoleplayViewModel>();
 
-                  Navigator.of(context).pop();
+                   final result = await FilePicker.platform.pickFiles(
+                     type: FileType.custom,
+                     allowedExtensions: ['json'],
+                     allowMultiple: false,
+                   );
+                   if (result == null || result.files.isEmpty || result.files.first.path == null) return;
 
-                  try {
-                    final content = await File(result.files.first.path!).readAsString();
-                    final json = jsonDecode(content) as Map<String, dynamic>;
-                    final parsed = ParsedCharacterCard.fromJson(json);
+                   Navigator.of(context).pop();
 
-                    if (!parsed.isValid) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Not a valid SillyTavern character card (chara_card_v2)')),
-                      );
-                      return;
-                    }
+                   try {
+                     final content = await File(result.files.first.path!).readAsString();
+                     final json = jsonDecode(content) as Map<String, dynamic>;
+                     final parsed = ParsedCharacterCard.fromJson(json);
 
-                    final character = CharacterProfile(
-                      name: parsed.name,
-                      personality: parsed.personality,
-                      firstMessage: parsed.firstMessage,
-                      setting: parsed.setting,
-                      userPersona: parsed.userPersona,
-                    );
+                     if (!parsed.isValid) {
+                       if (context.mounted) {
+                         ScaffoldMessenger.of(context).showSnackBar(
+                           const SnackBar(content: Text('Not a valid SillyTavern character card (chara_card_v2)')),
+                         );
+                       }
+                       return;
+                     }
 
-                    await context.read<CharacterRepository>().createCharacter(character);
+                     final character = CharacterProfile(
+                       name: parsed.name,
+                       personality: parsed.personality,
+                       firstMessage: parsed.firstMessage,
+                       setting: parsed.setting,
+                       userPersona: parsed.userPersona,
+                     );
+
+                     await charRepo.createCharacter(character);
 
                      // Auto-open edit dialog for the imported character
-                     final charRepo = context.read<CharacterRepository>();
                      final updated = await _showEditDialog(context, character, charRepo);
 
-                    final settingsVM = context.read<SettingsViewModel>();
-                    await context.read<RoleplayViewModel>().startRoleplay(
-                      updated,
-                      serverConfig: settingsVM.config,
-                      modelContextLength: settingsVM.getSelectedModelContextLength(),
-                    );
+                     await roleplayVM.startRoleplay(
+                       updated,
+                       serverConfig: settingsVM.config,
+                       modelContextLength: settingsVM.getSelectedModelContextLength(),
+                     );
 
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Character imported')),
-                      );
-                    }
-                  } catch (e) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Import failed: $e')),
-                      );
-                    }
-                  }
-                },
+                     if (context.mounted) {
+                       ScaffoldMessenger.of(context).showSnackBar(
+                         const SnackBar(content: Text('Character imported')),
+                       );
+                     }
+                   } catch (e) {
+                     if (context.mounted) {
+                       ScaffoldMessenger.of(context).showSnackBar(
+                         SnackBar(content: Text('Import failed: $e')),
+                       );
+                     }
+                   }
+                 },
               ),
             ),
 
             // Search Bar
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: TextField(
-                onChanged: (val) => setState(() => _searchQuery = val),
-                decoration: InputDecoration(
-                  hintText: 'Search characters...',
-                  prefixIcon: const Icon(Icons.search_rounded, size: 20),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      onChanged: (val) => setState(() => _searchQuery = val),
+                      decoration: InputDecoration(
+                        hintText: 'Search characters...',
+                        prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Tooltip(
+                    message: _showFavoritesOnly ? 'Show all characters' : 'Show favorites only',
+                    child: IconButton(
+                      icon: Icon(
+                        Icons.star_rounded,
+                        size: 20,
+                        color: _showFavoritesOnly
+                            ? AppTheme.accentSecondary
+                            : (isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted),
+                      ),
+                      onPressed: () => setState(() => _showFavoritesOnly = !_showFavoritesOnly),
+                    ),
+                  ),
+                ],
               ),
             ),
 
@@ -331,10 +532,10 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
                     );
                   }
 
-                  final filtered = _searchQuery.isEmpty
-                      ? snapshot.data!
-                      : snapshot.data!.where((c) =>
-                          c.name.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
+                  final filtered = snapshot.data!
+                      .where((c) => _searchQuery.isEmpty || c.name.toLowerCase().contains(_searchQuery.toLowerCase()))
+                      .where((c) => !_showFavoritesOnly || c.isFavorite)
+                      .toList();
 
                   if (filtered.isEmpty) {
                     return Center(
@@ -543,43 +744,68 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
                                           ),
                                         ),
                                         const Divider(height: 1),
-                                        // Existing threads
-                                        ...threads.map((thread) {
-                                          final isActive = thread.id == activeThreadId;
-                                          final hasBranchParent = thread.branchFromThreadId != null;
-                                          return Material(
-                                            color: Colors.transparent,
-                                            child: InkWell(
-                                              onTap: () {
-                                                roleplayVM.selectThread(thread);
-                                                Navigator.of(context).pop();
-                                              },
-                                              child: Padding(
-                                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                                child: Row(
-                                                  children: [
-                                                    Icon(
-                                                      hasBranchParent
-                                                          ? Icons.call_split_rounded
-                                                          : Icons.chat_bubble_outline_rounded,
-                                                      size: 16,
-                                                      color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
-                                                    ),
-                                                    const SizedBox(width: 8),
-                                                    Expanded(
-                                                      child: Text(
-                                                        thread.title,
-                                                        maxLines: 1,
-                                                        overflow: TextOverflow.ellipsis,
-                                                        style: TextStyle(
-                                                          fontSize: 12.5,
-                                                          fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
-                                                          color: isActive
-                                                              ? AppTheme.accentPrimary
-                                                              : (isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary),
-                                                        ),
-                                                      ),
-                                                    ),
+                                         // Existing threads
+                                         ...threads.map((thread) {
+                                           final isActive = thread.id == activeThreadId;
+                                           final hasBranchParent = thread.branchFromThreadId != null;
+                                           // Find parent thread title if this is a branch
+                                           String? branchParentTitle;
+                                           if (hasBranchParent) {
+                                             final parentThread = threads.firstWhere(
+                                               (t) => t.id == thread.branchFromThreadId,
+                                               orElse: () => thread,
+                                             );
+                                             branchParentTitle = parentThread.title;
+                                           }
+                                           return Material(
+                                             color: Colors.transparent,
+                                             child: InkWell(
+                                               onTap: () {
+                                                 roleplayVM.selectThread(thread);
+                                                 Navigator.of(context).pop();
+                                               },
+                                               child: Padding(
+                                                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                                 child: Row(
+                                                   children: [
+                                                     Icon(
+                                                       hasBranchParent
+                                                           ? Icons.call_split_rounded
+                                                           : Icons.chat_bubble_outline_rounded,
+                                                       size: 16,
+                                                       color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                                                     ),
+                                                     const SizedBox(width: 8),
+                                                     Expanded(
+                                                       child: Column(
+                                                         crossAxisAlignment: CrossAxisAlignment.start,
+                                                         children: [
+                                                           Text(
+                                                             thread.title,
+                                                             maxLines: 1,
+                                                             overflow: TextOverflow.ellipsis,
+                                                             style: TextStyle(
+                                                               fontSize: 12.5,
+                                                               fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+                                                               color: isActive
+                                                                   ? AppTheme.accentPrimary
+                                                                   : (isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary),
+                                                             ),
+                                                           ),
+                                                           if (hasBranchParent && branchParentTitle != null)
+                                                             Text(
+                                                               'Branch of: $branchParentTitle',
+                                                               maxLines: 1,
+                                                               overflow: TextOverflow.ellipsis,
+                                                               style: TextStyle(
+                                                                 fontSize: 10,
+                                                                 fontStyle: FontStyle.italic,
+                                                                 color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                                                               ),
+                                                             ),
+                                                         ],
+                                                       ),
+                                                     ),
                                                     if (isActive) ...[
                                                       Icon(
                                                         Icons.check_rounded,

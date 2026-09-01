@@ -19,6 +19,8 @@ class RoleplayContextBuilder {
     required String personality,
     String? setting,
     String? userPersona,
+    String? characterSystemPrompt,
+    String? postHistoryInstructions,
     required String userInput,
   }) async {
     // 1. Embed the user input
@@ -36,13 +38,15 @@ class RoleplayContextBuilder {
         .map((m) => m['content'] as String)
         .toList();
 
-    // 4. Build system prompt with retrieved memories
+    // 4. Build system prompt with retrieved memories and character overrides
     final systemPrompt = RoleplayPromptFormatter.buildSystemPrompt(
       characterName: characterName,
       personality: personality,
       setting: setting,
       userPersona: userPersona,
       retrievedMemories: memoryTexts,
+      characterSystemPrompt: characterSystemPrompt,
+      postHistoryInstructions: postHistoryInstructions,
     );
 
     return RoleplayContext(

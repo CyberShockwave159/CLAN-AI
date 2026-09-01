@@ -12,6 +12,7 @@ import 'package:clan_ai/data/models/character_profile.dart';
 import 'package:clan_ai/data/models/server_config.dart';
 import 'package:clan_ai/data/models/server_profile.dart';
 import 'package:clan_ai/data/models/system_prompt_template.dart';
+import 'package:clan_ai/data/models/persona_template.dart';
 import 'package:clan_ai/data/models/app_mode.dart';
 
 class LocalDatabase {
@@ -47,7 +48,7 @@ class LocalDatabase {
 
     return await openDatabase(
       path,
-      version: 5,
+      version: 6,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
     );
@@ -91,6 +92,14 @@ class LocalDatabase {
         await db.execute('ALTER TABLE messages ADD COLUMN updated_at TEXT');
       }
     }
+    if (oldVersion < 6) {
+      final columns = await db.rawQuery("PRAGMA table_info(messages)");
+      final hasRagMemoryCount = (columns as List<dynamic>)
+          .any((col) => (col as Map<String, dynamic>)['name'] == 'rag_memory_count');
+      if (!hasRagMemoryCount) {
+        await db.execute('ALTER TABLE messages ADD COLUMN rag_memory_count INTEGER DEFAULT NULL');
+      }
+    }
   }
 
   Future<void> _createDB(Database db, int version) async {
@@ -128,6 +137,9 @@ class LocalDatabase {
         total_variants INTEGER NOT NULL DEFAULT 1,
         sibling_ids TEXT,
         created_at TEXT NOT NULL,
+        is_edited INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT,
+        rag_memory_count INTEGER DEFAULT NULL,
         FOREIGN KEY (thread_id) REFERENCES threads (id) ON DELETE CASCADE
       )
     ''');
@@ -395,6 +407,29 @@ class LocalDatabase {
     final p = await prefs;
     await p.setString(
         _keySystemPromptTemplates, jsonEncode(templates.map((t) => t.toMap()).toList()));
+  }
+
+  // --- Persona Template Persistence ---
+
+  static const String _keyPersonaTemplates = 'clan_persona_templates';
+
+  Future<List<PersonaTemplate>> loadPersonaTemplates() async {
+    final p = await prefs;
+    final jsonStr = p.getString(_keyPersonaTemplates);
+    if (jsonStr != null && jsonStr.isNotEmpty) {
+      try {
+        final List<dynamic> jsonList = jsonDecode(jsonStr) as List<dynamic>;
+        return jsonList
+            .map((e) => PersonaTemplate.fromMap(e as Map<String, dynamic>))
+            .toList();
+      } catch (_) {}
+    }
+    return [];
+  }
+
+  Future<void> savePersonaTemplates(List<PersonaTemplate> templates) async {
+    final p = await prefs;
+    await p.setString(_keyPersonaTemplates, jsonEncode(templates.map((t) => t.toMap()).toList()));
   }
 
   // --- Server Profile Persistence ---

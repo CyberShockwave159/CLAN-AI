@@ -1,0 +1,103 @@
+# Self-Critique: Debugging Inline StatefulBuilder vs Proper StatefulWidget
+
+## The Problem
+The character edit dialog (inside `roleplay_drawer.dart`) had two bugs:
+1. Persona template selection didn't populate the "Your Persona" text field
+2. Auto-switching to newly created characters didn't work after the edit dialog
+
+## What Gemini Did
+Gemini extracted the inline `StatefulBuilder` dialog into a standalone `CharacterEditDialog` widget (`character_edit_dialog.dart`), mirroring the existing patterns in `SillyTavernImportDialog` and `CharacterCreationWizard`.
+
+Key changes:
+- Extracted to proper `StatefulWidget` with own `build()` method
+- Controllers initialized in `initState()`, disposed in `dispose()`
+- Used `context.watch<PersonaTemplateViewModel>()` in the widget's `build()` method
+- Used `_applyTemplate()` helper with `setState` (same pattern as the working wizard)
+- Used `initialValue` instead of deprecated `value` on `DropdownButtonFormField`
+- Reduced `_showEditDialog` to a 4-line delegate
+
+## My Oversights
+
+### 1. Failed to Recognize the Inline StatefulBuilder as the Root Cause
+I treated the context instability as a Provider/BuildContext issue and tried to fix it with `read` vs `watch` changes, `ValueListenableBuilder`, and double `setState`. Gemini saw that the inline `StatefulBuilder` was the structural problem and fixed it at the source.
+
+**Lesson:** When a widget uses `StatefulBuilder` with nested builders inside `showDialog`, and similar widgets in the same codebase use proper `StatefulWidget`, extract it. The inline builder creates a fragile context chain: caller → showDialog → StatefulBuilder → AlertDialog → SingleChildScrollView → Column → DropdownButtonFormField.
+
+### 2. Controller Lifecycle in Builder Function
+I created `TextEditingController` instances inside the builder function:
+```dart
+builder: (ctx, setState) {
+    final userPersonaCtrl = TextEditingController(text: ...);
+    // ...
+}
+```
+These get recreated on every rebuild. Gemini moved them to `initState()`:
+```dart
+@override
+void initState() {
+    super.initState();
+    _userPersonaCtrl = TextEditingController(text: ...);
+}
+@override
+void dispose() {
+    _userPersonaCtrl.dispose();
+    super.dispose();
+}
+```
+
+**Lesson:** Controllers in builder functions are recreated every rebuild. In a `StatefulBuilder`, this can cause subtle state loss. Move to `initState()`/`dispose()`.
+
+### 3. Overcomplicating with Workarounds
+I added `ValueListenableBuilder` and a second `setState(() {})` to force the TextField to update. These worked but were symptoms of the underlying problem: the inline builder's `setState` only rebuilds the builder, not its siblings. A proper `StatefulWidget` with a single `setState` in `_applyTemplate` handles this naturally because the entire widget rebuilds.
+
+**Lesson:** If you need `ValueListenableBuilder` or double `setState` to make something work, the widget structure is likely wrong. Extract to a proper `StatefulWidget`.
+
+### 4. Missing the Pattern Already in the Codebase
+The codebase had two working dialogs using the same pattern:
+- `SillyTavernImportDialog` — proper `StatefulWidget`, `context.watch`, `_applyTemplate()`
+- `CharacterCreationWizard` — proper `StatefulWidget`, `context.watch`, `_applyTemplate()`
+
+The edit dialog was the odd one out: inline `StatefulBuilder`, `context.read`, no `_applyTemplate()`. Gemini recognized this and made the edit dialog match the working patterns.
+
+**Lesson:** When debugging, look for similar widgets in the codebase. If two out of three work the same way, the third one likely needs to match that pattern.
+
+### 5. Using Deprecated `value` Instead of `initialValue`
+I used `value: selectedTemplateId` (deprecated). Gemini used `initialValue: _selectedTemplateId` (correct API). The deprecated `value` has different semantics — it controls the current value and can interact unpredictably with internal FormField state.
+
+**Lesson:** Use the current API. `initialValue` sets the starting value; `value` controls the live value. For form fields that manage their own state, `initialValue` is usually correct.
+
+## Troubleshooting Checklist for Future Similar Issues
+
+When a dialog widget doesn't update correctly:
+
+1. **Is it a proper StatefulWidget or inline StatefulBuilder?**
+   - If inline → extract to proper StatefulWidget
+   - Proper widgets have stable `BuildContext` and controller lifecycle
+
+2. **Are controllers created in initState or in a builder function?**
+   - Builder function → recreated every rebuild
+   - initState → persists across rebuilds
+
+3. **Does `context.watch` or `context.read`?**
+   - `watch` → rebuilds when provider changes (correct for displaying data)
+   - `read` → one-time fetch (can miss async updates)
+
+4. **Is `setState` wrapping all state changes that affect the UI?**
+   - If modifying a controller outside `setState`, sibling widgets won't rebuild
+   - `_applyTemplate` pattern: `setState(() { controller.text = ...; })`
+
+5. **Are there similar working widgets in the codebase?**
+   - Compare the broken widget to working ones
+   - Match the pattern (StatefulWidget vs StatefulBuilder, watch vs read, etc.)
+
+6. **Is the deprecated API being used?**
+   - `DropdownButtonFormField` uses `initialValue`, not `value`
+   - Check Flutter docs for current API
+
+7. **Is the context stable?**
+   - Context from `showDialog` builder → traces through dialog route
+   - Context from inline builder → fragile, depends on caller
+   - Context from proper `build()` method → most stable
+
+## Key Takeaway
+The simplest fix is often extracting to a proper `StatefulWidget`. Don't patch inline builders with workarounds when the working pattern in your codebase is a clean widget. Pattern matching across similar widgets is more reliable than incremental debugging of a broken pattern.

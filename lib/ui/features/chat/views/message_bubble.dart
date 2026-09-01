@@ -16,6 +16,8 @@ class MessageBubble extends StatelessWidget {
   final VoidCallback? onBranch;
   final VoidCallback? onDelete;
   final Function(String newContent)? onEditAssistant;
+  final Uint8List? characterAvatar;
+  final String? characterName;
 
   const MessageBubble({
     super.key,
@@ -29,6 +31,8 @@ class MessageBubble extends StatelessWidget {
     this.onBranch,
     this.onDelete,
     this.onEditAssistant,
+    this.characterAvatar,
+    this.characterName,
   });
 
   void _copyToClipboard(BuildContext context) {
@@ -41,6 +45,24 @@ class MessageBubble extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
+  }
+
+  Color _getAvatarColor(String name) {
+    final colors = const [
+      AppTheme.accentPrimary,
+      AppTheme.accentSecondary,
+      AppTheme.accentIndigo,
+      AppTheme.accentCyan,
+    ];
+    final idx = name.codeUnitAt(0) % colors.length;
+    return colors[idx];
+  }
+
+  String _getInitials(String name) {
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.isEmpty) return '?';
+    if (parts.length == 1) return parts[0][0].toUpperCase();
+    return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
   }
 
   void _showEditDialog(BuildContext context) {
@@ -190,18 +212,48 @@ class MessageBubble extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               if (!isUser) ...[
-                Container(
-                  width: 24,
-                  height: 24,
-                  decoration: BoxDecoration(
-                    color: AppTheme.accentPrimary,
-                    borderRadius: BorderRadius.circular(6),
+                if (characterAvatar != null)
+                  Container(
+                    width: 24,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      image: DecorationImage(
+                        image: MemoryImage(characterAvatar!),
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  )
+                else if (characterName != null)
+                  Container(
+                    width: 24,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: _getAvatarColor(characterName!),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      _getInitials(characterName!),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                  )
+                else
+                  Container(
+                    width: 24,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: AppTheme.accentPrimary,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Icon(Icons.smart_toy_rounded, size: 14, color: Colors.white),
                   ),
-                  child: const Icon(Icons.smart_toy_rounded, size: 14, color: Colors.white),
-                ),
                 const SizedBox(width: 8),
                 Text(
-                  'CLAN AI',
+                  characterName ?? 'CLAN AI',
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
@@ -307,13 +359,39 @@ class MessageBubble extends StatelessWidget {
           ),
 
           // Token Performance Metrics (Assistant only)
-          if (!isUser && message.status == MessageStatus.completed)
+          if (!isUser && message.status == MessageStatus.completed) ...[
+            if (message.ragMemoryCount != null && message.ragMemoryCount! > 0)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Tooltip(
+                  message: '${message.ragMemoryCount} memory${message.ragMemoryCount! == 1 ? '' : 's'} retrieved via RAG',
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.memory_rounded,
+                        size: 12,
+                        color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${message.ragMemoryCount}',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             TokenSpeedBadge(
               tokensPerSecond: message.tokensPerSecond,
               totalTokens: message.totalTokens,
               timeToFirstTokenMs: message.timeToFirstTokenMs,
               generationTimeSec: message.generationTimeSec,
             ),
+          ],
 
           // Message Action Toolbar (Branch switchers, Copy, Edit, Regenerate)
           Padding(

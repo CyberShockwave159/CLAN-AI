@@ -14,6 +14,7 @@ import 'package:clan_ai/data/repositories/server_repository.dart';
 import 'package:clan_ai/ui/features/chat/view_models/chat_view_model.dart';
 import 'package:clan_ai/ui/features/chat/views/chat_screen.dart';
 import 'package:clan_ai/ui/features/roleplay/views/roleplay_screen.dart';
+import 'package:clan_ai/ui/features/roleplay/view_models/persona_template_view_model.dart';
 import 'package:clan_ai/ui/features/roleplay/view_models/roleplay_view_model.dart';
 import 'package:clan_ai/ui/features/settings/view_models/settings_view_model.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -57,6 +58,9 @@ void main() async {
         ),
         ChangeNotifierProvider(
           create: (_) => ChatViewModel(chatRepository: chatRepository),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => PersonaTemplateViewModel(),
         ),
         ChangeNotifierProvider(
           create: (_) => RoleplayViewModel(
