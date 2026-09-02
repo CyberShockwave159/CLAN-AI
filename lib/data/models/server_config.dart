@@ -21,6 +21,7 @@ class ServerConfig {
   final int latencyMs;
   final String? systemPrompt;
   final bool confirmDeleteMessage;
+  final bool reasoning;
 
   const ServerConfig({
     this.id = 'default',
@@ -34,6 +35,7 @@ class ServerConfig {
     this.latencyMs = -1,
     this.systemPrompt = 'You are a helpful, brilliant, and honest AI assistant.',
     this.confirmDeleteMessage = true,
+    this.reasoning = false,
   });
 
   ServerConfig copyWith({
@@ -48,6 +50,7 @@ class ServerConfig {
     int? latencyMs,
     String? systemPrompt,
     bool? confirmDeleteMessage,
+    bool? reasoning,
   }) {
     return ServerConfig(
       id: id ?? this.id,
@@ -61,6 +64,7 @@ class ServerConfig {
       latencyMs: latencyMs ?? this.latencyMs,
       systemPrompt: systemPrompt ?? this.systemPrompt,
       confirmDeleteMessage: confirmDeleteMessage ?? this.confirmDeleteMessage,
+      reasoning: reasoning ?? this.reasoning,
     );
   }
 
@@ -75,6 +79,7 @@ class ServerConfig {
       'default_params': jsonEncode(defaultParams.toMap()),
       'system_prompt': systemPrompt,
       'confirm_delete_message': confirmDeleteMessage ? 1 : 0,
+      'reasoning': reasoning ? 1 : 0,
     };
   }
 
@@ -102,6 +107,7 @@ class ServerConfig {
       defaultParams: defaultParams,
       systemPrompt: map['system_prompt'] as String? ?? 'You are a helpful, brilliant, and honest AI assistant.',
       confirmDeleteMessage: (map['confirm_delete_message'] as int?) == 1,
+      reasoning: (map['reasoning'] as int?) == 1,
     );
   }
 }

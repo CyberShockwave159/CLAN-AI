@@ -11,6 +11,7 @@ class GenerationParams {
   final int contextSize;
   final List<String> stopSequences;
   final String? grammar;
+  final bool reasoning;
 
   const GenerationParams({
     this.temperature = 0.7,
@@ -24,6 +25,7 @@ class GenerationParams {
     this.contextSize = 4096,
     this.stopSequences = const [],
     this.grammar,
+    this.reasoning = false,
   });
 
   GenerationParams copyWith({
@@ -38,6 +40,7 @@ class GenerationParams {
     int? contextSize,
     List<String>? stopSequences,
     String? grammar,
+    bool? reasoning,
   }) {
     return GenerationParams(
       temperature: temperature ?? this.temperature,
@@ -51,6 +54,7 @@ class GenerationParams {
       contextSize: contextSize ?? this.contextSize,
       stopSequences: stopSequences ?? this.stopSequences,
       grammar: grammar ?? this.grammar,
+      reasoning: reasoning ?? this.reasoning,
     );
   }
 
@@ -76,6 +80,10 @@ class GenerationParams {
 
     if (stopSequences.isNotEmpty) {
       payload['stop'] = stopSequences;
+    }
+    if (reasoning) {
+      payload['reasoning'] = true;
+      payload['include_reasoning'] = true;
     }
     return payload;
   }
@@ -107,6 +115,10 @@ class GenerationParams {
     if (grammar != null && grammar!.isNotEmpty) {
       payload['grammar'] = grammar;
     }
+    if (reasoning) {
+      payload['reasoning'] = true;
+      payload['include_reasoning'] = true;
+    }
     return payload;
   }
 
@@ -123,6 +135,7 @@ class GenerationParams {
       'context_size': contextSize,
       'stop_sequences': stopSequences,
       'grammar': grammar,
+      'reasoning': reasoning,
     };
   }
 
@@ -139,6 +152,7 @@ class GenerationParams {
       contextSize: (map['context_size'] as num?)?.toInt() ?? 4096,
       stopSequences: (map['stop_sequences'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? const [],
       grammar: map['grammar'] as String?,
+      reasoning: (map['reasoning'] as num?)?.toInt() == 1,
     );
   }
 }

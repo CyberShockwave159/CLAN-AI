@@ -72,5 +72,24 @@ Final conclusion.
       expect(payload['n_ctx'], equals(8192));
       expect(payload['prompt'], contains('### User:\nHi'));
     });
+
+    test('Includes reasoning flags when reasoning is enabled', () {
+      const params = GenerationParams(
+        reasoning: true,
+      );
+
+      final openAiPayload = params.toOpenAiPayload(
+        messages: [
+          {'role': 'user', 'content': 'Hi'}
+        ],
+        model: 'deepseek-r1',
+      );
+
+      expect(openAiPayload['reasoning'], isTrue);
+      expect(openAiPayload['include_reasoning'], isTrue);
+
+      final nativePayload = params.toLlamaNativePayload(prompt: 'Hi');
+      expect(nativePayload['reasoning'], isTrue);
+    });
   });
 }

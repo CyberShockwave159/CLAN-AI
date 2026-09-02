@@ -5,6 +5,114 @@ import 'package:clan_ai/data/models/chat_message.dart';
 import 'package:clan_ai/ui/features/chat/widgets/markdown_body_view.dart';
 import 'package:clan_ai/ui/features/chat/widgets/token_speed_badge.dart';
 
+class _ReasoningBlock extends StatefulWidget {
+  final String reasoningContent;
+  final bool isStreaming;
+  final bool isUser;
+
+  const _ReasoningBlock({
+    required this.reasoningContent,
+    required this.isStreaming,
+    required this.isUser,
+  });
+
+  @override
+  State<_ReasoningBlock> createState() => _ReasoningBlockState();
+}
+
+class _ReasoningBlockState extends State<_ReasoningBlock> {
+  bool _isExpanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final hasContent = widget.reasoningContent.isNotEmpty;
+
+    return Semantics(
+      button: true,
+      label: _isExpanded ? 'Collapse thinking process' : 'Expand thinking process',
+      child: InkWell(
+        onTap: () {
+          if (hasContent) {
+            setState(() {
+              _isExpanded = !_isExpanded;
+            });
+          }
+        },
+        borderRadius: BorderRadius.circular(8),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          margin: const EdgeInsets.only(bottom: 8),
+          decoration: BoxDecoration(
+            color: (isDark ? AppTheme.darkSurfaceVariant : AppTheme.lightSurfaceVariant)
+                .withValues(alpha: _isExpanded ? 0.85 : 0.5),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isDark
+                  ? AppTheme.darkBorder.withValues(alpha: 0.6)
+                  : AppTheme.lightBorder.withValues(alpha: 0.6),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.psychology_rounded,
+                    size: 15,
+                    color: widget.isStreaming
+                        ? AppTheme.accentPrimary
+                        : (isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    widget.isStreaming ? 'Thinking...' : 'Thinking',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: widget.isStreaming
+                          ? (isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary)
+                          : (isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted),
+                    ),
+                  ),
+                  const Spacer(),
+                  if (hasContent)
+                    Icon(
+                      _isExpanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                      size: 16,
+                      color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                    ),
+                ],
+              ),
+              if (_isExpanded && hasContent) ...[
+                const SizedBox(height: 6),
+                Divider(
+                  height: 1,
+                  thickness: 0.8,
+                  color: (isDark ? AppTheme.darkBorder : AppTheme.lightBorder).withValues(alpha: 0.4),
+                ),
+                const SizedBox(height: 8),
+                SelectableText(
+                  widget.reasoningContent,
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.45,
+                    fontStyle: FontStyle.italic,
+                    color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class MessageBubble extends StatelessWidget {
   final ChatMessage message;
   final int messageIndex;
@@ -291,6 +399,13 @@ class MessageBubble extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (message.reasoningContent.isNotEmpty && !isUser)
+                      _ReasoningBlock(
+                        reasoningContent: message.reasoningContent,
+                        isStreaming: message.status == MessageStatus.streaming,
+                        isUser: isUser,
+                      ),
+
                     if (message.content.isNotEmpty)
                       DynamicMarkdownView(data: message.content, isUser: isUser),
 
@@ -301,7 +416,7 @@ class MessageBubble extends StatelessWidget {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            if (message.content.isEmpty)
+                            if (message.content.isEmpty && message.reasoningContent.isEmpty)
                               Text(
                                 'Thinking',
                                 style: TextStyle(
@@ -310,16 +425,18 @@ class MessageBubble extends StatelessWidget {
                                   color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
                                 ),
                               ),
-                            const SizedBox(width: 4),
-                            Container(
-                              width: 8,
-                              height: 15,
-                              margin: const EdgeInsets.only(left: 2),
-                              decoration: BoxDecoration(
-                                color: AppTheme.accentPrimary,
-                                borderRadius: BorderRadius.circular(2),
+                            if (message.content.isEmpty && message.reasoningContent.isEmpty)
+                              const SizedBox(width: 4),
+                            if (message.content.isNotEmpty || message.reasoningContent.isEmpty)
+                              Container(
+                                width: 8,
+                                height: 15,
+                                margin: const EdgeInsets.only(left: 2),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.accentPrimary,
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
                               ),
-                            ),
                           ],
                         ),
                       ),

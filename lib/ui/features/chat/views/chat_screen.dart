@@ -74,10 +74,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (shouldDeleteThread) {
       _scrollToBottom(false);
     } else if (chatVM.canUndo) {
-      final deletedMsg = chatVM.messages.length > messageIndex
-          ? null
-          : null; // Already deleted, show undo for any user message deletion
-      
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Message deleted'),

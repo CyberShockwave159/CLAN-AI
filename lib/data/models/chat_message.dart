@@ -47,6 +47,7 @@ class ChatMessage {
   final bool isEdited;
   final DateTime? updatedAt;
   final int? ragMemoryCount;
+  final String reasoningContent;
 
   ChatMessage({
     String? id,
@@ -67,6 +68,7 @@ class ChatMessage {
     this.isEdited = false,
     this.updatedAt,
     this.ragMemoryCount,
+    this.reasoningContent = '',
   })  : id = id ?? const Uuid().v4(),
         createdAt = createdAt ?? DateTime.now();
 
@@ -89,6 +91,7 @@ class ChatMessage {
     bool? isEdited,
     DateTime? updatedAt,
     int? ragMemoryCount,
+    String? reasoningContent,
   }) {
     return ChatMessage(
       id: id ?? this.id,
@@ -109,6 +112,7 @@ class ChatMessage {
       isEdited: isEdited ?? this.isEdited,
       updatedAt: updatedAt ?? this.updatedAt,
       ragMemoryCount: ragMemoryCount ?? this.ragMemoryCount,
+      reasoningContent: reasoningContent ?? this.reasoningContent,
     );
   }
 
@@ -132,6 +136,7 @@ class ChatMessage {
       'is_edited': isEdited ? 1 : 0,
       'updated_at': updatedAt?.toIso8601String(),
       'rag_memory_count': ragMemoryCount,
+      'reasoning_content': reasoningContent,
     };
   }
 
@@ -165,13 +170,18 @@ class ChatMessage {
           ? DateTime.tryParse(map['updated_at'] as String)
           : null,
       ragMemoryCount: (map['rag_memory_count'] as num?)?.toInt(),
+      reasoningContent: (map['reasoning_content'] as String?) ?? '',
     );
   }
 
   Map<String, dynamic> toOpenAiMessage() {
-    return {
+    final msg = <String, dynamic>{
       'role': role.value,
       'content': content,
     };
+    if (reasoningContent.isNotEmpty) {
+      msg['reasoning'] = reasoningContent;
+    }
+    return msg;
   }
 }

@@ -35,6 +35,7 @@ class RoleplayViewModel extends ChangeNotifier {
   CancelToken? _currentCancelToken;
   Timer? _uiThrottleTimer;
   String _pendingStreamBuffer = '';
+  String _pendingReasoningBuffer = '';
 
   final Map<String, Future<List<ChatThread>>> _threadCache = {};
 
@@ -125,6 +126,14 @@ class RoleplayViewModel extends ChangeNotifier {
     _activeThread = null;
     _messages = [];
     notifyListeners();
+  }
+
+  /// Updates the active character if it matches the updated character's ID.
+  void updateActiveCharacter(CharacterProfile updated) {
+    if (_activeCharacter?.id == updated.id) {
+      _activeCharacter = updated;
+      notifyListeners();
+    }
   }
 
   /// Start a roleplay session with the given character.
@@ -748,6 +757,7 @@ class RoleplayViewModel extends ChangeNotifier {
     _isGenerating = true;
     _currentCancelToken = CancelToken();
     _pendingStreamBuffer = '';
+    _pendingReasoningBuffer = '';
     notifyListeners();
 
     final msgIndex = _messages.indexWhere((m) => m.id == assistantMessageId);
@@ -772,6 +782,16 @@ class RoleplayViewModel extends ChangeNotifier {
         _pendingStreamBuffer = '';
         notifyListeners();
       }
+      if (_pendingReasoningBuffer.isNotEmpty &&
+          currentMsgIndex >= 0 &&
+          currentMsgIndex < _messages.length) {
+        final currentMsg = _messages[currentMsgIndex];
+        _messages[currentMsgIndex] = currentMsg.copyWith(
+          reasoningContent: currentMsg.reasoningContent + _pendingReasoningBuffer,
+        );
+        _pendingReasoningBuffer = '';
+        notifyListeners();
+      }
     });
 
     StreamMetrics? finalMetrics;
@@ -790,6 +810,9 @@ class RoleplayViewModel extends ChangeNotifier {
       await for (final chunk in stream) {
         if (chunk.text.isNotEmpty) {
           _pendingStreamBuffer += chunk.text;
+        }
+        if (chunk.reasoning != null && chunk.reasoning!.isNotEmpty) {
+          _pendingReasoningBuffer += chunk.reasoning!;
         }
         if (chunk.metrics != null) {
           finalMetrics = chunk.metrics;
@@ -813,6 +836,7 @@ class RoleplayViewModel extends ChangeNotifier {
 
         final completedMsg = currentMsg.copyWith(
           content: finalContent,
+          reasoningContent: currentMsg.reasoningContent + _pendingReasoningBuffer,
           status: errorMessage != null ? MessageStatus.error : MessageStatus.completed,
           errorMessage: errorMessage,
           tokensPerSecond: finalMetrics?.tokensPerSecond,
@@ -840,6 +864,7 @@ class RoleplayViewModel extends ChangeNotifier {
 
       _isGenerating = false;
       _currentCancelToken = null;
+      _pendingReasoningBuffer = '';
       notifyListeners();
     }
   }

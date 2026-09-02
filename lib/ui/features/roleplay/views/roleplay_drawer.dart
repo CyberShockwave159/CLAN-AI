@@ -1,10 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:clan_ai/core/constants/app_theme.dart';
 import 'package:clan_ai/core/utils/conversation_export.dart';
@@ -13,9 +11,7 @@ import 'package:clan_ai/data/models/chat_thread.dart';
 import 'package:clan_ai/data/models/character_profile.dart';
 import 'package:clan_ai/data/repositories/character_repository.dart';
 import 'package:clan_ai/ui/features/roleplay/widgets/character_creation_wizard.dart';
-import 'package:clan_ai/ui/features/roleplay/widgets/silly_tavern_import_dialog.dart';
-import 'package:clan_ai/ui/features/roleplay/widgets/persona_template_dialog.dart';
-import 'package:clan_ai/ui/features/roleplay/view_models/persona_template_view_model.dart';
+import 'package:clan_ai/ui/features/roleplay/widgets/character_edit_dialog.dart';
 import 'package:clan_ai/ui/features/roleplay/view_models/roleplay_view_model.dart';
 import 'package:clan_ai/ui/features/settings/view_models/settings_view_model.dart';
 import 'package:clan_ai/ui/features/settings/views/settings_screen.dart';
@@ -47,240 +43,7 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
   Future<CharacterProfile> _showEditDialog(BuildContext context, CharacterProfile character, CharacterRepository repo) {
     return showDialog<CharacterProfile>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setState) {
-          final isDark = Theme.of(ctx).brightness == Brightness.dark;
-          final nameCtrl = TextEditingController(text: character.name);
-          final personalityCtrl = TextEditingController(text: character.personality);
-          final firstMsgCtrl = TextEditingController(text: character.firstMessage);
-          final settingCtrl = TextEditingController(text: character.setting ?? '');
-          final userPersonaCtrl = TextEditingController(text: character.userPersona ?? '');
-          final systemPromptCtrl = TextEditingController(text: character.systemPrompt ?? '');
-          final postHistoryCtrl = TextEditingController(text: character.postHistoryInstructions ?? '');
-          final alternateGreetingsCtrl = TextEditingController(text: character.alternateGreetings.join('\n'));
-           final personaVM = ctx.watch<PersonaTemplateViewModel>();
-          String? selectedTemplateId;
-          Uint8List? avatarPreview;
-          final displayAvatar = avatarPreview ?? character.avatarData;
-
-           return AlertDialog(
-             title: const Text('Edit Character'),
-             content: SingleChildScrollView(
-               child: Column(
-                 mainAxisSize: MainAxisSize.min,
-                 crossAxisAlignment: CrossAxisAlignment.start,
-                 children: [
-                   Row(
-                     children: [
-                       GestureDetector(
-                         onTap: () async {
-                           final XFile? image = await ImagePicker().pickImage(source: ImageSource.gallery);
-                           if (image != null) {
-                             final bytes = await image.readAsBytes();
-                             setState(() => avatarPreview = bytes);
-                           }
-                         },
-                         child: Container(
-                           width: 48,
-                           height: 48,
-                           decoration: BoxDecoration(
-                             shape: BoxShape.circle,
-                             color: _avatarColor(displayAvatar, isDark),
-                             border: Border.all(color: AppTheme.accentPrimary.withValues(alpha: 0.4), width: 2),
-                           ),
-                           child: displayAvatar != null
-                               ? ClipOval(child: Image.memory(displayAvatar, width: 48, height: 48, fit: BoxFit.cover))
-                               : const Icon(Icons.camera_alt_rounded, size: 20, color: AppTheme.accentPrimary),
-                         ),
-                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            ElevatedButton.icon(
-                              onPressed: () async {
-                                final XFile? image = await ImagePicker().pickImage(source: ImageSource.gallery);
-                                if (image != null) {
-                                  final bytes = await image.readAsBytes();
-                                  setState(() => avatarPreview = bytes);
-                                }
-                              },
-                              icon: const Icon(Icons.image_rounded, size: 14),
-                              label: const Text('Change'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: isDark ? AppTheme.darkSurfaceVariant : AppTheme.lightSurfaceVariant,
-                                foregroundColor: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                              ),
-                            ),
-                            if (avatarPreview != null || character.avatarData != null)
-                              TextButton(
-                                onPressed: () => setState(() => avatarPreview = null),
-                                style: TextButton.styleFrom(padding: EdgeInsets.zero),
-                                child: const Text('Remove', style: TextStyle(fontSize: 11)),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: nameCtrl,
-                    decoration: const InputDecoration(labelText: 'Name'),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: personalityCtrl,
-                    maxLines: 4,
-                    decoration: const InputDecoration(labelText: 'Personality'),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: firstMsgCtrl,
-                    maxLines: 3,
-                    decoration: const InputDecoration(labelText: 'First Message'),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: settingCtrl,
-                    maxLines: 2,
-                    decoration: const InputDecoration(labelText: 'Setting (Optional)'),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: alternateGreetingsCtrl,
-                    maxLines: 4,
-                    decoration: const InputDecoration(
-                      labelText: 'Alternate Greetings (One per line, Optional)',
-                      hintText: 'One greeting per line',
-                    ),
-                  ),
-                   const SizedBox(height: 8),
-                    ValueListenableBuilder<TextEditingValue>(
-                      valueListenable: userPersonaCtrl,
-                      builder: (context, value, child) {
-                        return TextField(
-                          controller: userPersonaCtrl,
-                          maxLines: 3,
-                          decoration: const InputDecoration(
-                            labelText: 'Your Persona (Optional)',
-                            hintText: 'Describe your role in this roleplay',
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                   Row(
-                     children: [
-                       Expanded(
-                         child: DropdownButtonFormField<String>(
-                           value: selectedTemplateId,
-                           decoration: InputDecoration(
-                             labelText: 'Load Persona Template',
-                             prefixIcon: const Icon(Icons.tag_rounded),
-                             border: OutlineInputBorder(
-                               borderRadius: BorderRadius.circular(12),
-                             ),
-                           ),
-                           hint: const Text('Select a template...'),
-                           items: [
-                             const DropdownMenuItem<String>(
-                               value: '',
-                               child: Text('-- None --'),
-                             ),
-                              ...personaVM.templates.map((template) {
-                               return DropdownMenuItem<String>(
-                                 value: template.id,
-                                 child: Text(template.name),
-                               );
-                             }),
-                           ],
-                              onChanged: (value) {
-                              setState(() => selectedTemplateId = value);
-                              if (value != null && value.isNotEmpty) {
-                                final template = personaVM.getTemplateById(value);
-                                if (template != null) {
-                                  userPersonaCtrl.text = template.description;
-                                  setState(() {});
-                                }
-                              }
-                            },
-                         ),
-                       ),
-                       const SizedBox(width: 8),
-                       IconButton(
-                         tooltip: 'Create new template',
-                         icon: const Icon(Icons.add_circle_rounded),
-                         onPressed: () async {
-                           await showDialog<void>(
-                             context: ctx,
-                             builder: (_) => const PersonaTemplateDialog(),
-                           );
-                           setState(() {});
-                         },
-                       ),
-                     ],
-                   ),
-                   const SizedBox(height: 8),
-                   TextField(
-                     controller: systemPromptCtrl,
-                    maxLines: 3,
-                    decoration: const InputDecoration(
-                      labelText: 'System Prompt Override (Optional)',
-                      hintText: 'Use {{original}} to prepend to default prompt',
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: postHistoryCtrl,
-                    maxLines: 3,
-                    decoration: const InputDecoration(
-                      labelText: 'Post History Instructions (Optional)',
-                      hintText: 'Additional instructions appended after AI responses',
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(character),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () {
-                  List<String> alternateGreetings = [];
-                  final greetingsText = alternateGreetingsCtrl.text.trim();
-                  if (greetingsText.isNotEmpty) {
-                    alternateGreetings = greetingsText
-                        .split('\n')
-                        .map((g) => g.trim())
-                        .where((g) => g.isNotEmpty)
-                        .toList();
-                  }
-
-                  final updated = character.copyWith(
-                    name: nameCtrl.text.trim().isEmpty ? character.name : nameCtrl.text.trim(),
-                    personality: personalityCtrl.text.trim(),
-                    firstMessage: firstMsgCtrl.text.trim(),
-                    setting: settingCtrl.text.trim().isEmpty ? null : settingCtrl.text.trim(),
-                    userPersona: userPersonaCtrl.text.trim().isEmpty ? null : userPersonaCtrl.text.trim(),
-                    avatarData: avatarPreview,
-                    systemPrompt: systemPromptCtrl.text.trim().isEmpty ? null : systemPromptCtrl.text.trim(),
-                    postHistoryInstructions: postHistoryCtrl.text.trim().isEmpty ? null : postHistoryCtrl.text.trim(),
-                    alternateGreetings: alternateGreetings,
-                  );
-                  repo.updateCharacter(updated);
-                  Navigator.of(ctx).pop(updated);
-                },
-                child: const Text('Save'),
-              ),
-            ],
-          );
-        },
-      ),
+      builder: (_) => CharacterEditDialog(character: character, repository: repo),
     ).then((value) => value ?? character);
   }
 
@@ -321,10 +84,6 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
     ];
     final idx = name.codeUnitAt(0) % colors.length;
     return colors[idx];
-  }
-
-  Color _avatarColor(Uint8List? avatar, bool isDark) {
-    return avatar != null ? Colors.transparent : (isDark ? AppTheme.darkSurfaceVariant : AppTheme.lightSurfaceVariant);
   }
 
   String _getInitials(String name) {
@@ -375,7 +134,7 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
                      context: context,
                      builder: (_) => const CharacterCreationWizard(),
                    );
-                    if (mounted && newCharacter != null) {
+                    if (newCharacter != null) {
                       await roleplayVM.startRoleplay(
                         newCharacter,
                         serverConfig: settingsVM.config,
@@ -659,16 +418,24 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
                                         size: 18,
                                         color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
                                       ),
-                                      onSelected: (action) {
+                                      onSelected: (action) async {
                                         if (action == 'edit') {
-                                          _showEditDialog(context, character, context.read<CharacterRepository>());
+                                          final updated = await _showEditDialog(context, character, context.read<CharacterRepository>());
+                                          final roleplayVM = context.read<RoleplayViewModel>();
+                                          roleplayVM.updateActiveCharacter(updated);
+                                          if (mounted) {
+                                            setState(() {});
+                                          }
                                         } else if (action == 'delete') {
                                           _showDeleteDialog(context, character);
                                         } else if (action == 'toggle_favorite') {
                                           final repo = context.read<CharacterRepository>();
-                                          repo.updateCharacter(
+                                          await repo.updateCharacter(
                                             character.copyWith(isFavorite: !character.isFavorite),
                                           );
+                                          if (mounted) {
+                                            setState(() {});
+                                          }
                                         }
                                       },
                                       itemBuilder: (ctx) => [

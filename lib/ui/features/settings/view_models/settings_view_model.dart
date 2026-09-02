@@ -149,6 +149,12 @@ class SettingsViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> toggleReasoning(bool value) async {
+    _config = _config.copyWith(reasoning: value);
+    await _saveConfig();
+    notifyListeners();
+  }
+
   Future<void> addTemplate(String name, String content) async {
     await _templateRepository.addTemplate(name, content);
     _templates = await _templateRepository.loadTemplates();

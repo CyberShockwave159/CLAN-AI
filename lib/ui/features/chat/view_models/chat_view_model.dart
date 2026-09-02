@@ -35,6 +35,7 @@ class ChatViewModel extends ChangeNotifier {
   CancelToken? _currentCancelToken;
   Timer? _uiThrottleTimer;
   String _pendingStreamBuffer = '';
+  String _pendingReasoningBuffer = '';
 
   // Undo support for message deletion
   ChatMessage? _undoneMessage;
@@ -574,6 +575,7 @@ class ChatViewModel extends ChangeNotifier {
     _isGenerating = true;
     _currentCancelToken = CancelToken();
     _pendingStreamBuffer = '';
+    _pendingReasoningBuffer = '';
     notifyListeners();
 
     final historySlice = upToIndex != null
@@ -595,6 +597,16 @@ class ChatViewModel extends ChangeNotifier {
         _pendingStreamBuffer = '';
         notifyListeners();
       }
+      if (_pendingReasoningBuffer.isNotEmpty &&
+          currentMsgIndex >= 0 &&
+          currentMsgIndex < _messages.length) {
+        final currentMsg = _messages[currentMsgIndex];
+        _messages[currentMsgIndex] = currentMsg.copyWith(
+          reasoningContent: currentMsg.reasoningContent + _pendingReasoningBuffer,
+        );
+        _pendingReasoningBuffer = '';
+        notifyListeners();
+      }
     });
 
     StreamMetrics? finalMetrics;
@@ -613,6 +625,9 @@ class ChatViewModel extends ChangeNotifier {
       await for (final chunk in stream) {
         if (chunk.text.isNotEmpty) {
           _pendingStreamBuffer += chunk.text;
+        }
+        if (chunk.reasoning != null && chunk.reasoning!.isNotEmpty) {
+          _pendingReasoningBuffer += chunk.reasoning!;
         }
         if (chunk.metrics != null) {
           finalMetrics = chunk.metrics;
@@ -638,6 +653,7 @@ class ChatViewModel extends ChangeNotifier {
 
         final completedMsg = currentMsg.copyWith(
           content: finalContent,
+          reasoningContent: currentMsg.reasoningContent + _pendingReasoningBuffer,
           status: errorMessage != null
               ? MessageStatus.error
               : MessageStatus.completed,
@@ -651,6 +667,8 @@ class ChatViewModel extends ChangeNotifier {
         _messages[finalMsgIndex] = completedMsg;
         await _chatRepository.saveMessage(completedMsg);
       }
+
+      _pendingReasoningBuffer = '';
 
       _isGenerating = false;
       _currentCancelToken = null;

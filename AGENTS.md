@@ -5,7 +5,7 @@ Recommended order: `pub get` → `analyze` → `test` → `run`.
 ```
 flutter pub get            # fetch dependencies (required after git pull)
 flutter analyze            # lint + typecheck (uses flutter_lints)
-flutter test               # runs all 4 test files (4 widget/domain + SSE)
+flutter test               # runs all 5 test files (5 widget/domain + SSE, includes reasoning tests)
 flutter run -d <device>    # devices: linux, macos, windows, <android-id>
 ```
 
@@ -29,10 +29,10 @@ flutter run -d <device>    # devices: linux, macos, windows, <android-id>
 - `lib/ui/features/roleplay/view_models/roleplay_view_model.dart` — roleplay state with RAG. `_init()` calls `loadLastChat()` which uses `getThreads()` (all threads) then filters by `characterId`. Auto-loads last active thread by `characterId`. Supports `startRoleplay()` and `startRoleplayWithGreeting()` for alternate greetings.
 - `lib/ui/features/settings/view_models/settings_view_model.dart` — profiles, templates, server config, health polling, appMode. 15s health polling timer.
 - `lib/ui/features/roleplay/view_models/persona_template_view_model.dart` — manages persona templates CRUD. Exposes templates list and create/update/delete methods.
-- `lib/data/datasources/local_storage.dart` — SQLite schema v5 (threads + messages tables) + SharedPreferences singleton. Migration guards check column existence before `ALTER TABLE`. Also manages persona templates storage via `_keyPersonaTemplates`.
+- `lib/data/datasources/local_storage.dart` — SQLite schema v7 (threads + messages tables) + SharedPreferences singleton. Migration guards check column existence before `ALTER TABLE`. Also manages persona templates storage via `_keyPersonaTemplates`.
 - `lib/data/datasources/vector_store.dart` — SQLite vector store for roleplay character memory. Separate database file from main SQLite.
-- `lib/data/datasources/llama_api_service.dart` — streams completions (OpenAI `/v1/chat/completions` or llama.cpp native `/completion`). Context-fit caps `contextSize` to model capacity minus reserved output tokens.
-- `lib/core/network/sse_client.dart` — SSE parser for OpenAI delta and native `{content, stop}` formats. Produces `StreamChunk` + `StreamMetrics`.
+- `lib/data/datasources/llama_api_service.dart` — streams completions (OpenAI `/v1/chat/completions` or llama.cpp native `/completion`). Context-fit caps `contextSize` to model capacity minus reserved output tokens. Passes `serverConfig.reasoning` through to params for reasoning-capable models.
+- `lib/core/network/sse_client.dart` — SSE parser for OpenAI delta and native `{content, stop}` formats. Produces `StreamChunk` + `StreamMetrics`. Extracts reasoning from multiple field names (`reasoning`, `reasoning_content`, `thought`). `filterReasoning()` stream pipeline processes inline thinking tags and forwards dedicated reasoning fields.
 - `lib/core/network/http_client.dart` — HTTP client with `_throwForStatusCode` mapping status codes to 3 exceptions: `ContextLimitExceededException` (400 + "context"/"exceed"), `ServerOOMException` (500 + "memory"/"slot"), or generic `AppException`.
 - `lib/core/utils/silly_tavern_card_parser.dart` — Parses SillyTavern `chara_card_v2` (spec_version 2.0) JSON into `ParsedCharacterCard` DTO. Maps `.data.description` → personality, `.data.first_mes` → firstMessage, `.data.scenario` → setting. Replaces `{{char}}` with character name and `{{user}}` with user persona (or "User" as fallback) in personality, firstMessage, setting, userPersona, systemPrompt, and postHistoryInstructions. Truncates personality to 4000 chars. Also extracts `.data.system_prompt`, `.data.post_history_instructions`, `.data.alternate_greetings[]`.
 - `lib/core/utils/st_avatar_downloader.dart` — Downloads avatar bytes from URL with 30s timeout. Validates image format (PNG/JPEG/WebP) via magic bytes.
@@ -47,10 +47,10 @@ flutter run -d <device>    # devices: linux, macos, windows, <android-id>
 
 ## Key models
 - **`ChatThread`** (lib/data/models/chat_thread.dart) — owns messages via FK; `systemPrompt` (per-thread override), `modelId`, `customParams` (JSON), `isPinned`, `branchFromThreadId`, `characterId` (null = assistant, set = roleplay).
-- **`ChatMessage`** (lib/data/models/chat_message.dart) — `parentId`, `role` (system/user/assistant), `variantIndex`, `totalVariants`, `siblingIds` for branching. Status: `idle`/`sending`/`streaming`/`completed`/`error`. Metrics: `tokensPerSecond`, `totalTokens`, `timeToFirstTokenMs`, `generationTimeSec`. `isEdited` (bool), `updatedAt` (DateTime?) for tracking edits.
-- **`ServerConfig`** (lib/data/models/server_config.dart) — `id`, `name`, `baseUrl`, `apiKey`, `selectedModel`, `protocol` (openAi | llamaNative), `defaultParams`, `healthStatus`, `latencyMs`, `systemPrompt` (default: 'You are a helpful, brilliant, and honest AI assistant.'), `confirmDeleteMessage`.
+- **`ChatMessage`** (lib/data/models/chat_message.dart) — `parentId`, `role` (system/user/assistant), `variantIndex`, `totalVariants`, `siblingIds` for branching. Status: `idle`/`sending`/`streaming`/`completed`/`error`. Metrics: `tokensPerSecond`, `totalTokens`, `timeToFirstTokenMs`, `generationTimeSec`. `isEdited` (bool), `updatedAt` (DateTime?) for tracking edits. `reasoningContent` (String) — stores the model's reasoning/thinking block when the "View Thinking" toggle is enabled.
+- **`ServerConfig`** (lib/data/models/server_config.dart) — `id`, `name`, `baseUrl`, `apiKey`, `selectedModel`, `protocol` (openAi | llamaNative), `defaultParams`, `healthStatus`, `latencyMs`, `systemPrompt` (default: 'You are a helpful, brilliant, and honest AI assistant.'), `confirmDeleteMessage`, `reasoning` (bool — whether to request reasoning content from the API).
 - **`ServerProfile`** (lib/data/models/server_profile.dart) — `name`, `baseUrl`, `apiKey`, `protocol`. Multiple profiles; switching changes connection details only. Config (system prompt, params, model) is global.
-- **`GenerationParams`** (lib/domain/models/generation_params.dart) — temperature, topP, topK, minP, repeatPenalty, presencePenalty, frequencyPenalty, maxTokens (default 4096, **0 means unlimited**), contextSize (default 4096, clamped to [128, 1000000] during streaming), stopSequences, grammar.
+- **`GenerationParams`** (lib/domain/models/generation_params.dart) — temperature, topP, topK, minP, repeatPenalty, presencePenalty, frequencyPenalty, maxTokens (default 4096, **0 means unlimited**), contextSize (default 4096, clamped to [128, 1000000] during streaming), stopSequences, grammar, `reasoning` (bool — when true, includes `reasoning: true` and `include_reasoning: true` in OpenAI payload).
 - **`CharacterProfile`** (lib/data/models/character_profile.dart) — `name`, `personality`, `firstMessage`, `setting`, `userPersona`, `avatarData` (PNG/JPG bytes), `isFavorite`, `systemPrompt` (per-character system prompt override with `{{original}}` prefix support), `postHistoryInstructions` (appended after AI responses), `alternateGreetings` (list of alternative opening messages). Stored in SharedPreferences as JSON.
 - **`PersonaTemplate`** (lib/data/models/persona_template.dart) — Global reusable user persona. `id`, `name`, `personaText`, `createdAt`, `updatedAt`. Stored in SharedPreferences as JSON list.
 - **`AppMode`** (lib/data/models/app_mode.dart) — `assistant` or `roleplay`.
@@ -59,11 +59,12 @@ flutter run -d <device>    # devices: linux, macos, windows, <android-id>
 ## Streaming flow (critical for chat changes)
 1. ViewModel creates user message → persists to SQLite → creates streaming placeholder.
 2. Resolves effective system prompt (`thread.systemPrompt ?? config.systemPrompt`).
-3. Repository → ApiService: context-fit caps `contextSize` (modelCapacity - maxTokens or 512 if unlimited). OpenAI POSTs `/v1/chat/completions`; llamaNative POSTs `/completion` with `### User`/`### Assistant` template.
-4. `SseClient.parseStream()` handles both OpenAI delta and native `{content, stop}` formats.
-5. Context limit errors → `ContextLimitExceededException`.
-6. **UI throttling:** `Timer.periodic(Duration(milliseconds: 20))` buffers tokens to avoid frame drops. Timer looks up message by ID each tick to handle mutations.
-7. Final metrics written to SQLite on completion.
+3. Repository → ApiService: context-fit caps `contextSize` (modelCapacity - maxTokens or 512 if unlimited). OpenAI POSTs `/v1/chat/completions`; llamaNative POSTs `/completion` with `### User`/`### Assistant` template. If `serverConfig.reasoning` is true, sends `reasoning: true` in payload.
+4. `SseClient.parseStream()` handles both OpenAI delta and native `{content, stop}` formats. Extracts reasoning from multiple field names (`reasoning`, `reasoning_content`, `thought`).
+5. `SseClient.filterReasoning()` stream pipeline processes inline thinking tags (```xml, `<thought>`, `<reasoning>`) and forwards dedicated reasoning fields. Applied to both OpenAI and native streams.
+6. Context limit errors → `ContextLimitExceededException`.
+7. **UI throttling:** `Timer.periodic(Duration(milliseconds: 20))` buffers both `content` and `reasoningContent` tokens to avoid frame drops. Timer looks up message by ID each tick to handle mutations.
+8. Final metrics and `reasoningContent` written to SQLite on completion.
 
 ## RAG flow (roleplay only)
 - `RoleplayViewModel.startRoleplay()` creates thread with initial RAG context (empty memories on first session).
@@ -74,13 +75,22 @@ flutter run -d <device>    # devices: linux, macos, windows, <android-id>
 - `RoleplayViewModel.getCachedThreadsForCharacter(characterId)` uses a cached `Future` to avoid repeated `FutureBuilder` calls in the drawer.
 - **System prompt override**: If character has `systemPrompt`, `RoleplayContextBuilder` uses it to replace the standard prompt. `{{original}}` prefix inserts standard prompt before custom text. `postHistoryInstructions` are appended after the full prompt.
 
+## Reasoning/Thinking Block Feature
+- **Settings toggle**: "Show Reasoning" in Settings → Safety & Convenience section. Stored in `ServerConfig.reasoning`. Persists via `toggleReasoning(bool)` in `SettingsViewModel`.
+- **API request**: When enabled, `GenerationParams.toOpenAiPayload()` adds `"reasoning": true` and `"include_reasoning": true`. Native payload also includes `reasoning: true`.
+- **SSE parsing**: `SseClient.parseStream()` extracts reasoning from multiple field names: `delta.reasoning`, `delta.reasoning_content`, `delta.thought`, top-level `reasoning`, etc. Both OpenAI and native formats.
+- **Inline tag processing**: `SseClient.filterReasoning()` processes inline thinking tags (```xml, `<thought>`, `<reasoning>`) in the text stream. Handles partial tags mid-stream. Forwards dedicated reasoning fields when `enableReasoning` is true.
+- **ViewModel accumulation**: Both `ChatViewModel` and `RoleplayViewModel` maintain `_pendingReasoningBuffer` alongside `_pendingStreamBuffer`. Throttle timer flushes both independently. On completion, saves `reasoningContent` to message via `copyWith(reasoningContent: ...)`.
+- **UI display**: `_ReasoningBlock` widget in `MessageBubble` renders collapsible thinking block. Shows "Thinking" header with psychology icon. Tap to expand/collapse. Uses `AnimatedContainer`, `SelectableText`, and `Semantics` for smooth UX. Shows "Thinking..." while streaming.
+- **Reasoning model support**: Works with OpenAI o1/o3, DeepSeek R1, Qwen, and other reasoning-capable models. Requires llama.cpp v1.7.7+ for native reasoning support.
+
 ## Gotchas
 - **Conversation branching:** Regenerate/edit truncates at parent message, creates new sibling branches. Navigation uses `variantIndex` + `siblingIds`. `ChatViewModel.branchConversation()` creates a new `ChatThread` with copied messages and `branchFromThreadId` link.
 - **System prompt resolution:** Thread-level `ChatThread.systemPrompt` overrides global `ServerConfig.systemPrompt`. In roleplay, RAG context builder overwrites it per-message. Character-level `CharacterProfile.systemPrompt` takes priority — if set, it replaces the entire prompt; `{{original}}` prefix inserts standard prompt before custom text.
 - **Health polling:** 15s timer. Fallback chain: `/props` → `/v1/models`. `ServerRepository.fetchModels()` tries `/props` first (llama.cpp), then `/v1/models` (OpenAI), deduplicates by model id.
 - **Android networking:** `127.0.0.1` is device loopback. Use `10.0.2.2` for emulator, LAN IP for physical devices.
 - **SQLite FFI:** `sqfliteFfiInit()` called **once** in `main.dart` via `_initSqliteFfi()`. Guard: `if (_sqfliteFfiInitialized) return;` + platform check (Linux/Windows/macOS only). Both `LocalDatabase._initDB()` and `VectorStoreDatabase._initDB()` rely on this. Calling it again triggers "You are changing sqflite default factory" warning.
-- **SQLite schema v5:** Migrations check column existence before `ALTER TABLE`. Delete `clan_ai.db` if schema errors occur.
+- **SQLite schema v7:** Migrations check column existence before `ALTER TABLE`. `reasoning_content` column stores thinking blocks. Delete `clan_ai.db` if schema errors occur.
 - **Profile vs config:** Profile stores connection details (`baseUrl`, `apiKey`, `protocol`). System prompt, params, model selection are global config shared across profiles.
 - **Thread isolation:** `ChatViewModel.loadThreads()` → `getAssistantThreads()` filters out `characterId != null`. `RoleplayViewModel.loadLastChat()` → `getThreads()` (all threads) then filters by `characterId`, falls back to all-threads for legacy migration. `RoleplayViewModel.startRoleplay()` calls `getThreadsForCharacter(characterId)` to reuse existing threads — never creates duplicates.
 - **RAG isolation:** Embeddings stored with `character_id`. Queries: `WHERE character_id = ?` — no cross-character leakage.
@@ -112,11 +122,12 @@ flutter run -d <device>    # devices: linux, macos, windows, <android-id>
 - **Bubble width:** Capped at 600px via `LayoutBuilder` to prevent overflow on tablets.
 
 ## Testing
-4 test files. No ViewModel, Repository, or API service tests:
-- `test/domain/generation_params_test.dart` — `GenerationParams` OpenAI & native payload serialization, plus `TextSanitizer` markdown/code/LaTeX segment parsing (7 segments: markdown, inlineMath, markdown, blockMath, markdown, codeBlock, markdown).
-- `test/network/sse_client_test.dart` — `SseClient.parseStream()` for OpenAI deltas, llama.cpp native chunks, ping comments, multi-line data.
+5 test files. No ViewModel, Repository, or API service tests:
+- `test/domain/generation_params_test.dart` — `GenerationParams` OpenAI & native payload serialization, plus `TextSanitizer` markdown/code/LaTeX segment parsing (7 segments: markdown, inlineMath, markdown, blockMath, markdown, codeBlock, markdown). Includes reasoning payload flags test.
+- `test/network/sse_client_test.dart` — `SseClient.parseStream()` for OpenAI deltas, llama.cpp native chunks, ping comments, multi-line data. Multi-field reasoning extraction and `filterReasoning` inline tag processing tests.
 - `test/widget_test.dart` — renders `ConnectionBadge` with status + latency. Calls `sqfliteFfiInit()` in `setUpAll` (safe in test isolate).
 - `test/widget/character_edit_dialog_test.dart` — tests persona template loading into the character edit dialog's user persona field. Uses fake repositories for persona templates and character CRUD.
+- `test/widget/message_bubble_reasoning_test.dart` — tests reasoning block rendering and expand/collapse in `MessageBubble`.
 
 Run one: `flutter test test/domain/generation_params_test.dart`.
 
@@ -139,7 +150,7 @@ lib/
     ├── features/
     │   ├── chat/
     │   │   ├── view_models/           # ChatViewModel
-    │   │   ├── views/                 # ChatScreen, MessageBubble, PromptInputBar
+    │   │   ├── views/                 # ChatScreen, MessageBubble, PromptInputBar, _ReasoningBlock
     │   │   └── widgets/               # MarkdownBodyView, CodeBlockView, MathView, TokenSpeedBadge
     │   ├── drawer/
     │   │   └── views/                 # ChatDrawer

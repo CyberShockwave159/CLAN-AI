@@ -788,6 +788,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             contentPadding: EdgeInsets.zero,
           ),
 
+          SwitchListTile(
+            title: const Text('View Thinking'),
+            subtitle: const Text('Request and stream model reasoning/thinking in an expandable block for compatible models.'),
+            value: settingsVM.config.reasoning,
+            onChanged: (value) => settingsVM.toggleReasoning(value),
+            contentPadding: EdgeInsets.zero,
+          ),
+
           const SizedBox(height: 40),
 
           // Section 6: RAG Memory Management (roleplay only)

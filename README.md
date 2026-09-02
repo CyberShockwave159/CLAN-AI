@@ -16,6 +16,7 @@ Frontier-class cross-platform llama.cpp client. A Flutter app that connects to a
 ## Features
 
 - Real-time streaming chat with both OpenAI-compatible and native llama.cpp endpoints
+- **Reasoning/Thinking Block View** — Toggle in Settings to request and display model reasoning/thinking as a collapsible block. Supports dedicated reasoning fields (`delta.reasoning`), inline tags (```xml, `<thought>`), and multiple field name conventions across models
 - **AI Roleplay Mode** — Toggle from Settings; mirrors assistant mode UI with per-character isolated sessions and client-side RAG memory
 - **Character Creation** — 4-step wizard (personality, setting/world, user persona, advanced prompt settings) with optional avatar upload and persona template selector
 - **SillyTavern Import** — Import `.json` character cards (`chara_card_v2` format) with auto-edit dialog; extracts system prompt override, post history instructions, and alternate greetings
@@ -101,6 +102,7 @@ Characters can have multiple opening messages:
 - **Four root providers**: `SettingsViewModel`, `ChatViewModel`, `RoleplayViewModel`, `PersonaTemplateViewModel`
 - **SQLite** via `sqflite` (desktop uses `sqflite_common_ffi`, mobile uses native)
 - **Streaming** via Server-Sent Events with 20ms UI throttling to prevent frame drops
+- **Reasoning pipeline**: `SseClient.parseStream()` extracts reasoning from multiple field names (`reasoning`, `reasoning_content`, `thought`) across OpenAI and native formats. `SseClient.filterReasoning()` processes inline thinking tags and forwards dedicated reasoning fields through a stream pipeline. Both OpenAI and llama.cpp native protocols support the `reasoning` parameter.
 - **Thread isolation**: `ChatThread.characterId` distinguishes assistant vs roleplay threads
 - **FileSaver**: Native mobile save dialogs via platform channels (Android SAF, iOS UIDocumentPicker); desktop falls back to app documents directory
 - **SillyTavern Import**: `lib/core/utils/silly_tavern_card_parser.dart` parses `chara_card_v2` JSON; extracts `system_prompt`, `post_history_instructions`, and `alternate_greetings` in addition to core fields. `lib/core/utils/st_avatar_downloader.dart` fetches avatars; auto-edit dialog for imported characters via `CharacterEditDialog` (proper StatefulWidget)
@@ -118,14 +120,15 @@ flutter run            # launch app
 
 ### Testing
 
-4 test files cover: `GenerationParams` serialization, `SseClient` parsing, a widget render, and the `CharacterEditDialog` persona template loading. No tests exist for ViewModels, Repositories, or API services.
+5 test files cover: `GenerationParams` serialization (including reasoning payload flags), `SseClient` parsing (including multi-field reasoning extraction and `filterReasoning` inline tag processing), a widget render, the `CharacterEditDialog` persona template loading, and `MessageBubble` reasoning block interaction. No tests exist for ViewModels, Repositories, or API services.
 
 ## Gotchas
 
 - **Conversation branching**: Regenerate and edit operations truncate at the parent message and create new sibling branches. Navigation between variants uses `variantIndex` + `siblingIds`.
 - **Android networking**: `127.0.0.1` refers to the Android device's loopback, not your host machine. Use `10.0.2.2` for the Android emulator or your host's LAN IP for physical devices.
 - **SQLite desktop FFI**: On Linux/Windows/macOS, `sqflite_common_ffi` is initialized **once** in `main.dart` (`_initSqliteFfi()`). Do not call `sqfliteFfiInit()` again — it will trigger a warning.
-- **Database migration**: DB schema is version 5. If you encounter schema errors, clear the app's local storage or delete `clan_ai.db`.
+- **Database migration**: DB schema is version 7 (added `rag_memory_count` and `reasoning_content` columns to messages table). If you encounter schema errors, clear the app's local storage or delete `clan_ai.db`.
+- **Reasoning block streaming**: The `ReasoningBlock` widget displays thinking/reasoning content when the "View Thinking" toggle is enabled in Settings. Models can provide reasoning via dedicated fields (`delta.reasoning`, `delta.reasoning_content`, `delta.thought`) or inline tags (```xml, `<thought>`, `<reasoning>`). The `filterReasoning` stream pipeline handles both formats. Older llama.cpp versions may not return reasoning content.
 - **Roleplay thread separation**: `ChatViewModel.loadThreads()` filters out threads with `characterId != null` (roleplay threads). `RoleplayViewModel.loadLastChat()` loads threads with `characterId != null` (or falls back for legacy threads).
 - **RAG isolation**: Each character's embeddings are stored with `character_id` in the vector store. Queries are strictly `WHERE character_id = ?` — no cross-character memory leakage.
 - **Export**: Chat export is only available via context menus in the chat drawer and character drawer. On mobile, tapping export opens a native save dialog (Android SAF / iOS UIDocumentPicker) so users choose the destination. On desktop, files write to the app documents directory.

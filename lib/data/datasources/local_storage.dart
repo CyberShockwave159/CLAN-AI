@@ -48,7 +48,7 @@ class LocalDatabase {
 
     return await openDatabase(
       path,
-      version: 6,
+      version: 7,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
     );
@@ -100,6 +100,14 @@ class LocalDatabase {
         await db.execute('ALTER TABLE messages ADD COLUMN rag_memory_count INTEGER DEFAULT NULL');
       }
     }
+    if (oldVersion < 7) {
+      final columns = await db.rawQuery("PRAGMA table_info(messages)");
+      final hasReasoningContent = (columns as List<dynamic>)
+          .any((col) => (col as Map<String, dynamic>)['name'] == 'reasoning_content');
+      if (!hasReasoningContent) {
+        await db.execute('ALTER TABLE messages ADD COLUMN reasoning_content TEXT NOT NULL DEFAULT ""');
+      }
+    }
   }
 
   Future<void> _createDB(Database db, int version) async {
@@ -140,6 +148,7 @@ class LocalDatabase {
         is_edited INTEGER NOT NULL DEFAULT 0,
         updated_at TEXT,
         rag_memory_count INTEGER DEFAULT NULL,
+        reasoning_content TEXT NOT NULL DEFAULT "",
         FOREIGN KEY (thread_id) REFERENCES threads (id) ON DELETE CASCADE
       )
     ''');

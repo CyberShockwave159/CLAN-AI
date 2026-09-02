@@ -42,7 +42,9 @@ class TextSanitizer {
             codeBuffer.clear();
             i += 3;
             // Skip language identifier (read until newline)
-            while (i < text.length && text[i] != '\n') i++;
+            while (i < text.length && text[i] != '\n') {
+              i++;
+            }
             if (i < text.length) i++; // skip \n
             continue;
           }
@@ -68,7 +70,11 @@ class TextSanitizer {
               i++;
               continue;
             }
-            // Potential inline math
+            // Flush markdown buffer before inline math
+            if (markdownBuffer.isNotEmpty) {
+              segments.add(TextSegment(type: SegmentType.markdown, content: markdownBuffer.toString()));
+              markdownBuffer.clear();
+            }
             state = _ParseState.inInlineMath;
             mathBuffer.clear();
             i++;

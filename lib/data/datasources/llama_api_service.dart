@@ -71,7 +71,10 @@ class LlamaApiService {
     CancelToken? cancelToken,
     int? modelContextLength,
   }) async* {
-    final effectiveParams = params ?? serverConfig.defaultParams;
+    var effectiveParams = params ?? serverConfig.defaultParams;
+
+    // Apply server-level reasoning setting to params
+    effectiveParams = effectiveParams.copyWith(reasoning: serverConfig.reasoning);
 
     // Best-effort context fit: cap contextSize to model's actual capacity
     int adjustedContextSize = effectiveParams.contextSize;
@@ -147,9 +150,14 @@ class LlamaApiService {
       apiKey: serverConfig.apiKey,
     );
 
-    yield* SseClient.parseStream(
+    final rawStream = SseClient.parseStream(
       streamedResponse.stream,
       cancelToken: cancelToken,
+    );
+
+    yield* SseClient.filterReasoning(
+      rawStream,
+      enableReasoning: serverConfig.reasoning,
     );
   }
 
@@ -188,9 +196,14 @@ class LlamaApiService {
       apiKey: serverConfig.apiKey,
     );
 
-    yield* SseClient.parseStream(
+    final rawStream = SseClient.parseStream(
       streamedResponse.stream,
       cancelToken: cancelToken,
+    );
+
+    yield* SseClient.filterReasoning(
+      rawStream,
+      enableReasoning: serverConfig.reasoning,
     );
   }
 }

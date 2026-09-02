@@ -101,3 +101,161 @@ When a dialog widget doesn't update correctly:
 
 ## Key Takeaway
 The simplest fix is often extracting to a proper `StatefulWidget`. Don't patch inline builders with workarounds when the working pattern in your codebase is a clean widget. Pattern matching across similar widgets is more reliable than incremental debugging of a broken pattern.
+
+---
+
+# Self-Critique: Reasoning/Thinking Block Feature
+
+## The Problem
+The "Show Reasoning" toggle in Settings worked, but thinking blocks were not being streamed or displayed in either assistant or roleplay mode. The user reported toggling the setting, sending a message, and seeing no thinking block.
+
+## What Gemini Did
+Gemini took a fundamentally different approach than I did. Here are the key architectural differences:
+
+### 1. The `filterReasoning` Pipeline Method
+I treated reasoning as a simple field extraction from the SSE stream delta. Gemini recognized that models might embed thinking in two different ways:
+- **Dedicated field**: `delta.reasoning` (OpenAI format)
+- **Inline tags**: ```xml, `<thought>`, `<reasoning>` wrapped in the text stream
+
+Gemini created a `filterReasoning` method that wraps the raw SSE stream and:
+- Forwards dedicated reasoning fields when `enableReasoning` is true
+- Parses inline thinking tags from text chunks, extracting the reasoning content
+- Strips inline tags from the visible text when reasoning is enabled
+- Handles partial tags mid-stream (e.g., `<thoug` received before `ht>`)
+
+```dart
+// Gemini's approach: pipeline transformer
+static Stream<StreamChunk> filterReasoning(
+  Stream<StreamChunk> source, {
+  required bool enableReasoning,
+}) async* {
+  // Processes inline tags AND forwards dedicated reasoning fields
+}
+```
+
+I only extracted `delta.reasoning` in the parser and never processed inline tags in the text stream.
+
+### 2. Multiple Field Name Extraction
+I only extracted from `delta.reasoning`. Gemini extracted from ALL possible field names:
+
+```dart
+// Gemini's extraction covers:
+delta?['reasoning_content']
+delta?['reasoning']
+delta?['thought']
+firstChoice['reasoning_content']
+firstChoice['reasoning']
+decoded['reasoning_content']
+decoded['reasoning']
+decoded['thought']
+```
+
+This handles:
+- OpenAI format: `delta.reasoning`
+- OpenAI format: `delta.reasoning_content`
+- DeepSeek/R1 format: `delta.thought`
+- llama.cpp native: `reasoning`, `reasoning_content`, or `thought` at any level
+
+### 3. Both Protocol Payload Support
+I added `reasoning` to `toOpenAiPayload` only. Gemini added it to BOTH:
+- `toOpenAiPayload`: `reasoning` + `include_reasoning`
+- `toLlamaNativePayload`: `reasoning`
+
+The `include_reasoning` flag is sent alongside `reasoning: true` as a fallback for some APIs.
+
+### 4. Pipeline Wiring
+Gemini wired `filterReasoning` into BOTH `_streamOpenAi` AND `_streamLlamaNative`:
+```dart
+yield* SseClient.filterReasoning(
+  SseClient.parseStream(streamedResponse.stream),
+  enableReasoning: serverConfig.reasoning,
+);
+```
+
+My changes were incomplete — the pipeline was set up in the parser but `filterReasoning` wasn't being called on the stream.
+
+### 5. UI Polish
+Gemini's `_ReasoningBlock` includes:
+- `SelectableText` (allows copying reasoning content)
+- `AnimatedContainer` with smooth expand/collapse animation
+- `Semantics` for screen reader accessibility
+- `FontStyle.italic` for reasoning text styling
+- Cursor visibility only when BOTH content and reasoning are empty
+
+## My Oversights
+
+### 1. Treating Reasoning as a Single-Channel Problem
+I assumed models send reasoning as ONE field (`delta.reasoning`). Many reasoning-capable models (DeepSeek R1, Qwen, etc.) embed thinking as inline tags in the text stream:
+
+```
+<think>Let me solve this step by step...</think>
+The answer is 42.
+```
+
+In this case, the `delta.content` is the FULL text including tags. My parser extracted nothing because there was no `delta.reasoning` field. Gemini's `filterReasoning` handles both cases.
+
+**Lesson:** When dealing with streaming text, consider ALL possible formats a model might use, not just the most common one.
+
+### 2. Parser vs. Pipeline
+I modified the SSE parser to extract `delta.reasoning` but never created a pipeline method to process the stream. The view models then used the raw stream from the parser, which had no inline tag processing. Gemini's `filterReasoning` acts as a pipeline transformer between the parser and the view model.
+
+**Lesson:** When the data needs transformation beyond simple field extraction, use a stream pipeline method rather than modifying the parser directly.
+
+### 3. Model Diversity in Field Names
+I only checked `delta.reasoning`. Different models use different conventions:
+- OpenAI o1/o3: `delta.reasoning`
+- DeepSeek R1: `delta.thought`
+- Some llama.cpp builds: `delta.reasoning_content`
+- Some APIs: `reasoning` at top level, not in delta
+
+**Lesson:** Extract from ALL possible field names, not just the one you expect.
+
+### 4. Protocol Parity
+I added reasoning to the OpenAI payload but forgot the native payload. For users on `ApiProtocol.llamaNative`, the toggle would do nothing.
+
+**Lesson:** Always check ALL code paths. If a feature affects multiple protocols, implement it in ALL of them.
+
+### 5. Inline Tag Handling (Partial Tags)
+My implementation assumed complete chunks. But network streaming means a chunk might end mid-tag: `...<thoug`. Gemini's `filterReasoning` handles this with `findPendingTagPrefix`, which detects partial tag prefixes and buffers them for the next chunk.
+
+**Lesson:** Streaming data is not chunk-aligned. Always handle partial tokens, partial tags, and partial field names.
+
+## Troubleshooting Checklist for Future Streaming Features
+
+When a streaming feature isn't working:
+
+1. **Is the feature wired in ALL protocol paths?**
+   - OpenAI + llamaNative both need the change
+   - Check every `yield*` in the API service
+
+2. **Does the pipeline include stream transformation?**
+   - Parser extracts fields → filterReasoning processes tags → view model receives clean chunks
+   - Don't rely on the parser alone for complex transformations
+
+3. **Are ALL possible field names checked?**
+   - `reasoning`, `reasoning_content`, `thought`
+   - In delta, in choice, at top level
+
+4. **Does the UI handle both dedicated fields AND inline tags?**
+   - If `chunk.reasoning` exists → use it
+   - If inline tags exist in `chunk.text` → extract them
+   - Both paths should feed the same `reasoningContent` field
+
+5. **Is the enable flag passed through the entire pipeline?**
+   - Settings → ServerConfig → API Service → filterReasoning → View Model → MessageBubble
+   - Every hop needs `enableReasoning` or equivalent
+
+6. **Are partial chunks handled?**
+   - Network streaming breaks at arbitrary byte boundaries
+   - Tags, field names, and JSON structures can be split across chunks
+
+## Key Takeaway
+For streaming features, think in terms of pipelines: parser → transformer → accumulator → renderer. Each stage handles a different concern. The parser extracts raw fields, the transformer processes inline content, the view model accumulates into state, and the renderer displays it. Don't try to do everything in the parser — use dedicated pipeline methods like `filterReasoning` that can handle multiple data formats and edge cases.
+
+## Why the Toggle Appeared to Work But Thinking Didn't Appear
+The toggle was correctly stored in `ServerConfig.reasoning` and correctly applied to `GenerationParams`. The OpenAI payload included `reasoning: true`. But two things broke the end-to-end flow:
+
+1. **The `filterReasoning` pipeline method existed but wasn't wired into the stream** — so inline tags were never processed
+2. **Only one field name was checked in the parser** — so models using `thought` or `reasoning_content` returned empty reasoning
+
+The root cause was a pipeline gap: the data had a path from Settings → Request, but the response path from API → Stream → View Model had incomplete transformation.
