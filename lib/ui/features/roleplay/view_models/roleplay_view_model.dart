@@ -24,9 +24,11 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
 
   CharacterProfile? _activeCharacter;
   CharacterProfile? get activeCharacter => _activeCharacter;
+  set activeCharacter(CharacterProfile? v) => _activeCharacter = v;
 
   ChatThread? _activeThread;
   ChatThread? get activeThread => _activeThread;
+  set activeThread(ChatThread? v) => _activeThread = v;
 
   List<ChatMessage> _messages = [];
 

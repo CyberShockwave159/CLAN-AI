@@ -5,7 +5,7 @@ Recommended order: `pub get` → `analyze` → `test` → `run`.
 ```
 flutter pub get            # fetch dependencies (required after git pull)
 flutter analyze            # lint + typecheck (uses flutter_lints)
-flutter test               # runs all 5 test files (5 widget/domain + SSE, includes reasoning tests)
+flutter test               # runs all 23 test files (~150+ tests across all layers, includes reasoning)
 flutter run -d <device>    # devices: linux, macos, windows, <android-id>
 ```
 
@@ -128,14 +128,28 @@ flutter run -d <device>    # devices: linux, macos, windows, <android-id>
 - **Bubble width:** Capped at 600px via `LayoutBuilder` to prevent overflow on tablets.
 
 ## Testing
-5 test files. No ViewModel, Repository, or API service tests:
-- `test/domain/generation_params_test.dart` — `GenerationParams` OpenAI & native payload serialization, plus `TextSanitizer` markdown/code/LaTeX segment parsing (7 segments: markdown, inlineMath, markdown, blockMath, markdown, codeBlock, markdown). Includes reasoning payload flags test.
-- `test/network/sse_client_test.dart` — `SseClient.parseStream()` for OpenAI deltas, llama.cpp native chunks, ping comments, multi-line data. Multi-field reasoning extraction and `filterReasoning` inline tag processing tests.
-- `test/widget_test.dart` — renders `ConnectionBadge` with status + latency. Calls `sqfliteFfiInit()` in `setUpAll` (safe in test isolate).
-- `test/widget/character_edit_dialog_test.dart` — tests persona template loading into the character edit dialog's user persona field. Uses fake repositories for persona templates and character CRUD.
-- `test/widget/message_bubble_reasoning_test.dart` — tests reasoning block rendering and expand/collapse in `MessageBubble`.
+23 test files across 8 layers, ~150+ tests. All tests use fake repositories (no real SQLite or network). ViewModels expose private state via setters for test injection.
 
-Run one: `flutter test test/domain/generation_params_test.dart`.
+### Test structure
+- **Test helpers** (`test/helpers/`) — `FakeChatRepository`, `FakeCharacterRepository`, `FakeVectorStore`, `FakeServerRepository`, `FakePersonaTemplateRepository`, `test_model_factories.dart`.
+- **Domain** (`test/domain/`) — `generation_params_test.dart` (OpenAI & native payloads, TextSanitizer segment parsing, reasoning flags), `models/model_roundtrips_test.dart` (ChatThread, ChatMessage, CharacterProfile, PersonaTemplate, ServerConfig serialization roundtrips).
+- **Network** (`test/network/`) — `sse_client_test.dart` (OpenAI deltas, llama.cpp native chunks, ping comments, multi-line data, multi-field reasoning extraction, `filterReasoning` inline tag processing).
+- **Utils** (`test/utils/`) — `roleplay_prompt_formatter_test.dart`, `roleplay_context_builder_test.dart`, `hash_embedding_test.dart`, `vector_store_test.dart`, `silly_tavern_card_parser_test.dart`, `conversation_export_test.dart`.
+- **Mixin** (`test/mixin/`) — `stream_mutation_mixin_test.dart` (streaming, undo, stop, switchVariant).
+- **Repositories** (`test/repository/`) — `chat_repository_test.dart`, `character_repository_test.dart` (thread CRUD, message operations, favorites, embeddings).
+- **ViewModels** (`test/view_model/`) — `chat_view_model_test.dart`, `roleplay_view_model_test.dart`, `settings_view_model_test.dart`, `persona_template_view_model_test.dart`.
+- **Widgets** (`test/widget/`) — `message_bubble_test.dart`, `message_bubble_reasoning_test.dart`, `character_edit_dialog_test.dart`, `alternate_greeting_selector_test.dart`.
+- **Integration** (`test/integration/`) — `assistant_chat_flow_test.dart`, `roleplay_chat_flow_test.dart`, `character_lifecycle_test.dart`, `persona_defaults_test.dart`, `settings_persistence_test.dart`.
+
+### Running tests
+```bash
+flutter test                          # all tests
+flutter test test/domain/             # domain layer only
+flutter test test/view_model/         # view model tests only
+flutter test test/integration/        # integration tests only
+flutter test test/widget/             # widget tests only
+flutter test test/domain/generation_params_test.dart   # single file
+```
 
 ## Code structure
 ```
@@ -168,4 +182,17 @@ lib/
     │       ├── view_models/           # SettingsViewModel
     │       └── views/                 # SettingsScreen, ParameterTuningSheet, sections/ (profile_section, safety_section, app_mode_section)
     └── shared/                        # AppHeader, ConnectionBadge, mixins/ (stream_mutation_mixin), widgets/ (parameter_sheet_opener, drawer_export_menu, auto_scroll_mixin, delete_message_handler), avatar_utils
+## Tests
+```
+test/
+├── domain/                          # generation_params_test.dart, models/model_roundtrips_test.dart
+├── helpers/                         # Fake repos and model factories
+├── integration/                     # assistant_chat_flow_test.dart, roleplay_chat_flow_test.dart, etc.
+├── mixin/                           # stream_mutation_mixin_test.dart
+├── network/                         # sse_client_test.dart
+├── repository/                      # chat_repository_test.dart, character_repository_test.dart
+├── utils/                           # roleplay_prompt_formatter_test.dart, vector_store_test.dart, etc.
+├── view_model/                      # chat_view_model_test.dart, roleplay_view_model_test.dart, etc.
+└── widget/                          # message_bubble_test.dart, character_edit_dialog_test.dart, etc.
+```
 ```

@@ -118,13 +118,23 @@ Characters can have multiple opening messages:
 
 ```bash
 flutter analyze        # lint + typecheck
-flutter test           # runs all 5 test files
+flutter test           # runs all 23 test files (~150+ tests across all layers)
 flutter run            # launch app
 ```
 
 ### Testing
 
-5 test files cover: `GenerationParams` serialization (including reasoning payload flags), `SseClient` parsing (including multi-field reasoning extraction and `filterReasoning` inline tag processing), a widget render, the `CharacterEditDialog` persona template loading, and `MessageBubble` reasoning block interaction. No tests exist for ViewModels, Repositories, or API services.
+23 test files across 8 layers (~150+ tests). All tests use fake repositories (no real SQLite or network). ViewModels expose private state via setters for test injection.
+
+**Coverage by layer:**
+- **Domain** — `GenerationParams` serialization (OpenAI & native payloads, TextSanitizer segment parsing, reasoning flags), model roundtrip serialization (ChatThread, ChatMessage, CharacterProfile, PersonaTemplate, ServerConfig)
+- **Network** — `SseClient` parsing (OpenAI deltas, llama.cpp native chunks, ping comments, multi-line data, multi-field reasoning extraction, `filterReasoning` inline tag processing)
+- **Utilities** — Roleplay prompt formatter, context builder, hash embedding, vector store, SillyTavern card parser, conversation export
+- **Mixins** — StreamMutationMixin (streaming, undo, stop, switchVariant)
+- **Repositories** — ChatRepository, CharacterRepository (thread/message CRUD, favorites, embeddings)
+- **ViewModels** — ChatViewModel, RoleplayViewModel, SettingsViewModel, PersonaTemplateViewModel
+- **Widgets** — MessageBubble (reasoning block expand/collapse), CharacterEditDialog (persona template loading), AlternateGreetingSelector
+- **Integration** — Assistant chat flow, roleplay flow, character lifecycle, persona defaults, settings persistence
 
 ## Gotchas
 

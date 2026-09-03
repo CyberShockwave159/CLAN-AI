@@ -18,9 +18,11 @@ class ChatViewModel extends ChangeNotifier with StreamMutationMixin {
 
   List<ChatThread> _threads = [];
   List<ChatThread> get threads => _threads;
+  set threads(List<ChatThread> v) => _threads = v;
 
   ChatThread? _activeThread;
   ChatThread? get activeThread => _activeThread;
+  set activeThread(ChatThread? v) => _activeThread = v;
 
   List<ChatMessage> _messages = [];
 
