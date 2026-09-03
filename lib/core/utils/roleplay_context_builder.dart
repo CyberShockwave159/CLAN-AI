@@ -1,5 +1,5 @@
 import 'package:clan_ai/core/utils/roleplay_prompt_formatter.dart';
-import 'package:clan_ai/data/datasources/embedding_service.dart';
+import 'package:clan_ai/core/utils/hash_embedding.dart';
 import 'package:clan_ai/data/datasources/vector_store.dart';
 
 /// Orchestrates the RAG pipeline: embed user input → search character memory →
@@ -23,8 +23,8 @@ class RoleplayContextBuilder {
     String? postHistoryInstructions,
     required String userInput,
   }) async {
-    // 1. Embed the user input
-    final queryVector = EmbeddingService.embed(userInput);
+    // 1. Embed the user input (kept for search but not stored in result)
+    final queryVector = HashEmbedding.embed(userInput);
 
     // 2. Search for relevant memories (strictly scoped to characterId)
     final memories = await _vectorStore.searchSimilar(
@@ -52,7 +52,6 @@ class RoleplayContextBuilder {
     return RoleplayContext(
       systemPrompt: systemPrompt,
       memories: memoryTexts,
-      queryVector: queryVector,
     );
   }
 }
@@ -61,11 +60,9 @@ class RoleplayContextBuilder {
 class RoleplayContext {
   final String systemPrompt;
   final List<String> memories;
-  final List<double> queryVector;
 
   RoleplayContext({
     required this.systemPrompt,
     required this.memories,
-    required this.queryVector,
   });
 }

@@ -15,6 +15,7 @@ import 'package:clan_ai/ui/features/roleplay/widgets/character_edit_dialog.dart'
 import 'package:clan_ai/ui/features/roleplay/view_models/roleplay_view_model.dart';
 import 'package:clan_ai/ui/features/settings/view_models/settings_view_model.dart';
 import 'package:clan_ai/ui/features/settings/views/settings_screen.dart';
+import 'package:clan_ai/ui/shared/avatar_utils.dart';
 
 /// Sidebar for roleplay mode — shows a list of characters.
 /// Mirrors ChatDrawer structure but displays characters instead of threads.
@@ -75,23 +76,9 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
     );
   }
 
-  Color _getAvatarColor(String name) {
-    final colors = const [
-      AppTheme.accentPrimary,
-      AppTheme.accentSecondary,
-      AppTheme.accentIndigo,
-      AppTheme.accentCyan,
-    ];
-    final idx = name.codeUnitAt(0) % colors.length;
-    return colors[idx];
-  }
+  Color _getAvatarColor(String name) => AvatarUtils.getColor(name);
 
-  String _getInitials(String name) {
-    final parts = name.trim().split(RegExp(r'\s+'));
-    if (parts.isEmpty) return '?';
-    if (parts.length == 1) return parts[0][0].toUpperCase();
-    return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-  }
+  String _getInitials(String name) => AvatarUtils.getInitials(name);
 
   Future<void> _handleStartChat(BuildContext context, CharacterProfile character) async {
     final settingsVM = context.read<SettingsViewModel>();
@@ -99,6 +86,7 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
     await roleplayVM.startRoleplay(
       character,
       serverConfig: settingsVM.config,
+      connection: settingsVM.connectionDetails,
       modelContextLength: settingsVM.getSelectedModelContextLength(),
     );
     // ignore: use_build_context_synchronously
@@ -134,13 +122,14 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
                      context: context,
                      builder: (_) => const CharacterCreationWizard(),
                    );
-                    if (newCharacter != null) {
-                      await roleplayVM.startRoleplay(
-                        newCharacter,
-                        serverConfig: settingsVM.config,
-                        modelContextLength: settingsVM.getSelectedModelContextLength(),
-                      );
-                    }
+                     if (newCharacter != null) {
+                       await roleplayVM.startRoleplay(
+                         newCharacter,
+                         serverConfig: settingsVM.config,
+                         connection: settingsVM.connectionDetails,
+                         modelContextLength: settingsVM.getSelectedModelContextLength(),
+                       );
+                     }
                  },
               ),
             ),
@@ -198,11 +187,12 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
                      // Auto-open edit dialog for the imported character
                      final updated = await _showEditDialog(context, character, charRepo);
 
-                     await roleplayVM.startRoleplay(
-                       updated,
-                       serverConfig: settingsVM.config,
-                       modelContextLength: settingsVM.getSelectedModelContextLength(),
-                     );
+                      await roleplayVM.startRoleplay(
+                        updated,
+                        serverConfig: settingsVM.config,
+                        connection: settingsVM.connectionDetails,
+                        modelContextLength: settingsVM.getSelectedModelContextLength(),
+                      );
 
                      if (context.mounted) {
                        ScaffoldMessenger.of(context).showSnackBar(
@@ -461,7 +451,7 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
                             // Expanded thread list
                             if (isExpanded)
                               FutureBuilder<List<ChatThread>>(
-                                future: roleplayVM.getCachedThreadsForCharacter(character.id),
+                                future: roleplayVM.getThreadsForCharacter(character.id),
                                 builder: (ctx, snapshot) {
                                   if (!snapshot.hasData || snapshot.data!.isEmpty) {
                                     return const SizedBox.shrink();

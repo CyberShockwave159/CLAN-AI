@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:clan_ai/core/constants/app_constants.dart';
 import 'package:clan_ai/core/constants/app_theme.dart';
+import 'package:clan_ai/ui/features/settings/views/sections/app_mode_section.dart';
+import 'package:clan_ai/ui/features/settings/views/sections/profile_section.dart';
+import 'package:clan_ai/ui/features/settings/views/sections/safety_section.dart';
 import 'package:clan_ai/data/datasources/vector_store.dart';
 import 'package:clan_ai/data/models/app_mode.dart';
 import 'package:clan_ai/data/models/character_profile.dart';
 import 'package:clan_ai/data/models/persona_template.dart';
 import 'package:clan_ai/data/models/server_config.dart';
-import 'package:clan_ai/data/models/server_profile.dart';
 import 'package:clan_ai/data/models/system_prompt_template.dart';
 import 'package:clan_ai/data/repositories/character_repository.dart';
 import 'package:clan_ai/ui/features/chat/view_models/chat_view_model.dart';
@@ -28,28 +31,61 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late TextEditingController _apiKeyController;
   late TextEditingController _systemPromptController;
   bool _obscureApiKey = true;
+  late SettingsViewModel _settingsVM;
+  late ChatViewModel _chatVM;
 
   @override
   void initState() {
     super.initState();
-    final settingsVM = context.read<SettingsViewModel>();
-    _urlController = TextEditingController(text: settingsVM.config.baseUrl);
-    _apiKeyController = TextEditingController(text: settingsVM.config.apiKey ?? '');
+    _settingsVM = context.read<SettingsViewModel>();
+    _urlController = TextEditingController(text: _settingsVM.config.baseUrl);
+    _apiKeyController = TextEditingController(text: _settingsVM.config.apiKey ?? '');
 
-    final chatVM = context.read<ChatViewModel>();
+    _chatVM = context.read<ChatViewModel>();
     String initialPrompt;
-    if (chatVM.activeThread != null) {
-      final threadPrompt = chatVM.activeThread!.systemPrompt;
-      initialPrompt = threadPrompt ?? settingsVM.config.systemPrompt ?? 'You are a helpful, brilliant, and honest AI assistant.';
+    if (_chatVM.activeThread != null) {
+      final threadPrompt = _chatVM.activeThread!.systemPrompt;
+      initialPrompt = threadPrompt ?? _settingsVM.config.systemPrompt ?? defaultSystemPrompt;
     } else {
-      initialPrompt = settingsVM.config.systemPrompt ?? 'You are a helpful, brilliant, and honest AI assistant.';
+      initialPrompt = _settingsVM.config.systemPrompt ?? defaultSystemPrompt;
     }
     _systemPromptController = TextEditingController(text: initialPrompt);
+
+    _settingsVM.addListener(_syncControllers);
+    _chatVM.addListener(_syncControllers);
   }
 
-  void _applySystemPromptTemplate(String template) {
-    _systemPromptController.text = template;
-    context.read<SettingsViewModel>().updateSystemPrompt(template);
+  void _syncControllers() {
+    if (_urlController.text != _settingsVM.config.baseUrl) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _urlController.text != _settingsVM.config.baseUrl) {
+          _urlController.text = _settingsVM.config.baseUrl;
+        }
+      });
+    }
+
+    final apiKeyText = _settingsVM.config.apiKey ?? '';
+    if (_apiKeyController.text != apiKeyText) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _apiKeyController.text != apiKeyText) {
+          _apiKeyController.text = apiKeyText;
+        }
+      });
+    }
+
+    String effectivePrompt;
+    if (_chatVM.activeThread != null) {
+      effectivePrompt = _chatVM.activeThread!.systemPrompt ?? _settingsVM.config.systemPrompt ?? defaultSystemPrompt;
+    } else {
+      effectivePrompt = _settingsVM.config.systemPrompt ?? defaultSystemPrompt;
+    }
+    if (_systemPromptController.text != effectivePrompt) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _systemPromptController.text != effectivePrompt) {
+          _systemPromptController.text = effectivePrompt;
+        }
+      });
+    }
   }
 
   void _openParameterSheet(BuildContext context, SettingsViewModel vm) {
@@ -159,201 +195,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  void _showCreateProfileDialog() {
-    final nameController = TextEditingController(text: 'New Profile');
-    final urlController = TextEditingController(text: context.read<SettingsViewModel>().config.baseUrl);
-    final apiKeyController = TextEditingController(text: context.read<SettingsViewModel>().config.apiKey ?? '');
-    final settingsVM = context.read<SettingsViewModel>();
-    ApiProtocol selectedProtocol = settingsVM.config.protocol;
-
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setState) => WillPopScope(
-          onWillPop: () async {
-            nameController.dispose();
-            urlController.dispose();
-            apiKeyController.dispose();
-            return true;
-          },
-          child: AlertDialog(
-            title: const Text('Create Server Profile'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: nameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Profile Name',
-                      hintText: 'e.g. Home WiFi, Office, Cellular',
-                    ),
-                    autofocus: true,
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: urlController,
-                    decoration: const InputDecoration(
-                      labelText: 'Server Base URL',
-                      hintText: 'http://192.168.x.x:8080',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: apiKeyController,
-                    obscureText: true,
-                    decoration: const InputDecoration(
-                      labelText: 'API Key (Optional)',
-                      hintText: 'sk-...',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SegmentedButton<ApiProtocol>(
-                    segments: const [
-                      ButtonSegment(value: ApiProtocol.openAi, label: Text('OpenAI')),
-                      ButtonSegment(value: ApiProtocol.llamaNative, label: Text('llama.cpp')),
-                    ],
-                    selected: {selectedProtocol},
-                    onSelectionChanged: (selected) {
-                      setState(() => selectedProtocol = selected.first);
-                    },
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () {
-                  final name = nameController.text.trim();
-                  final baseUrl = urlController.text.trim();
-                  if (name.isEmpty || baseUrl.isEmpty) return;
-                  settingsVM.createProfile(
-                    name: name,
-                    baseUrl: baseUrl,
-                    apiKey: apiKeyController.text.trim().isEmpty ? null : apiKeyController.text.trim(),
-                    protocol: selectedProtocol,
-                  );
-                  Navigator.of(ctx).pop();
-                },
-                child: const Text('Create'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showEditProfileDialog(ServerProfile profile) {
-    final nameController = TextEditingController(text: profile.name);
-    final urlController = TextEditingController(text: profile.baseUrl);
-    final apiKeyController = TextEditingController(text: profile.apiKey ?? '');
-    final settingsVM = context.read<SettingsViewModel>();
-    ApiProtocol selectedProtocol = profile.protocol;
-
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setState) => WillPopScope(
-          onWillPop: () async {
-            nameController.dispose();
-            urlController.dispose();
-            apiKeyController.dispose();
-            return true;
-          },
-          child: AlertDialog(
-            title: const Text('Edit Server Profile'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: nameController,
-                    decoration: const InputDecoration(labelText: 'Profile Name'),
-                    autofocus: true,
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: urlController,
-                    decoration: const InputDecoration(labelText: 'Server Base URL'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: apiKeyController,
-                    obscureText: true,
-                    decoration: const InputDecoration(labelText: 'API Key (Optional)'),
-                  ),
-                  const SizedBox(height: 12),
-                  SegmentedButton<ApiProtocol>(
-                    segments: const [
-                      ButtonSegment(value: ApiProtocol.openAi, label: Text('OpenAI')),
-                      ButtonSegment(value: ApiProtocol.llamaNative, label: Text('llama.cpp')),
-                    ],
-                    selected: {selectedProtocol},
-                    onSelectionChanged: (selected) {
-                      setState(() => selectedProtocol = selected.first);
-                    },
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () {
-                  final name = nameController.text.trim();
-                  final baseUrl = urlController.text.trim();
-                  if (name.isEmpty || baseUrl.isEmpty) return;
-                  final updatedProfile = profile.copyWith(
-                    name: name,
-                    baseUrl: baseUrl,
-                    apiKey: apiKeyController.text.trim().isEmpty ? null : apiKeyController.text.trim(),
-                    protocol: selectedProtocol,
-                  );
-                  settingsVM.updateProfile(updatedProfile);
-                  Navigator.of(ctx).pop();
-                },
-                child: const Text('Save'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showDeleteProfileDialog(String profileId, String profileName) {
-    final settingsVM = context.read<SettingsViewModel>();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Profile?'),
-        content: Text('Are you sure you want to delete "$profileName"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppTheme.statusError),
-            onPressed: () {
-              settingsVM.deleteProfile(profileId);
-              Navigator.of(ctx).pop();
-            },
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -381,97 +222,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildSectionHeader('Server Profiles', Icons.storage_rounded),
           const SizedBox(height: 10),
 
-          Row(
-            children: [
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  initialValue: settingsVM.activeProfileId,
-                  decoration: InputDecoration(
-                    labelText: 'Active Profile',
-                    prefixIcon: const Icon(Icons.fingerprint_rounded, size: 20),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  ),
-                  items: settingsVM.profiles.map((profile) {
-                    return DropdownMenuItem(
-                      value: profile.id,
-                      child: Text(
-                        profile.name,
-                        style: const TextStyle(fontSize: 13),
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: (val) {
-                    if (val != null) {
-                      settingsVM.switchProfile(val);
-                    }
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                icon: const Icon(Icons.add_rounded),
-                tooltip: 'New Profile',
-                onPressed: _showCreateProfileDialog,
-              ),
-            ],
-          ),
-
-          if (settingsVM.profiles.isEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                'No profiles yet. Click + to create one.',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
-                ),
-              ),
-            )
-          else
-            SizedBox(
-              height: 44,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: settingsVM.profiles.length,
-                itemBuilder: (context, profileIndex) {
-                  final profile = settingsVM.profiles[profileIndex];
-                  final isActive = profile.id == settingsVM.activeProfileId;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: GestureDetector(
-                      onTap: () => settingsVM.switchProfile(profile.id),
-                      onLongPress: () => _showEditProfileDialog(profile),
-                      child: Chip(
-                        avatar: Icon(
-                          Icons.fingerprint_rounded,
-                          size: 16,
-                          color: isActive ? AppTheme.accentPrimary : (isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted),
-                        ),
-                        label: Text(
-                          profile.name,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-                          ),
-                        ),
-                        onDeleted: () => _showDeleteProfileDialog(profile.id, profile.name),
-                        deleteIconColor: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          side: BorderSide(
-                            color: isActive
-                                ? AppTheme.accentPrimary.withValues(alpha: 0.5)
-                                : (isDark ? AppTheme.darkBorder : AppTheme.lightBorder),
-                            width: isActive ? 1.5 : 1,
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
+          ProfileSection(),
 
           const SizedBox(height: 24),
 
@@ -538,7 +289,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       icon: Icon(Icons.memory_rounded, size: 16),
                     ),
                   ],
-                  selected: {settingsVM.config.protocol},
+                  selected: {settingsVM.connectionDetails?.protocol ?? ApiProtocol.openAi},
                   onSelectionChanged: (selected) {
                     settingsVM.updateProtocol(selected.first);
                   },
@@ -742,20 +493,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   },
                 ),
               ),
-
-            // Preset Chips (inline with delete support for custom, or just display)
-            const SizedBox(height: 8),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _buildTemplateChip('Default', 'You are a helpful, brilliant, and honest AI assistant.'),
-                  _buildTemplateChip('Code Architect', 'You are an elite software architect and senior engineer. Write clean, modular, and optimized code with complete explanations.'),
-                  _buildTemplateChip('Concise Expert', 'You are a concise expert. Answer directly and precisely without conversational filler.'),
-                  _buildTemplateChip('Creative Writer', 'You are a creative writer with rich vocabulary and engaging prose.'),
-                ],
-              ),
-            ),
           ],
 
           const SizedBox(height: 24),
@@ -780,21 +517,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildSectionHeader('Safety & Convenience', Icons.security_rounded),
           const SizedBox(height: 10),
 
-          SwitchListTile(
-            title: const Text('Confirm Message Deletion'),
-            subtitle: const Text('Show a confirmation dialog before deleting a message and all subsequent messages.'),
-            value: settingsVM.config.confirmDeleteMessage,
-            onChanged: (value) => settingsVM.toggleConfirmDeleteMessage(value),
-            contentPadding: EdgeInsets.zero,
-          ),
-
-          SwitchListTile(
-            title: const Text('View Thinking'),
-            subtitle: const Text('Request and stream model reasoning/thinking in an expandable block for compatible models.'),
-            value: settingsVM.config.reasoning,
-            onChanged: (value) => settingsVM.toggleReasoning(value),
-            contentPadding: EdgeInsets.zero,
-          ),
+          SafetySection(),
 
           const SizedBox(height: 40),
 
@@ -986,18 +709,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildSectionHeader('App Mode', Icons.view_agenda_rounded),
           const SizedBox(height: 10),
 
-          SwitchListTile(
-            title: const Text('Roleplay Mode'),
-            subtitle: const Text('Enable character roleplay with persistent memory.'),
-            value: settingsVM.appMode == AppMode.roleplay,
-            onChanged: (value) {
-              settingsVM.updateAppMode(
-                value ? AppMode.roleplay : AppMode.assistant,
-              );
-              Navigator.of(context).pop();
-            },
-            contentPadding: EdgeInsets.zero,
-          ),
+          AppModeSection(),
 
           const SizedBox(height: 40),
         ],
@@ -1021,16 +733,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildTemplateChip(String label, String template) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: ActionChip(
-        label: Text(label, style: const TextStyle(fontSize: 12)),
-        onPressed: () => _applySystemPromptTemplate(template),
-      ),
     );
   }
 
@@ -1071,6 +773,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   void dispose() {
+    _settingsVM.removeListener(_syncControllers);
+    _chatVM.removeListener(_syncControllers);
     _urlController.dispose();
     _apiKeyController.dispose();
     _systemPromptController.dispose();

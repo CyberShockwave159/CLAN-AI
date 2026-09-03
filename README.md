@@ -98,6 +98,10 @@ Characters can have multiple opening messages:
 
 - **Hybrid Clean Architecture / MVVM** with `Provider` + `ChangeNotifier` state management
 - **No codegen** — all JSON serialization is manual (`jsonEncode`/`jsonDecode` + `toMap()`/`fromMap()`)
+- **Shared constants** in `lib/core/constants/app_constants.dart` — all magic numbers and default strings centralized
+- **Shared mixin** `StreamMutationMixin` in `lib/ui/shared/mixins/stream_mutation_mixin.dart` — provides streaming, undo, switchVariant, stopGeneration logic for both ChatViewModel and RoleplayViewModel
+- **Shared settings sections** in `lib/ui/features/settings/views/sections/` — `profile_section.dart`, `safety_section.dart`, `app_mode_section.dart`
+- **ServerProfile consolidation:** `ServerConnectionDetails` removed; `ServerProfile` serves as connection details throughout
 - **Dependency wiring** in `lib/main.dart` via constructor injection
 - **Four root providers**: `SettingsViewModel`, `ChatViewModel`, `RoleplayViewModel`, `PersonaTemplateViewModel`
 - **SQLite** via `sqflite` (desktop uses `sqflite_common_ffi`, mobile uses native)
@@ -114,7 +118,7 @@ Characters can have multiple opening messages:
 
 ```bash
 flutter analyze        # lint + typecheck
-flutter test           # runs all 3 test files
+flutter test           # runs all 5 test files
 flutter run            # launch app
 ```
 

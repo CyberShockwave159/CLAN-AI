@@ -1,22 +1,24 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
-import 'package:clan_ai/core/errors/app_exception.dart';
 import 'package:clan_ai/core/network/sse_client.dart';
 import 'package:clan_ai/core/utils/conversation_export.dart';
 import 'package:clan_ai/core/utils/file_saver.dart';
 import 'package:clan_ai/core/utils/roleplay_context_builder.dart';
-import 'package:clan_ai/data/datasources/embedding_service.dart';
+import 'package:clan_ai/core/utils/hash_embedding.dart';
 import 'package:clan_ai/data/datasources/vector_store.dart';
 import 'package:clan_ai/data/models/chat_message.dart';
 import 'package:clan_ai/data/models/chat_thread.dart';
 import 'package:clan_ai/data/models/character_profile.dart';
 import 'package:clan_ai/data/models/server_config.dart';
+import 'package:clan_ai/data/models/server_profile.dart';
 import 'package:clan_ai/data/repositories/character_repository.dart';
 import 'package:clan_ai/data/repositories/chat_repository.dart';
+import 'package:clan_ai/core/constants/app_constants.dart';
 import 'package:clan_ai/domain/models/generation_params.dart';
+import 'package:clan_ai/ui/shared/mixins/stream_mutation_mixin.dart';
 
-class RoleplayViewModel extends ChangeNotifier {
+class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
   final ChatRepository _chatRepository;
   final   CharacterRepository _characterRepository;
 
@@ -27,22 +29,40 @@ class RoleplayViewModel extends ChangeNotifier {
   ChatThread? get activeThread => _activeThread;
 
   List<ChatMessage> _messages = [];
-  List<ChatMessage> get messages => _messages;
 
   bool _isGenerating = false;
+
+  @override
   bool get isGenerating => _isGenerating;
+  set isGenerating(bool v) => _isGenerating = v;
 
   CancelToken? _currentCancelToken;
   Timer? _uiThrottleTimer;
   String _pendingStreamBuffer = '';
   String _pendingReasoningBuffer = '';
 
-  final Map<String, Future<List<ChatThread>>> _threadCache = {};
+  @override
+  Timer? get uiThrottleTimer => _uiThrottleTimer;
+  set uiThrottleTimer(Timer? v) => _uiThrottleTimer = v;
 
-  // Undo support for message deletion
-  ChatMessage? _undoneMessage;
-  DateTime? _undoTimestamp;
-  static const _undoTimeout = Duration(seconds: 5);
+  @override
+  String get pendingStreamBuffer => _pendingStreamBuffer;
+  set pendingStreamBuffer(String v) => _pendingStreamBuffer = v;
+
+  @override
+  String get pendingReasoningBuffer => _pendingReasoningBuffer;
+  set pendingReasoningBuffer(String v) => _pendingReasoningBuffer = v;
+
+  @override
+  CancelToken? get currentCancelToken => _currentCancelToken;
+  set currentCancelToken(CancelToken? v) => _currentCancelToken = v;
+
+  @override
+  ChatRepository get chatRepository => _chatRepository;
+
+  @override
+  List<ChatMessage> get messages => _messages;
+  set messages(List<ChatMessage> v) => _messages = v;
 
   RoleplayViewModel({
     ChatRepository? chatRepository,
@@ -140,25 +160,28 @@ class RoleplayViewModel extends ChangeNotifier {
   /// Reuses existing thread for this character if one exists, otherwise creates a new one.
   Future<void> startRoleplay(CharacterProfile character, {
     required ServerConfig serverConfig,
+    required ServerProfile? connection,
     GenerationParams? customParams,
     int? modelContextLength,
   }) async {
-    await _startRoleplayWithGreeting(character, character.firstMessage, serverConfig: serverConfig, customParams: customParams, modelContextLength: modelContextLength);
+    await _startRoleplayWithGreeting(character, character.firstMessage, serverConfig: serverConfig, connection: connection, customParams: customParams, modelContextLength: modelContextLength);
   }
 
   /// Start a new conversation with the character using an alternate greeting.
   Future<void> startRoleplayWithGreeting(CharacterProfile character, String greeting, {
     required ServerConfig serverConfig,
+    required ServerProfile? connection,
     GenerationParams? customParams,
     int? modelContextLength,
   }) async {
-    await _startRoleplayWithGreeting(character, greeting, serverConfig: serverConfig, customParams: customParams, modelContextLength: modelContextLength);
+    await _startRoleplayWithGreeting(character, greeting, serverConfig: serverConfig, connection: connection, customParams: customParams, modelContextLength: modelContextLength);
   }
 
   /// Start a roleplay session with a specific greeting message.
   /// This is used for alternate greetings.
   Future<void> _startRoleplayWithGreeting(CharacterProfile character, String greeting, {
     required ServerConfig serverConfig,
+    required ServerProfile? connection,
     GenerationParams? customParams,
     int? modelContextLength,
   }) async {
@@ -230,6 +253,7 @@ class RoleplayViewModel extends ChangeNotifier {
   Future<void> sendMessage({
     required String prompt,
     required ServerConfig serverConfig,
+    required ServerProfile? connection,
     GenerationParams? customParams,
     int? modelContextLength,
   }) async {
@@ -251,8 +275,8 @@ class RoleplayViewModel extends ChangeNotifier {
 
     // Auto-update thread title if this is the first user message (similar to assistant mode)
     if (_messages.where((m) => m.role == MessageRole.user).length == 1) {
-      final autoTitle = prompt.trim().length > 32
-          ? '${prompt.trim().substring(0, 32)}...'
+      final autoTitle = prompt.trim().length > autoTitleMaxLen
+          ? '${prompt.trim().substring(0, autoTitleMaxLen)}...'
           : prompt.trim();
       final titleUpdatedThread = _activeThread!.copyWith(title: autoTitle);
       await _chatRepository.updateThread(titleUpdatedThread);
@@ -301,6 +325,7 @@ class RoleplayViewModel extends ChangeNotifier {
     await _streamResponse(
       assistantMessageId: assistantMessageId,
       serverConfig: serverConfig,
+      connection: connection,
       customParams: customParams,
       modelContextLength: modelContextLength,
       ragMemoryCount: ragMemoryCount,
@@ -310,6 +335,7 @@ class RoleplayViewModel extends ChangeNotifier {
   Future<void> regenerateMessage({
     required int messageIndex,
     required ServerConfig serverConfig,
+    required ServerProfile? connection,
     GenerationParams? customParams,
     int? modelContextLength,
   }) async {
@@ -349,6 +375,7 @@ class RoleplayViewModel extends ChangeNotifier {
     await _streamResponse(
       assistantMessageId: newAssistantId,
       serverConfig: serverConfig,
+      connection: connection,
       customParams: customParams,
       modelContextLength: modelContextLength,
     );
@@ -358,6 +385,7 @@ class RoleplayViewModel extends ChangeNotifier {
     required int messageIndex,
     required String newContent,
     required ServerConfig serverConfig,
+    required ServerProfile? connection,
     GenerationParams? customParams,
     int? modelContextLength,
   }) async {
@@ -436,6 +464,7 @@ class RoleplayViewModel extends ChangeNotifier {
     await _streamResponse(
       assistantMessageId: assistantMessageId,
       serverConfig: serverConfig,
+      connection: connection,
       customParams: customParams,
       modelContextLength: modelContextLength,
       ragMemoryCount: ragMemoryCount,
@@ -445,6 +474,7 @@ class RoleplayViewModel extends ChangeNotifier {
   Future<void> branchConversation({
     required int messageIndex,
     required ServerConfig serverConfig,
+    required ServerProfile? connection,
     GenerationParams? customParams,
     int? modelContextLength,
   }) async {
@@ -522,6 +552,7 @@ class RoleplayViewModel extends ChangeNotifier {
       await _streamResponse(
         assistantMessageId: assistantMessageId,
         serverConfig: serverConfig,
+        connection: connection,
         customParams: customParams,
         modelContextLength: modelContextLength,
         ragMemoryCount: branchRagCount,
@@ -529,28 +560,11 @@ class RoleplayViewModel extends ChangeNotifier {
     }
   }
 
+  /// Switches the message at the given index to a different variant.
   Future<void> switchVariant({
     required int messageIndex,
     required bool previous,
-  }) async {
-    if (messageIndex < 0 || messageIndex >= _messages.length) return;
-
-    final currentMsg = _messages[messageIndex];
-    if (currentMsg.siblingIds.isEmpty) return;
-
-    final siblingIndex = previous ? currentMsg.variantIndex - 1 : currentMsg.variantIndex;
-    if (siblingIndex < 0 || siblingIndex >= currentMsg.siblingIds.length) return;
-
-    final siblingId = currentMsg.siblingIds[siblingIndex];
-    final siblingMsg = await _chatRepository.getMessagesForThread(currentMsg.threadId).then(
-      (msgs) => msgs.firstWhere((m) => m.id == siblingId, orElse: () => currentMsg),
-    );
-
-    if (siblingMsg.id != currentMsg.id) {
-      _messages[messageIndex] = siblingMsg;
-      notifyListeners();
-    }
-  }
+  }) => doSwitchVariant(messageIndex: messageIndex, previous: previous);
 
   Future<void> selectThread(ChatThread thread) async {
     if (_isGenerating) {
@@ -573,20 +587,16 @@ class RoleplayViewModel extends ChangeNotifier {
     return await _chatRepository.getThreadsForCharacter(characterId);
   }
 
-  /// Cached version of getThreadsForCharacter to avoid repeated FutureBuilder calls.
-  Future<List<ChatThread>> getCachedThreadsForCharacter(String characterId) {
-    if (!_threadCache.containsKey(characterId)) {
-      _threadCache[characterId] = _chatRepository.getThreadsForCharacter(characterId);
+  Future<void> deleteCharacter(String characterId) async {
+    final characterThreads = await _chatRepository.getThreadsForCharacter(characterId);
+    for (final thread in characterThreads) {
+      if (_activeThread?.id == thread.id) {
+        _activeThread = null;
+        _messages = [];
+      }
+      await _chatRepository.deleteThread(thread.id);
     }
-    return _threadCache[characterId]!;
-  }
-
-  void _clearThreadCache(String? characterId) {
-    if (characterId != null) _threadCache.remove(characterId);
-  }
-
-  void deleteCharacter(String characterId) {
-    _threadCache.remove(characterId);
+    notifyListeners();
   }
 
   Future<void> editAssistantMessage({
@@ -623,6 +633,7 @@ class RoleplayViewModel extends ChangeNotifier {
   Future<bool> deleteMessage({
     required int messageIndex,
     required ServerConfig serverConfig,
+    required ServerProfile? connection,
     GenerationParams? customParams,
     int? modelContextLength,
   }) async {
@@ -648,8 +659,7 @@ class RoleplayViewModel extends ChangeNotifier {
 
     // Store for undo (only user messages, not AI responses that trigger regeneration)
     if (isUserMessage) {
-      _undoneMessage = deletedMsg;
-      _undoTimestamp = DateTime.now();
+      storeUndoMessage(deletedMsg);
     }
 
     if (!isUserMessage && _messages.isNotEmpty) {
@@ -689,6 +699,7 @@ class RoleplayViewModel extends ChangeNotifier {
       await _streamResponse(
         assistantMessageId: newAssistantId,
         serverConfig: serverConfig,
+        connection: connection,
         customParams: customParams,
         modelContextLength: modelContextLength,
         ragMemoryCount: ragMemoryCount,
@@ -700,30 +711,43 @@ class RoleplayViewModel extends ChangeNotifier {
     return false;
   }
 
-  Future<void> undoDelete() async {
-    if (_undoneMessage == null || _undoTimestamp == null) return;
-    if (DateTime.now().difference(_undoTimestamp!) > _undoTimeout) {
-      _undoneMessage = null;
-      _undoTimestamp = null;
-      return;
-    }
-    if (_activeThread == null) {
-      _undoneMessage = null;
-      _undoTimestamp = null;
-      return;
+  Future<void> undoDelete() => doUndoDelete();
+
+  /// Delegates to mixin but adds RAG embedding post-stream hook.
+  Future<void> _streamResponse({
+    required String assistantMessageId,
+    required ServerConfig serverConfig,
+    required ServerProfile? connection,
+    GenerationParams? customParams,
+    int? modelContextLength,
+    int? ragMemoryCount,
+  }) async {
+    Future<void> onEmbed(String _) async {
+      if (_activeCharacter == null) return;
+      final msgIndex = messages.indexWhere((m) => m.id == assistantMessageId);
+      if (msgIndex <= 0) return;
+      try {
+        final currentMsg = messages[msgIndex];
+        if (currentMsg.status == MessageStatus.completed) {
+          final userMsg = messages.sublist(0, msgIndex).reversed
+              .firstWhere((m) => m.role == MessageRole.user, orElse: () => messages[0]);
+          _embedMessageAsync(
+            _activeCharacter!.id,
+            userMsg.id,
+            '${userMsg.content}\n\n${currentMsg.content}',
+          );
+        }
+      } catch (_) {}
     }
 
-    await _chatRepository.saveMessage(_undoneMessage!);
-    _messages = await _chatRepository.getMessagesForThread(_activeThread!.id);
-    _undoneMessage = null;
-    _undoTimestamp = null;
-    notifyListeners();
-  }
-
-  bool get canUndo {
-    return _undoneMessage != null &&
-        _undoTimestamp != null &&
-        DateTime.now().difference(_undoTimestamp!) <= _undoTimeout;
+    await doStreamResponse(
+      assistantMessageId: assistantMessageId,
+      serverConfig: serverConfig,
+      connection: connection,
+      customParams: customParams,
+      modelContextLength: modelContextLength,
+      onComplete: onEmbed,
+    );
   }
 
   Future<void> deleteThread(String threadId) async {
@@ -733,141 +757,12 @@ class RoleplayViewModel extends ChangeNotifier {
       await _characterRepository.deleteEmbeddingsForMessages(_activeCharacter!.id, messageIds);
     }
     await _chatRepository.deleteThread(threadId);
-    _clearThreadCache(_activeCharacter?.id);
     _activeThread = null;
     _messages = [];
     notifyListeners();
   }
 
-  void stopGeneration() {
-    if (_isGenerating && _currentCancelToken != null) {
-      _currentCancelToken?.cancel();
-      _isGenerating = false;
-      notifyListeners();
-    }
-  }
-
-  Future<void> _streamResponse({
-    required String assistantMessageId,
-    required ServerConfig serverConfig,
-    GenerationParams? customParams,
-    int? modelContextLength,
-    int? ragMemoryCount,
-  }) async {
-    _isGenerating = true;
-    _currentCancelToken = CancelToken();
-    _pendingStreamBuffer = '';
-    _pendingReasoningBuffer = '';
-    notifyListeners();
-
-    final msgIndex = _messages.indexWhere((m) => m.id == assistantMessageId);
-    if (msgIndex == -1) {
-      _isGenerating = false;
-      notifyListeners();
-      return;
-    }
-
-    final historySlice = _messages.sublist(0, msgIndex);
-    final effectiveSystemPrompt = _activeThread?.systemPrompt ?? serverConfig.systemPrompt;
-
-    _uiThrottleTimer = Timer.periodic(const Duration(milliseconds: 20), (_) {
-      final currentMsgIndex = _messages.indexWhere((m) => m.id == assistantMessageId);
-      if (_pendingStreamBuffer.isNotEmpty &&
-          currentMsgIndex >= 0 &&
-          currentMsgIndex < _messages.length) {
-        final currentMsg = _messages[currentMsgIndex];
-        _messages[currentMsgIndex] = currentMsg.copyWith(
-          content: currentMsg.content + _pendingStreamBuffer,
-        );
-        _pendingStreamBuffer = '';
-        notifyListeners();
-      }
-      if (_pendingReasoningBuffer.isNotEmpty &&
-          currentMsgIndex >= 0 &&
-          currentMsgIndex < _messages.length) {
-        final currentMsg = _messages[currentMsgIndex];
-        _messages[currentMsgIndex] = currentMsg.copyWith(
-          reasoningContent: currentMsg.reasoningContent + _pendingReasoningBuffer,
-        );
-        _pendingReasoningBuffer = '';
-        notifyListeners();
-      }
-    });
-
-    StreamMetrics? finalMetrics;
-    String? errorMessage;
-
-    try {
-      final stream = _chatRepository.streamCompletion(
-        serverConfig: serverConfig,
-        history: historySlice,
-        systemPrompt: effectiveSystemPrompt,
-        params: customParams ?? _activeThread?.customParams ?? serverConfig.defaultParams,
-        cancelToken: _currentCancelToken,
-        modelContextLength: modelContextLength,
-      );
-
-      await for (final chunk in stream) {
-        if (chunk.text.isNotEmpty) {
-          _pendingStreamBuffer += chunk.text;
-        }
-        if (chunk.reasoning != null && chunk.reasoning!.isNotEmpty) {
-          _pendingReasoningBuffer += chunk.reasoning!;
-        }
-        if (chunk.metrics != null) {
-          finalMetrics = chunk.metrics;
-        }
-      }
-    } on RequestCancelledException {
-      // Stopped gracefully
-    } catch (e) {
-      errorMessage = e.toString();
-      if (e is AppException && e.recoverySuggestion != null) {
-        errorMessage = '$errorMessage\n\nTip: ${e.recoverySuggestion}';
-      }
-    } finally {
-      _uiThrottleTimer?.cancel();
-      _uiThrottleTimer = null;
-
-      if (msgIndex >= 0 && msgIndex < _messages.length) {
-        final currentMsg = _messages[msgIndex];
-        final finalContent = currentMsg.content + _pendingStreamBuffer;
-        _pendingStreamBuffer = '';
-
-        final completedMsg = currentMsg.copyWith(
-          content: finalContent,
-          reasoningContent: currentMsg.reasoningContent + _pendingReasoningBuffer,
-          status: errorMessage != null ? MessageStatus.error : MessageStatus.completed,
-          errorMessage: errorMessage,
-          tokensPerSecond: finalMetrics?.tokensPerSecond,
-          totalTokens: finalMetrics?.completionTokens,
-          timeToFirstTokenMs: finalMetrics?.timeToFirstTokenMs,
-          generationTimeSec: finalMetrics?.generationTimeSec,
-          ragMemoryCount: ragMemoryCount,
-        );
-
-        _messages[msgIndex] = completedMsg;
-        await _chatRepository.saveMessage(completedMsg);
-
-        // Fire-and-forget: embed user + assistant message pair for RAG memory
-        if (_activeCharacter != null && errorMessage == null) {
-          // Find the corresponding user message
-          final userMsg = _messages.sublist(0, msgIndex).reversed
-              .firstWhere((m) => m.role == MessageRole.user, orElse: () => _messages[0]);
-          _embedMessageAsync(
-            _activeCharacter!.id,
-            userMsg.id,
-            '${userMsg.content}\n\n${completedMsg.content}',
-          );
-        }
-      }
-
-      _isGenerating = false;
-      _currentCancelToken = null;
-      _pendingReasoningBuffer = '';
-      notifyListeners();
-    }
-  }
+  void stopGeneration() => doStopGeneration();
 
   /// Non-blocking embedding save for RAG memory.
   /// Shows a subtle snackbar if the first embedding fails (on character start).
@@ -878,7 +773,7 @@ class RoleplayViewModel extends ChangeNotifier {
     bool isFirstMessage = false,
   }) async {
     try {
-      final vector = EmbeddingService.embed(content);
+      final vector = HashEmbedding.embed(content);
       await VectorStore().saveEmbedding(
         characterId: characterId,
         messageId: messageId,
@@ -924,8 +819,8 @@ class RoleplayViewModel extends ChangeNotifier {
 
   @override
   void dispose() {
-    _uiThrottleTimer?.cancel();
-    _currentCancelToken?.cancel();
+    uiThrottleTimer?.cancel();
+    currentCancelToken?.cancel();
     super.dispose();
   }
 }

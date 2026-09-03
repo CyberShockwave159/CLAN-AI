@@ -1,117 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:clan_ai/core/constants/app_constants.dart';
 import 'package:clan_ai/core/constants/app_theme.dart';
 import 'package:clan_ai/data/models/chat_message.dart';
 import 'package:clan_ai/ui/features/chat/widgets/markdown_body_view.dart';
 import 'package:clan_ai/ui/features/chat/widgets/token_speed_badge.dart';
-
-class _ReasoningBlock extends StatefulWidget {
-  final String reasoningContent;
-  final bool isStreaming;
-  final bool isUser;
-
-  const _ReasoningBlock({
-    required this.reasoningContent,
-    required this.isStreaming,
-    required this.isUser,
-  });
-
-  @override
-  State<_ReasoningBlock> createState() => _ReasoningBlockState();
-}
-
-class _ReasoningBlockState extends State<_ReasoningBlock> {
-  bool _isExpanded = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final hasContent = widget.reasoningContent.isNotEmpty;
-
-    return Semantics(
-      button: true,
-      label: _isExpanded ? 'Collapse thinking process' : 'Expand thinking process',
-      child: InkWell(
-        onTap: () {
-          if (hasContent) {
-            setState(() {
-              _isExpanded = !_isExpanded;
-            });
-          }
-        },
-        borderRadius: BorderRadius.circular(8),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeInOut,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          margin: const EdgeInsets.only(bottom: 8),
-          decoration: BoxDecoration(
-            color: (isDark ? AppTheme.darkSurfaceVariant : AppTheme.lightSurfaceVariant)
-                .withValues(alpha: _isExpanded ? 0.85 : 0.5),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: isDark
-                  ? AppTheme.darkBorder.withValues(alpha: 0.6)
-                  : AppTheme.lightBorder.withValues(alpha: 0.6),
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.psychology_rounded,
-                    size: 15,
-                    color: widget.isStreaming
-                        ? AppTheme.accentPrimary
-                        : (isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    widget.isStreaming ? 'Thinking...' : 'Thinking',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: widget.isStreaming
-                          ? (isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary)
-                          : (isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted),
-                    ),
-                  ),
-                  const Spacer(),
-                  if (hasContent)
-                    Icon(
-                      _isExpanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
-                      size: 16,
-                      color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
-                    ),
-                ],
-              ),
-              if (_isExpanded && hasContent) ...[
-                const SizedBox(height: 6),
-                Divider(
-                  height: 1,
-                  thickness: 0.8,
-                  color: (isDark ? AppTheme.darkBorder : AppTheme.lightBorder).withValues(alpha: 0.4),
-                ),
-                const SizedBox(height: 8),
-                SelectableText(
-                  widget.reasoningContent,
-                  style: TextStyle(
-                    fontSize: 12,
-                    height: 1.45,
-                    fontStyle: FontStyle.italic,
-                    color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
+import 'package:clan_ai/ui/features/chat/widgets/reasoning_block.dart';
+import 'package:clan_ai/ui/shared/avatar_utils.dart';
 
 class MessageBubble extends StatelessWidget {
   final ChatMessage message;
@@ -155,23 +50,9 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
-  Color _getAvatarColor(String name) {
-    final colors = const [
-      AppTheme.accentPrimary,
-      AppTheme.accentSecondary,
-      AppTheme.accentIndigo,
-      AppTheme.accentCyan,
-    ];
-    final idx = name.codeUnitAt(0) % colors.length;
-    return colors[idx];
-  }
+  Color _getAvatarColor(String name) => AvatarUtils.getColor(name);
 
-  String _getInitials(String name) {
-    final parts = name.trim().split(RegExp(r'\s+'));
-    if (parts.isEmpty) return '?';
-    if (parts.length == 1) return parts[0][0].toUpperCase();
-    return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-  }
+  String _getInitials(String name) => AvatarUtils.getInitials(name);
 
   void _showEditDialog(BuildContext context) {
     final controller = TextEditingController(text: message.content);
@@ -264,7 +145,7 @@ class MessageBubble extends StatelessWidget {
                   : 'The message and all messages after it will be removed. This cannot be undone.',
               style: TextStyle(color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted),
             ),
-            if (message.content.length > 100) ...[
+            if (message.content.length > messagePreviewLen) ...[
               const SizedBox(height: 12),
               Container(
                 padding: const EdgeInsets.all(8),
@@ -273,7 +154,7 @@ class MessageBubble extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  '${message.content.substring(0, 100)}...',
+                  '${message.content.substring(0, messagePreviewLen)}...',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -311,7 +192,7 @@ class MessageBubble extends StatelessWidget {
     final textScaler = MediaQuery.of(context).textScaler;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: EdgeInsets.symmetric(horizontal: defaultBubblePadding, vertical: 8),
       child: Column(
         crossAxisAlignment: isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
@@ -377,7 +258,7 @@ class MessageBubble extends StatelessWidget {
           // Message Content Box
           LayoutBuilder(
             builder: (context, constraints) {
-              final maxWidth = constraints.maxWidth > 600 ? 600.0 : constraints.maxWidth * 0.88;
+              final maxWidth = constraints.maxWidth > maxBubbleWidth ? maxBubbleWidth : constraints.maxWidth * 0.88;
               return Container(
                 constraints: BoxConstraints(maxWidth: maxWidth),
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -400,9 +281,9 @@ class MessageBubble extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (message.reasoningContent.isNotEmpty && !isUser)
-                      _ReasoningBlock(
+                      ReasoningBlock(
                         reasoningContent: message.reasoningContent,
-                        isStreaming: message.status == MessageStatus.streaming,
+                        status: message.status,
                         isUser: isUser,
                       ),
 

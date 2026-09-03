@@ -5,6 +5,7 @@ import 'package:clan_ai/data/datasources/local_storage.dart';
 import 'package:clan_ai/data/models/chat_message.dart';
 import 'package:clan_ai/data/models/chat_thread.dart';
 import 'package:clan_ai/data/models/server_config.dart';
+import 'package:clan_ai/data/models/server_profile.dart';
 import 'package:clan_ai/domain/models/generation_params.dart';
 
 class ChatRepository {
@@ -29,13 +30,6 @@ class ChatRepository {
   Future<List<ChatThread>> getAssistantThreads() async {
     return (await _localDb.getAllThreads())
         .where((t) => t.characterId == null)
-        .toList();
-  }
-
-  /// Returns only roleplay-mode threads (characterId != null).
-  Future<List<ChatThread>> getRoleplayThreads() async {
-    return (await _localDb.getAllThreads())
-        .where((t) => t.characterId != null)
         .toList();
   }
 
@@ -95,6 +89,7 @@ class ChatRepository {
 
   Stream<StreamChunk> streamCompletion({
     required ServerConfig serverConfig,
+    required ServerProfile? connection,
     required List<ChatMessage> history,
     required String? systemPrompt,
     GenerationParams? params,
@@ -103,6 +98,7 @@ class ChatRepository {
   }) {
     return _apiService.streamChatCompletions(
       serverConfig: serverConfig,
+      connection: connection,
       history: history,
       systemPrompt: systemPrompt,
       params: params,

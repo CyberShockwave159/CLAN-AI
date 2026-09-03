@@ -9,6 +9,7 @@ import 'package:clan_ai/data/models/server_profile.dart';
 import 'package:clan_ai/data/models/system_prompt_template.dart';
 import 'package:clan_ai/data/repositories/server_repository.dart';
 import 'package:clan_ai/data/repositories/system_prompt_templates_repository.dart';
+import 'package:clan_ai/core/constants/app_constants.dart';
 import 'package:clan_ai/domain/models/generation_params.dart';
 
 class SettingsViewModel extends ChangeNotifier {
@@ -38,6 +39,14 @@ class SettingsViewModel extends ChangeNotifier {
       if (p.id == _activeProfileId) return p.name;
     }
     return null;
+  }
+
+  ServerProfile? get connectionDetails {
+    if (_activeProfileId == null) return null;
+    return _profiles.firstWhere(
+      (p) => p.id == _activeProfileId,
+      orElse: () => throw StateError('Active profile not found'),
+    );
   }
 
   bool _isTestingConnection = false;
@@ -88,7 +97,7 @@ class SettingsViewModel extends ChangeNotifier {
 
   void _startHealthPolling() {
     _healthPollTimer?.cancel();
-    _healthPollTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+    _healthPollTimer = Timer.periodic(healthPollInterval, (_) {
       pingActiveServer();
     });
   }
@@ -108,21 +117,36 @@ class SettingsViewModel extends ChangeNotifier {
   }
 
   Future<void> updateBaseUrl(String url) async {
-    _config = _config.copyWith(baseUrl: url);
-    await _saveConfig();
-    notifyListeners();
+    final profile = await _serverRepository.getActiveProfile();
+    if (profile != null) {
+      final updated = profile.copyWith(baseUrl: url);
+      await _serverRepository.updateProfile(updated);
+      _profiles = await _serverRepository.loadProfiles();
+      notifyListeners();
+    }
+    _config = _config.copyWith(name: config.name);
   }
 
   Future<void> updateApiKey(String? key) async {
-    _config = _config.copyWith(apiKey: key);
-    await _saveConfig();
-    notifyListeners();
+    final profile = await _serverRepository.getActiveProfile();
+    if (profile != null) {
+      final updated = profile.copyWith(apiKey: key);
+      await _serverRepository.updateProfile(updated);
+      _profiles = await _serverRepository.loadProfiles();
+      notifyListeners();
+    }
+    _config = _config.copyWith(name: config.name);
   }
 
   Future<void> updateProtocol(ApiProtocol protocol) async {
-    _config = _config.copyWith(protocol: protocol);
-    await _saveConfig();
-    notifyListeners();
+    final profile = await _serverRepository.getActiveProfile();
+    if (profile != null) {
+      final updated = profile.copyWith(protocol: protocol);
+      await _serverRepository.updateProfile(updated);
+      _profiles = await _serverRepository.loadProfiles();
+      notifyListeners();
+    }
+    _config = _config.copyWith(name: config.name);
   }
 
   Future<void> updateSelectedModel(String modelId) async {
@@ -246,8 +270,21 @@ class SettingsViewModel extends ChangeNotifier {
     _config = _config.copyWith(healthStatus: ServerHealthStatus.connecting);
     notifyListeners();
 
+    final conn = connectionDetails;
+    if (conn == null) {
+      _config = _config.copyWith(
+        healthStatus: ServerHealthStatus.offline,
+        latencyMs: -1,
+      );
+      _testConnectionError = 'No active profile';
+      _isTestingConnection = false;
+      await _saveConfig();
+      notifyListeners();
+      return;
+    }
+
     try {
-      final pingRes = await _serverRepository.testConnection(_config.baseUrl, apiKey: _config.apiKey);
+      final pingRes = await _serverRepository.testConnection(conn.baseUrl, apiKey: conn.apiKey);
       _config = _config.copyWith(
         healthStatus: pingRes.status,
         latencyMs: pingRes.latencyMs,
@@ -256,7 +293,7 @@ class SettingsViewModel extends ChangeNotifier {
       if (pingRes.isHealthy) {
         _testConnectionError = null;
         // Fetch models
-        _availableModels = await _serverRepository.fetchModels(_config.baseUrl, apiKey: _config.apiKey);
+        _availableModels = await _serverRepository.fetchModels(conn.baseUrl, apiKey: conn.apiKey);
         if (_availableModels.isNotEmpty) {
           if (_config.selectedModel == null || _config.selectedModel!.isEmpty) {
             _config = _config.copyWith(selectedModel: _availableModels.first.id);
@@ -282,8 +319,17 @@ class SettingsViewModel extends ChangeNotifier {
 
   Future<void> pingActiveServer() async {
     if (_isTestingConnection) return;
+    final conn = connectionDetails;
+    if (conn == null) {
+      _config = _config.copyWith(
+        healthStatus: ServerHealthStatus.offline,
+        latencyMs: -1,
+      );
+      notifyListeners();
+      return;
+    }
     try {
-      final pingRes = await _serverRepository.testConnection(_config.baseUrl, apiKey: _config.apiKey);
+      final pingRes = await _serverRepository.testConnection(conn.baseUrl, apiKey: conn.apiKey);
       _config = _config.copyWith(
         healthStatus: pingRes.status,
         latencyMs: pingRes.latencyMs,

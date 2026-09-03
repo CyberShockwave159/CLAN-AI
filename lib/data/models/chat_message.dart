@@ -173,15 +173,4 @@ class ChatMessage {
       reasoningContent: (map['reasoning_content'] as String?) ?? '',
     );
   }
-
-  Map<String, dynamic> toOpenAiMessage() {
-    final msg = <String, dynamic>{
-      'role': role.value,
-      'content': content,
-    };
-    if (reasoningContent.isNotEmpty) {
-      msg['reasoning'] = reasoningContent;
-    }
-    return msg;
-  }
 }

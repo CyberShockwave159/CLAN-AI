@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:clan_ai/core/constants/app_constants.dart';
 import 'package:clan_ai/core/constants/api_endpoints.dart';
 import 'package:clan_ai/core/network/http_client.dart';
 import 'package:clan_ai/core/network/sse_client.dart';
@@ -6,6 +7,7 @@ import 'package:clan_ai/core/utils/latency_meter.dart';
 import 'package:clan_ai/data/models/chat_message.dart';
 import 'package:clan_ai/data/models/model_info.dart';
 import 'package:clan_ai/data/models/server_config.dart';
+import 'package:clan_ai/data/models/server_profile.dart';
 import 'package:clan_ai/domain/models/generation_params.dart';
 
 class LlamaApiService {
@@ -65,6 +67,7 @@ class LlamaApiService {
   /// Streams chat completions from the server via SSE.
   Stream<StreamChunk> streamChatCompletions({
     required ServerConfig serverConfig,
+    required ServerProfile? connection,
     required List<ChatMessage> history,
     required String? systemPrompt,
     GenerationParams? params,
@@ -82,23 +85,25 @@ class LlamaApiService {
       // Reserve some tokens for generation output (at least 256)
       final reservedForOutput = effectiveParams.maxTokens > 0
           ? effectiveParams.maxTokens
-          : 512;
+          : reservedOutputTokensDefault;
       final maxAllowed = modelContextLength - reservedForOutput;
       if (adjustedContextSize > maxAllowed) {
         adjustedContextSize = maxAllowed;
       }
-      adjustedContextSize = adjustedContextSize.clamp(128, 1000000);
+      adjustedContextSize = adjustedContextSize.clamp(minContextSize, maxContextSize);
     }
 
     final adjustedParams = effectiveParams.copyWith(contextSize: adjustedContextSize);
 
-    final cleanBase = ApiEndpoints.normalizeBaseUrl(serverConfig.baseUrl);
+    final connDetails = connection ?? ServerProfile(name: 'Default', baseUrl: defaultBaseUrl, protocol: ApiProtocol.openAi);
+    final cleanBase = ApiEndpoints.normalizeBaseUrl(connDetails.baseUrl);
 
-    if (serverConfig.protocol == ApiProtocol.llamaNative) {
+    if (connDetails.protocol == ApiProtocol.llamaNative) {
       // llama.cpp native /completion endpoint with raw prompt
       yield* _streamLlamaNative(
         cleanBase: cleanBase,
         serverConfig: serverConfig,
+        connection: connDetails,
         history: history,
         systemPrompt: systemPrompt,
         params: adjustedParams,
@@ -109,6 +114,7 @@ class LlamaApiService {
       yield* _streamOpenAi(
         cleanBase: cleanBase,
         serverConfig: serverConfig,
+        connection: connDetails,
         history: history,
         systemPrompt: systemPrompt,
         params: adjustedParams,
@@ -120,6 +126,7 @@ class LlamaApiService {
   Stream<StreamChunk> _streamOpenAi({
     required String cleanBase,
     required ServerConfig serverConfig,
+    required ServerProfile connection,
     required List<ChatMessage> history,
     required String? systemPrompt,
     required GenerationParams params,
@@ -134,7 +141,14 @@ class LlamaApiService {
 
     for (final msg in history) {
       if (msg.role == MessageRole.user || msg.role == MessageRole.assistant) {
-        messages.add(msg.toOpenAiMessage());
+        final Map<String, dynamic> openAiMsg = {
+          'role': msg.role.value,
+          'content': msg.content,
+        };
+        if (msg.reasoningContent.isNotEmpty) {
+          openAiMsg['reasoning'] = msg.reasoningContent;
+        }
+        messages.add(openAiMsg);
       }
     }
 
@@ -147,7 +161,7 @@ class LlamaApiService {
     final streamedResponse = await _httpClient.postStream(
       uri,
       body: payload,
-      apiKey: serverConfig.apiKey,
+      apiKey: connection.apiKey,
     );
 
     final rawStream = SseClient.parseStream(
@@ -164,6 +178,7 @@ class LlamaApiService {
   Stream<StreamChunk> _streamLlamaNative({
     required String cleanBase,
     required ServerConfig serverConfig,
+    required ServerProfile connection,
     required List<ChatMessage> history,
     required String? systemPrompt,
     required GenerationParams params,
@@ -193,7 +208,7 @@ class LlamaApiService {
     final streamedResponse = await _httpClient.postStream(
       uri,
       body: payload,
-      apiKey: serverConfig.apiKey,
+      apiKey: connection.apiKey,
     );
 
     final rawStream = SseClient.parseStream(

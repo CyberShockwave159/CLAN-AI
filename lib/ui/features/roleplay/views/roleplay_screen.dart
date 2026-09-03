@@ -10,6 +10,9 @@ import 'package:clan_ai/ui/features/settings/views/parameter_tuning_sheet.dart';
 import 'package:clan_ai/ui/features/settings/views/settings_screen.dart';
 import 'package:clan_ai/ui/shared/connection_badge.dart';
 import 'package:clan_ai/ui/features/roleplay/widgets/alternate_greeting_selector.dart';
+import 'package:clan_ai/ui/shared/mixins/auto_scroll_mixin.dart';
+import 'package:clan_ai/ui/shared/avatar_utils.dart';
+import 'package:clan_ai/ui/shared/delete_message_handler.dart';
 
 class RoleplayScreen extends StatefulWidget {
   const RoleplayScreen({super.key});
@@ -18,39 +21,11 @@ class RoleplayScreen extends StatefulWidget {
   State<RoleplayScreen> createState() => _RoleplayScreenState();
 }
 
-class _RoleplayScreenState extends State<RoleplayScreen> {
-  final ScrollController _scrollController = ScrollController();
-  bool _showScrollToBottom = false;
-
+class _RoleplayScreenState extends State<RoleplayScreen> with AutoScrollMixin {
   @override
   void initState() {
     super.initState();
-    _scrollController.addListener(_onScroll);
-  }
-
-  void _onScroll() {
-    if (_scrollController.hasClients) {
-      final isNearBottom = _scrollController.offset >= _scrollController.position.maxScrollExtent - 120;
-      if (!isNearBottom && !_showScrollToBottom) {
-        setState(() => _showScrollToBottom = true);
-      } else if (isNearBottom && _showScrollToBottom) {
-        setState(() => _showScrollToBottom = false);
-      }
-    }
-  }
-
-  void _scrollToBottom([bool animate = true]) {
-    if (!_scrollController.hasClients) return;
-    final target = _scrollController.position.maxScrollExtent;
-    if (animate) {
-      _scrollController.animateTo(
-        target,
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOut,
-      );
-    } else {
-      _scrollController.jumpTo(target);
-    }
+    initAutoScroll();
   }
 
   void _openParameterSheet(BuildContext context) {
@@ -68,44 +43,76 @@ class _RoleplayScreenState extends State<RoleplayScreen> {
 
   Future<void> _handleDeleteMessage(int messageIndex, SettingsViewModel settingsVM) async {
     final roleplayVM = context.read<RoleplayViewModel>();
-    final shouldDeleteThread = await roleplayVM.deleteMessage(
-      messageIndex: messageIndex,
-      serverConfig: settingsVM.config,
-      modelContextLength: settingsVM.getSelectedModelContextLength(),
+    await handleDeleteMessage(
+      context: context,
+      deleteFn: () => roleplayVM.deleteMessage(
+        messageIndex: messageIndex,
+        serverConfig: settingsVM.config,
+        connection: settingsVM.connectionDetails,
+        modelContextLength: settingsVM.getSelectedModelContextLength(),
+      ),
+      canUndo: roleplayVM.canUndo,
+      undoFn: () async {
+        await roleplayVM.undoDelete();
+        scrollToBottom();
+      },
+      onThreadDeleted: () => scrollToBottom(false),
     );
-    if (shouldDeleteThread) {
-      _scrollToBottom(false);
-    }
-    // Show undo snackbar if undo is available
-    if (roleplayVM.canUndo) {
-      final snackBar = SnackBar(
-        content: const Text('Message deleted'),
-        action: SnackBarAction(
-          label: 'Undo',
-          onPressed: roleplayVM.undoDelete,
-        ),
-        duration: const Duration(seconds: 5),
-      );
-      ScaffoldMessenger.of(context).showSnackBar(snackBar);
-    }
   }
 
-  Color _getAvatarColor(String name) {
-    final colors = const [
-      AppTheme.accentPrimary,
-      AppTheme.accentSecondary,
-      AppTheme.accentIndigo,
-      AppTheme.accentCyan,
-    ];
-    final idx = name.codeUnitAt(0) % colors.length;
-    return colors[idx];
-  }
-
-  String _getInitials(String name) {
-    final parts = name.trim().split(RegExp(r'\s+'));
-    if (parts.isEmpty) return '?';
-    if (parts.length == 1) return parts[0][0].toUpperCase();
-    return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+  Widget _buildEmptyState(BuildContext context, bool isDark) {
+    final activeChar = context.read<RoleplayViewModel>().activeCharacter;
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          if (activeChar != null) ...[
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: AvatarUtils.getColor(activeChar.name),
+              ),
+              child: activeChar.avatarData != null
+                  ? ClipOval(
+                      child: Image.memory(
+                        activeChar.avatarData!,
+                        width: 64,
+                        height: 64,
+                        fit: BoxFit.cover,
+                      ),
+                    )
+                  : Text(
+                      AvatarUtils.getInitials(activeChar.name),
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              activeChar.name,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+              ),
+            ),
+            const SizedBox(height: 28),
+            Text(
+              'Start your roleplay...',
+              style: TextStyle(
+                fontSize: 13,
+                color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   @override
@@ -115,9 +122,9 @@ class _RoleplayScreenState extends State<RoleplayScreen> {
     final settingsVM = context.watch<SettingsViewModel>();
 
     // Auto scroll down when assistant is actively streaming
-    if (roleplayVM.isGenerating && !_showScrollToBottom) {
+    if (roleplayVM.isGenerating && !showScrollToBottom) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _scrollToBottom(false);
+        scrollToBottom(false);
       });
     }
 
@@ -171,7 +178,7 @@ class _RoleplayScreenState extends State<RoleplayScreen> {
                 roleplayVM.messages.isEmpty
                     ? _buildEmptyState(context, isDark)
                     : ListView.builder(
-                        controller: _scrollController,
+                        controller: scrollController,
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         itemCount: roleplayVM.messages.length,
                         itemBuilder: (context, index) {
@@ -189,6 +196,7 @@ class _RoleplayScreenState extends State<RoleplayScreen> {
                               roleplayVM.regenerateMessage(
                                 messageIndex: index,
                                 serverConfig: settingsVM.config,
+                                connection: settingsVM.connectionDetails,
                                 modelContextLength: settingsVM.getSelectedModelContextLength(),
                               );
                             },
@@ -197,6 +205,7 @@ class _RoleplayScreenState extends State<RoleplayScreen> {
                                 messageIndex: index,
                                 newContent: newPrompt,
                                 serverConfig: settingsVM.config,
+                                connection: settingsVM.connectionDetails,
                                 modelContextLength: settingsVM.getSelectedModelContextLength(),
                               );
                             },
@@ -210,6 +219,7 @@ class _RoleplayScreenState extends State<RoleplayScreen> {
                               roleplayVM.branchConversation(
                                 messageIndex: index,
                                 serverConfig: settingsVM.config,
+                                connection: settingsVM.connectionDetails,
                                 modelContextLength: settingsVM.getSelectedModelContextLength(),
                               );
                             },
@@ -235,8 +245,7 @@ class _RoleplayScreenState extends State<RoleplayScreen> {
                         },
                       ),
 
-                // Floating Scroll-to-Bottom FAB
-                if (_showScrollToBottom)
+                if (showScrollToBottom)
                   Positioned(
                     right: 16,
                     bottom: 16,
@@ -245,8 +254,8 @@ class _RoleplayScreenState extends State<RoleplayScreen> {
                       foregroundColor: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
                       elevation: 4,
                       onPressed: () {
-                        _scrollToBottom(true);
-                        setState(() => _showScrollToBottom = false);
+                        scrollToBottom(true);
+                        setState(() => showScrollToBottom = false);
                       },
                       child: const Icon(Icons.arrow_downward_rounded, size: 18),
                     ),
@@ -261,11 +270,10 @@ class _RoleplayScreenState extends State<RoleplayScreen> {
             AlternateGreetingSelector(
               greetings: roleplayVM.activeCharacter!.alternateGreetings,
               onSelectGreeting: () {
-                // Start a new conversation with the selected character
-                // (The drawer closes when selecting a different character)
                 roleplayVM.startRoleplay(
                   roleplayVM.activeCharacter!,
                   serverConfig: settingsVM.config,
+                  connection: settingsVM.connectionDetails,
                   modelContextLength: settingsVM.getSelectedModelContextLength(),
                 );
               },
@@ -278,10 +286,11 @@ class _RoleplayScreenState extends State<RoleplayScreen> {
               roleplayVM.sendMessage(
                 prompt: prompt,
                 serverConfig: settingsVM.config,
+                connection: settingsVM.connectionDetails,
                 modelContextLength: settingsVM.getSelectedModelContextLength(),
               );
               WidgetsBinding.instance.addPostFrameCallback((_) {
-                _scrollToBottom(true);
+                scrollToBottom(true);
               });
             },
             onStop: () => roleplayVM.stopGeneration(),
@@ -290,66 +299,5 @@ class _RoleplayScreenState extends State<RoleplayScreen> {
         ],
       ),
     );
-  }
-
-  Widget _buildEmptyState(BuildContext context, bool isDark) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          // Character avatar if available
-          if (context.read<RoleplayViewModel>().activeCharacter != null) ...[
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: _getAvatarColor(context.read<RoleplayViewModel>().activeCharacter!.name),
-              ),
-              child: context.read<RoleplayViewModel>().activeCharacter!.avatarData != null
-                  ? ClipOval(
-                      child: Image.memory(
-                        context.read<RoleplayViewModel>().activeCharacter!.avatarData!,
-                        width: 64,
-                        height: 64,
-                        fit: BoxFit.cover,
-                      ),
-                    )
-                  : Text(
-                      _getInitials(context.read<RoleplayViewModel>().activeCharacter!.name),
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
-                    ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              context.read<RoleplayViewModel>().activeCharacter!.name,
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
-              ),
-            ),
-            const SizedBox(height: 28),
-            Text(
-              'Start your roleplay...',
-              style: TextStyle(
-                fontSize: 13,
-                color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
   }
 }

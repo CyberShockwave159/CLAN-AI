@@ -8,8 +8,6 @@ class ServerProfile {
   final String baseUrl;
   final String? apiKey;
   final ApiProtocol protocol;
-  final DateTime createdAt;
-  final DateTime updatedAt;
 
   ServerProfile({
     String? id,
@@ -17,11 +15,7 @@ class ServerProfile {
     required this.baseUrl,
     this.apiKey,
     required this.protocol,
-    DateTime? createdAt,
-    DateTime? updatedAt,
-  })  : id = id ?? const Uuid().v4(),
-        createdAt = createdAt ?? DateTime.now(),
-        updatedAt = updatedAt ?? DateTime.now();
+  }) : id = id ?? const Uuid().v4();
 
   ServerProfile copyWith({
     String? id,
@@ -29,8 +23,6 @@ class ServerProfile {
     String? baseUrl,
     String? apiKey,
     ApiProtocol? protocol,
-    DateTime? createdAt,
-    DateTime? updatedAt,
   }) {
     return ServerProfile(
       id: id ?? this.id,
@@ -38,8 +30,6 @@ class ServerProfile {
       baseUrl: baseUrl ?? this.baseUrl,
       apiKey: apiKey ?? this.apiKey,
       protocol: protocol ?? this.protocol,
-      createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? DateTime.now(),
     );
   }
 
@@ -50,8 +40,6 @@ class ServerProfile {
       'baseUrl': baseUrl,
       'apiKey': apiKey,
       'protocol': protocol.name,
-      'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
     };
   }
 
@@ -65,12 +53,6 @@ class ServerProfile {
         (p) => p.name == (map['protocol'] as String?),
         orElse: () => ApiProtocol.openAi,
       ),
-      createdAt: map['created_at'] != null
-          ? DateTime.tryParse(map['created_at'] as String) ?? DateTime.now()
-          : DateTime.now(),
-      updatedAt: map['updated_at'] != null
-          ? DateTime.tryParse(map['updated_at'] as String) ?? DateTime.now()
-          : DateTime.now(),
     );
   }
 

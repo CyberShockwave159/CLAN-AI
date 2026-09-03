@@ -67,7 +67,7 @@ class ServerRepository {
         final profiles = await loadProfiles();
         final index = profiles.indexWhere((p) => p.id == profile.id);
         if (index != -1) {
-          profiles[index] = profile.copyWith(updatedAt: DateTime.now());
+          profiles[index] = profile.copyWith();
           await saveProfiles(profiles);
           result = profiles[index];
         } else {
@@ -107,14 +107,16 @@ class ServerRepository {
 
   // --- Config Loading/Saving (Profile-aware) ---
 
+  Future<ServerProfile?> getActiveConnection() async {
+    return await getActiveProfile();
+  }
+
   Future<ServerConfig> loadActiveConfig() async {
     ServerConfig globalConfig = await _localDb.loadActiveServerConfig();
     final profile = await getActiveProfile();
     if (profile != null) {
       globalConfig = globalConfig.copyWith(
-        baseUrl: profile.baseUrl,
-        apiKey: profile.apiKey,
-        protocol: profile.protocol,
+        name: profile.name,
       );
     }
     return globalConfig;
@@ -127,9 +129,7 @@ class ServerRepository {
       final index = profiles.indexWhere((p) => p.id == activeId);
       if (index != -1) {
         profiles[index] = profiles[index].copyWith(
-          baseUrl: config.baseUrl,
-          apiKey: config.apiKey,
-          protocol: config.protocol,
+          name: config.name,
         );
         await saveProfiles(profiles);
         return;
@@ -138,13 +138,21 @@ class ServerRepository {
     await _localDb.saveActiveServerConfig(config);
   }
 
-  // --- Legacy API (kept for compatibility) ---
+  // --- API Passthroughs ---
 
-  Future<PingResult> testConnection(String baseUrl, {String? apiKey}) async {
+  Future<PingResult> ping(String baseUrl, {String? apiKey}) async {
     return await _apiService.ping(baseUrl, apiKey: apiKey);
   }
 
   Future<List<ModelInfo>> fetchModels(String baseUrl, {String? apiKey}) async {
     return await _apiService.fetchModels(baseUrl, apiKey: apiKey);
   }
+
+  // --- Legacy API (kept for compatibility) ---
+
+  Future<PingResult> testConnection(String baseUrl, {String? apiKey}) async {
+    return await ping(baseUrl, apiKey: apiKey);
+  }
+
+  // fetchModels is already exposed above; this alias is for compatibility
 }

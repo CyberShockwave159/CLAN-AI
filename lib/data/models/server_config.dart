@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:clan_ai/core/constants/app_constants.dart';
 import 'package:clan_ai/core/utils/latency_meter.dart';
 import 'package:clan_ai/domain/models/generation_params.dart';
 
@@ -10,41 +11,47 @@ enum ApiProtocol {
 }
 
 class ServerConfig {
-  final String id;
   final String name;
-  final String baseUrl;
-  final String? apiKey;
   final String? selectedModel;
-  final ApiProtocol protocol;
   final GenerationParams defaultParams;
   final ServerHealthStatus healthStatus;
   final int latencyMs;
   final String? systemPrompt;
   final bool confirmDeleteMessage;
   final bool reasoning;
+  // Legacy fields — read from old SharedPreferences format but not persisted
+  final String? _legacyBaseUrl;
+  final String? _legacyApiKey;
+  final ApiProtocol? _legacyProtocol;
 
   const ServerConfig({
-    this.id = 'default',
-    this.name = 'Local llama.cpp',
-    this.baseUrl = 'http://127.0.0.1:8080',
-    this.apiKey,
+    this.name = defaultServerName,
     this.selectedModel,
-    this.protocol = ApiProtocol.openAi,
     this.defaultParams = const GenerationParams(),
     this.healthStatus = ServerHealthStatus.offline,
     this.latencyMs = -1,
-    this.systemPrompt = 'You are a helpful, brilliant, and honest AI assistant.',
+    this.systemPrompt = defaultSystemPrompt,
     this.confirmDeleteMessage = true,
     this.reasoning = false,
-  });
+    String? legacyBaseUrl,
+    String? legacyApiKey,
+    ApiProtocol? legacyProtocol,
+  })  : _legacyBaseUrl = legacyBaseUrl,
+        _legacyApiKey = legacyApiKey,
+        _legacyProtocol = legacyProtocol;
+
+  /// Returns the base URL from legacy storage, or the default if not set.
+  String get baseUrl => _legacyBaseUrl ?? defaultBaseUrl;
+
+  /// Returns the API key from legacy storage, or null.
+  String? get apiKey => _legacyApiKey;
+
+  /// Returns the protocol from legacy storage, or OpenAI if not set.
+  ApiProtocol get protocol => _legacyProtocol ?? ApiProtocol.openAi;
 
   ServerConfig copyWith({
-    String? id,
     String? name,
-    String? baseUrl,
-    String? apiKey,
     String? selectedModel,
-    ApiProtocol? protocol,
     GenerationParams? defaultParams,
     ServerHealthStatus? healthStatus,
     int? latencyMs,
@@ -53,29 +60,25 @@ class ServerConfig {
     bool? reasoning,
   }) {
     return ServerConfig(
-      id: id ?? this.id,
       name: name ?? this.name,
-      baseUrl: baseUrl ?? this.baseUrl,
-      apiKey: apiKey ?? this.apiKey,
       selectedModel: selectedModel ?? this.selectedModel,
-      protocol: protocol ?? this.protocol,
       defaultParams: defaultParams ?? this.defaultParams,
       healthStatus: healthStatus ?? this.healthStatus,
       latencyMs: latencyMs ?? this.latencyMs,
       systemPrompt: systemPrompt ?? this.systemPrompt,
       confirmDeleteMessage: confirmDeleteMessage ?? this.confirmDeleteMessage,
       reasoning: reasoning ?? this.reasoning,
+      legacyBaseUrl: _legacyBaseUrl,
+      legacyApiKey: _legacyApiKey,
+      legacyProtocol: _legacyProtocol,
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
-      'id': id,
       'name': name,
-      'base_url': baseUrl,
-      'api_key': apiKey,
       'selected_model': selectedModel,
-      'protocol': protocol.name,
+      'protocol': ApiProtocol.openAi.name,
       'default_params': jsonEncode(defaultParams.toMap()),
       'system_prompt': systemPrompt,
       'confirm_delete_message': confirmDeleteMessage ? 1 : 0,
@@ -95,19 +98,20 @@ class ServerConfig {
     }
 
     return ServerConfig(
-      id: map['id'] as String? ?? 'default',
-      name: map['name'] as String? ?? 'Local llama.cpp',
-      baseUrl: map['base_url'] as String? ?? 'http://127.0.0.1:8080',
-      apiKey: map['api_key'] as String?,
+      name: map['name'] as String? ?? defaultServerName,
       selectedModel: map['selected_model'] as String?,
-      protocol: ApiProtocol.values.firstWhere(
-        (e) => e.name == map['protocol'],
-        orElse: () => ApiProtocol.openAi,
-      ),
       defaultParams: defaultParams,
-      systemPrompt: map['system_prompt'] as String? ?? 'You are a helpful, brilliant, and honest AI assistant.',
+      systemPrompt: map['system_prompt'] as String? ?? defaultSystemPrompt,
       confirmDeleteMessage: (map['confirm_delete_message'] as int?) == 1,
       reasoning: (map['reasoning'] as int?) == 1,
+      legacyBaseUrl: map['base_url'] as String?,
+      legacyApiKey: map['api_key'] as String?,
+      legacyProtocol: map['protocol'] != null
+          ? ApiProtocol.values.firstWhere(
+              (e) => e.name == map['protocol'],
+              orElse: () => ApiProtocol.openAi,
+            )
+          : null,
     );
   }
 }

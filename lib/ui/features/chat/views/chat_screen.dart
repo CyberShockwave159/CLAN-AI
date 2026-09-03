@@ -8,6 +8,8 @@ import 'package:clan_ai/ui/features/drawer/views/chat_drawer.dart';
 import 'package:clan_ai/ui/features/settings/view_models/settings_view_model.dart';
 import 'package:clan_ai/ui/features/settings/views/parameter_tuning_sheet.dart';
 import 'package:clan_ai/ui/shared/app_header.dart';
+import 'package:clan_ai/ui/shared/mixins/auto_scroll_mixin.dart';
+import 'package:clan_ai/ui/shared/delete_message_handler.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -16,39 +18,11 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> {
-  final ScrollController _scrollController = ScrollController();
-  bool _showScrollToBottom = false;
-
+class _ChatScreenState extends State<ChatScreen> with AutoScrollMixin {
   @override
   void initState() {
     super.initState();
-    _scrollController.addListener(_onScroll);
-  }
-
-  void _onScroll() {
-    if (_scrollController.hasClients) {
-      final isNearBottom = _scrollController.offset >= _scrollController.position.maxScrollExtent - 120;
-      if (!isNearBottom && !_showScrollToBottom) {
-        setState(() => _showScrollToBottom = true);
-      } else if (isNearBottom && _showScrollToBottom) {
-        setState(() => _showScrollToBottom = false);
-      }
-    }
-  }
-
-  void _scrollToBottom([bool animate = true]) {
-    if (!_scrollController.hasClients) return;
-    final target = _scrollController.position.maxScrollExtent;
-    if (animate) {
-      _scrollController.animateTo(
-        target,
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOut,
-      );
-    } else {
-      _scrollController.jumpTo(target);
-    }
+    initAutoScroll();
   }
 
   void _openParameterSheet(BuildContext context) {
@@ -66,29 +40,21 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _handleDeleteMessage(int messageIndex, SettingsViewModel settingsVM) async {
     final chatVM = context.read<ChatViewModel>();
-    final shouldDeleteThread = await chatVM.deleteMessage(
-      messageIndex: messageIndex,
-      serverConfig: settingsVM.config,
-      modelContextLength: settingsVM.getSelectedModelContextLength(),
+    await handleDeleteMessage(
+      context: context,
+      deleteFn: () => chatVM.deleteMessage(
+        messageIndex: messageIndex,
+        serverConfig: settingsVM.config,
+        connection: settingsVM.connectionDetails,
+        modelContextLength: settingsVM.getSelectedModelContextLength(),
+      ),
+      canUndo: chatVM.canUndo,
+      undoFn: () async {
+        await chatVM.undoDelete();
+        scrollToBottom();
+      },
+      onThreadDeleted: () => scrollToBottom(false),
     );
-    if (shouldDeleteThread) {
-      _scrollToBottom(false);
-    } else if (chatVM.canUndo) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Message deleted'),
-          action: SnackBarAction(
-            label: 'Undo',
-            onPressed: () async {
-              await chatVM.undoDelete();
-              _scrollToBottom();
-            },
-          ),
-          duration: const Duration(seconds: 5),
-        ),
-      );
-    }
   }
 
   @override
@@ -98,9 +64,9 @@ class _ChatScreenState extends State<ChatScreen> {
     final settingsVM = context.watch<SettingsViewModel>();
 
     // Auto scroll down when assistant is actively streaming
-    if (chatVM.isGenerating && !_showScrollToBottom) {
+    if (chatVM.isGenerating && !showScrollToBottom) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _scrollToBottom(false);
+        scrollToBottom(false);
       });
     }
 
@@ -116,7 +82,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 chatVM.messages.isEmpty
                     ? _buildEmptyState(context, isDark, chatVM, settingsVM)
                     : ListView.builder(
-                        controller: _scrollController,
+                        controller: scrollController,
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         itemCount: chatVM.messages.length,
                         itemBuilder: (context, index) {
@@ -125,28 +91,31 @@ class _ChatScreenState extends State<ChatScreen> {
                                key: ValueKey(message.id),
                                message: message,
                                messageIndex: index,
-                               onRegenerate: () {
-                                 chatVM.regenerateMessage(
-                                   messageIndex: index,
-                                   serverConfig: settingsVM.config,
-                                   modelContextLength: settingsVM.getSelectedModelContextLength(),
-                                 );
-                               },
-                               onEdit: (newPrompt) {
-                                 chatVM.editUserPrompt(
-                                   messageIndex: index,
-                                   newContent: newPrompt,
-                                   serverConfig: settingsVM.config,
-                                   modelContextLength: settingsVM.getSelectedModelContextLength(),
-                                 );
-                               },
-                               onBranch: () {
-                                 chatVM.branchConversation(
-                                   messageIndex: index,
-                                   serverConfig: settingsVM.config,
-                                   modelContextLength: settingsVM.getSelectedModelContextLength(),
-                                 );
-                               },
+                                onRegenerate: () {
+                                  chatVM.regenerateMessage(
+                                    messageIndex: index,
+                                    serverConfig: settingsVM.config,
+                                    connection: settingsVM.connectionDetails,
+                                    modelContextLength: settingsVM.getSelectedModelContextLength(),
+                                  );
+                                },
+                                onEdit: (newPrompt) {
+                                  chatVM.editUserPrompt(
+                                    messageIndex: index,
+                                    newContent: newPrompt,
+                                    serverConfig: settingsVM.config,
+                                    connection: settingsVM.connectionDetails,
+                                    modelContextLength: settingsVM.getSelectedModelContextLength(),
+                                  );
+                                },
+                                onBranch: () {
+                                  chatVM.branchConversation(
+                                    messageIndex: index,
+                                    serverConfig: settingsVM.config,
+                                    connection: settingsVM.connectionDetails,
+                                    modelContextLength: settingsVM.getSelectedModelContextLength(),
+                                  );
+                                },
                               onPreviousVariant: () {
                                 chatVM.switchVariant(
                                   messageIndex: index,
@@ -169,8 +138,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         },
                       ),
 
-                // Floating Scroll-to-Bottom FAB
-                if (_showScrollToBottom)
+                if (showScrollToBottom)
                   Positioned(
                     right: 16,
                     bottom: 16,
@@ -179,8 +147,8 @@ class _ChatScreenState extends State<ChatScreen> {
                       foregroundColor: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
                       elevation: 4,
                       onPressed: () {
-                        _scrollToBottom(true);
-                        setState(() => _showScrollToBottom = false);
+                        scrollToBottom(true);
+                        setState(() => showScrollToBottom = false);
                       },
                       child: const Icon(Icons.arrow_downward_rounded, size: 18),
                     ),
@@ -196,10 +164,11 @@ class _ChatScreenState extends State<ChatScreen> {
               chatVM.sendMessage(
                 prompt: prompt,
                 serverConfig: settingsVM.config,
+                connection: settingsVM.connectionDetails,
                 modelContextLength: settingsVM.getSelectedModelContextLength(),
               );
               WidgetsBinding.instance.addPostFrameCallback((_) {
-                _scrollToBottom(true);
+                scrollToBottom(true);
               });
             },
             onStop: () => chatVM.stopGeneration(),
@@ -309,6 +278,7 @@ class _ChatScreenState extends State<ChatScreen> {
         chatVM.sendMessage(
           prompt: prompt,
           serverConfig: settingsVM.config,
+          connection: settingsVM.connectionDetails,
           modelContextLength: settingsVM.getSelectedModelContextLength(),
         );
       },
@@ -340,11 +310,5 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
   }
 }

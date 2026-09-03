@@ -13,8 +13,13 @@ flutter run -d <device>    # devices: linux, macos, windows, <android-id>
 - **Hybrid Clean Architecture / MVVM** with `Provider` + `ChangeNotifier`.
 - **No codegen.** All JSON serialization is manual `jsonEncode`/`jsonDecode` + `toMap()`/`fromMap()`.
 - **No domain layer interfaces.** `lib/domain/models/` contains only `generation_params.dart`.
+- **Shared constants** in `lib/core/constants/app_constants.dart` — all magic numbers and default strings centralized.
+- **Shared mixin** `StreamMutationMixin` in `lib/ui/shared/mixins/stream_mutation_mixin.dart` — provides shared streaming, undo, switchVariant, stopGeneration logic for both ChatViewModel and RoleplayViewModel.
+- **Shared widgets** in `lib/ui/shared/widgets/` — `parameter_sheet_opener.dart`, `drawer_export_menu.dart`, `auto_scroll_mixin.dart`, `delete_message_handler.dart`.
+- **Shared settings sections** in `lib/ui/features/settings/views/sections/` — `profile_section.dart`, `safety_section.dart`, `app_mode_section.dart`.
 - **Dependency wiring** in `lib/main.dart` via constructor injection.
 - **Four root providers:** `SettingsViewModel`, `ChatViewModel`, `RoleplayViewModel`, `PersonaTemplateViewModel`. `CharacterRepository` also exposed via `Provider`.
+- **ServerProfile consolidation:** `ServerConnectionDetails` removed; `ServerProfile` serves as connection details throughout. All method signatures using `ServerConnectionDetails?` now use `ServerProfile?`.
 - **App mode toggle:** `AppMode.assistant` vs `AppMode.roleplay` stored in SharedPreferences. `_HomeScreen` routes to `ChatScreen` or `RoleplayScreen` based on mode.
 
 ## Platform channels (mobile file save)
@@ -59,20 +64,19 @@ flutter run -d <device>    # devices: linux, macos, windows, <android-id>
 ## Streaming flow (critical for chat changes)
 1. ViewModel creates user message → persists to SQLite → creates streaming placeholder.
 2. Resolves effective system prompt (`thread.systemPrompt ?? config.systemPrompt`).
-3. Repository → ApiService: context-fit caps `contextSize` (modelCapacity - maxTokens or 512 if unlimited). OpenAI POSTs `/v1/chat/completions`; llamaNative POSTs `/completion` with `### User`/`### Assistant` template. If `serverConfig.reasoning` is true, sends `reasoning: true` in payload.
+3. Repository → ApiService: context-fit caps `contextSize` (modelCapacity - `reservedOutputTokensDefault` if unlimited). OpenAI POSTs `/v1/chat/completions`; llamaNative POSTs `/completion` with `### User`/`### Assistant` template. If `serverConfig.reasoning` is true, sends `reasoning: true` in payload.
 4. `SseClient.parseStream()` handles both OpenAI delta and native `{content, stop}` formats. Extracts reasoning from multiple field names (`reasoning`, `reasoning_content`, `thought`).
 5. `SseClient.filterReasoning()` stream pipeline processes inline thinking tags (```xml, `<thought>`, `<reasoning>`) and forwards dedicated reasoning fields. Applied to both OpenAI and native streams.
 6. Context limit errors → `ContextLimitExceededException`.
-7. **UI throttling:** `Timer.periodic(Duration(milliseconds: 20))` buffers both `content` and `reasoningContent` tokens to avoid frame drops. Timer looks up message by ID each tick to handle mutations.
+7. **UI throttling:** `uiThrottleInterval` (20ms) buffers both `content` and `reasoningContent` tokens to avoid frame drops. Timer looks up message by ID each tick to handle mutations. Implemented via `StreamMutationMixin`.
 8. Final metrics and `reasoningContent` written to SQLite on completion.
 
 ## RAG flow (roleplay only)
 - `RoleplayViewModel.startRoleplay()` creates thread with initial RAG context (empty memories on first session).
-- `RoleplayViewModel.sendMessage()` → `RoleplayContextBuilder.build()` → embeds user input → searches top-3 similar memories via `VectorStore.searchSimilar(characterId: ...)`.
+- `RoleplayViewModel.sendMessage()` → `RoleplayContextBuilder.build()` → embeds user input → searches top-K similar memories via `VectorStore.searchSimilar(characterId: ...)` where topK defaults to `defaultRagTopK` (3).
 - Retrieved memories injected into thread's `systemPrompt` before sending to API.
-- After stream completes: `_embedMessageAsync()` fires and-forget — embeds user+assistant pair into vector store.
+- After stream completes: `onComplete` hook in `StreamMutationMixin` fires `_embedMessageAsync()` — embeds user+assistant pair into vector store.
 - `RoleplayViewModel.deleteThread()` calls `_characterRepository.deleteEmbeddingsForMessages(characterId, messageIds)` — only deletes embeddings for messages in the deleted thread, **not** all character embeddings.
-- `RoleplayViewModel.getCachedThreadsForCharacter(characterId)` uses a cached `Future` to avoid repeated `FutureBuilder` calls in the drawer.
 - **System prompt override**: If character has `systemPrompt`, `RoleplayContextBuilder` uses it to replace the standard prompt. `{{original}}` prefix inserts standard prompt before custom text. `postHistoryInstructions` are appended after the full prompt.
 
 ## Reasoning/Thinking Block Feature
@@ -80,11 +84,12 @@ flutter run -d <device>    # devices: linux, macos, windows, <android-id>
 - **API request**: When enabled, `GenerationParams.toOpenAiPayload()` adds `"reasoning": true` and `"include_reasoning": true`. Native payload also includes `reasoning: true`.
 - **SSE parsing**: `SseClient.parseStream()` extracts reasoning from multiple field names: `delta.reasoning`, `delta.reasoning_content`, `delta.thought`, top-level `reasoning`, etc. Both OpenAI and native formats.
 - **Inline tag processing**: `SseClient.filterReasoning()` processes inline thinking tags (```xml, `<thought>`, `<reasoning>`) in the text stream. Handles partial tags mid-stream. Forwards dedicated reasoning fields when `enableReasoning` is true.
-- **ViewModel accumulation**: Both `ChatViewModel` and `RoleplayViewModel` maintain `_pendingReasoningBuffer` alongside `_pendingStreamBuffer`. Throttle timer flushes both independently. On completion, saves `reasoningContent` to message via `copyWith(reasoningContent: ...)`.
+- **ViewModel accumulation**: Both `ChatViewModel` and `RoleplayViewModel` maintain `_pendingReasoningBuffer` alongside `_pendingStreamBuffer` via `StreamMutationMixin`. Throttle timer flushes both independently. On completion, saves `reasoningContent` to message via `copyWith(reasoningContent: ...)`.
 - **UI display**: `_ReasoningBlock` widget in `MessageBubble` renders collapsible thinking block. Shows "Thinking" header with psychology icon. Tap to expand/collapse. Uses `AnimatedContainer`, `SelectableText`, and `Semantics` for smooth UX. Shows "Thinking..." while streaming.
 - **Reasoning model support**: Works with OpenAI o1/o3, DeepSeek R1, Qwen, and other reasoning-capable models. Requires llama.cpp v1.7.7+ for native reasoning support.
 
 ## Gotchas
+- **StreamMutationMixin:** `ChatViewModel` and `RoleplayViewModel` both mix in `StreamMutationMixin` which provides `_streamResponse`, `undoDelete`, `canUndo`, `stopGeneration`, `switchVariant`, and `storeUndoMessage`. The mixin's `doStreamResponse` is called from each VM's `_streamResponse` with an optional `onComplete` hook (used by RoleplayViewModel for RAG embedding).
 - **Conversation branching:** Regenerate/edit truncates at parent message, creates new sibling branches. Navigation uses `variantIndex` + `siblingIds`. `ChatViewModel.branchConversation()` creates a new `ChatThread` with copied messages and `branchFromThreadId` link.
 - **System prompt resolution:** Thread-level `ChatThread.systemPrompt` overrides global `ServerConfig.systemPrompt`. In roleplay, RAG context builder overwrites it per-message. Character-level `CharacterProfile.systemPrompt` takes priority — if set, it replaces the entire prompt; `{{original}}` prefix inserts standard prompt before custom text.
 - **Health polling:** 15s timer. Fallback chain: `/props` → `/v1/models`. `ServerRepository.fetchModels()` tries `/props` first (llama.cpp), then `/v1/models` (OpenAI), deduplicates by model id.
@@ -94,10 +99,11 @@ flutter run -d <device>    # devices: linux, macos, windows, <android-id>
 - **Profile vs config:** Profile stores connection details (`baseUrl`, `apiKey`, `protocol`). System prompt, params, model selection are global config shared across profiles.
 - **Thread isolation:** `ChatViewModel.loadThreads()` → `getAssistantThreads()` filters out `characterId != null`. `RoleplayViewModel.loadLastChat()` → `getThreads()` (all threads) then filters by `characterId`, falls back to all-threads for legacy migration. `RoleplayViewModel.startRoleplay()` calls `getThreadsForCharacter(characterId)` to reuse existing threads — never creates duplicates.
 - **RAG isolation:** Embeddings stored with `character_id`. Queries: `WHERE character_id = ?` — no cross-character leakage.
-- **Hash embedding:** Pure Dart 256-dim vectors via char trigrams in `EmbeddingService`. <5ms, <1KB per vector. No ML dependencies.
+- **Hash embedding:** Pure Dart 256-dim vectors via char trigrams in `HashEmbedding`. <5ms, <1KB per vector. No ML dependencies.
 - **Default API protocol:** `ApiProtocol.openAi` (in `ServerConfig` constructor).
+- **Default params:** `reservedOutputTokensDefault` (512), `minContextSize` (128), `maxContextSize` (1000000), `defaultRagTopK` (3), `defaultRagLimit` (100) — all in `app_constants.dart`.
 - **SharedPreferences CRUD race conditions:** `insertCharacter`/`updateCharacter`/`deleteCharacter` in `LocalDatabase`, `createProfile`/`updateProfile`/`deleteProfile` in `ServerRepository`, `addTemplate`/`updateTemplate`/`deleteTemplate` in `SystemPromptTemplatesRepository`, and `addTemplate`/`updateTemplate`/`deleteTemplate` in `PersonaTemplateRepository` all use a `Mutex` to serialize read-modify-write on SharedPreferences.
-- **Undo support:** `ChatViewModel` supports 5-second undo for user message deletions via `undoDelete()` and `canUndo` flag.
+- **Undo support:** `ChatViewModel` and `RoleplayViewModel` support 5-second undo for user message deletions via `undoDelete()` and `canUndo` flag (provided by `StreamMutationMixin`).
 - **Theme toggle:** `main.dart` loads theme mode from SharedPreferences via `LocalDatabase.instance.loadThemeMode()`. Defaults to dark.
 - **Prompt length limits:** `RoleplayPromptFormatter` caps personality (2000), setting (1000), userPersona (1000), memory (1000 per memory, max 3 memories) to prevent context overflow.
 - **Export behavior:** Export is only available via context menus in the chat drawer and character drawer. The header bar export popup has been removed. `FileSaver.saveFile()` opens native save dialogs on mobile (SAF on Android, UIDocumentPicker on iOS); on desktop writes to the app documents directory.
@@ -136,30 +142,30 @@ Run one: `flutter test test/domain/generation_params_test.dart`.
 lib/
 ├── main.dart                          # Bootstrap, Provider wiring, FFI init, HTTP client, theme loading
 ├── core/
-│   ├── constants/                     # AppTheme, API endpoints
+│   ├── constants/                     # AppTheme, API endpoints, shared constants (app_constants.dart)
 │   ├── errors/                        # AppException hierarchy (6 classes)
 │   ├── network/                       # ApiHttpClient, SseClient
 │   └── utils/                         # LatencyMeter, Mutex, RoleplayContextBuilder, RoleplayPromptFormatter, TextSanitizer, HashEmbedding, FileSaver, EmbeddingService, SillyTavernCardParser, StAvatarDownloader
 ├── data/
-│   ├── datasources/                   # LlamaApiService, LocalDatabase, VectorStore, EmbeddingService
-│   ├── models/                        # All domain models (ChatThread, ChatMessage, ServerConfig, CharacterProfile, PersonaTemplate, etc.)
+│   ├── datasources/                   # LlamaApiService, LocalDatabase, VectorStore
+│   ├── models/                        # All domain models (ChatThread, ChatMessage, ServerConfig, ServerProfile, CharacterProfile, PersonaTemplate, etc.)
 │   └── repositories/                  # ChatRepository, ServerRepository, CharacterRepository, SystemPromptTemplatesRepository, PersonaTemplateRepository
 ├── domain/
 │   └── models/                        # GenerationParams (only domain-layer model)
 └── ui/
     ├── features/
     │   ├── chat/
-    │   │   ├── view_models/           # ChatViewModel
+    │   │   ├── view_models/           # ChatViewModel (mixins StreamMutationMixin)
     │   │   ├── views/                 # ChatScreen, MessageBubble, PromptInputBar, _ReasoningBlock
     │   │   └── widgets/               # MarkdownBodyView, CodeBlockView, MathView, TokenSpeedBadge
     │   ├── drawer/
     │   │   └── views/                 # ChatDrawer
     │   ├── roleplay/
-    │   │   ├── view_models/           # RoleplayViewModel, PersonaTemplateViewModel
+    │   │   ├── view_models/           # RoleplayViewModel (mixins StreamMutationMixin), PersonaTemplateViewModel
     │   │   ├── views/                 # RoleplayScreen, RoleplayDrawer
     │   │   └── widgets/               # CharacterCreationWizard, CharacterEditDialog, SillyTavernImportDialog, PersonaTemplateDialog, AlternateGreetingSelector
     │   └── settings/
     │       ├── view_models/           # SettingsViewModel
-    │       └── views/                 # SettingsScreen, ParameterTuningSheet
-    └── shared/                        # AppHeader, ConnectionBadge
+    │       └── views/                 # SettingsScreen, ParameterTuningSheet, sections/ (profile_section, safety_section, app_mode_section)
+    └── shared/                        # AppHeader, ConnectionBadge, mixins/ (stream_mutation_mixin), widgets/ (parameter_sheet_opener, drawer_export_menu, auto_scroll_mixin, delete_message_handler), avatar_utils
 ```

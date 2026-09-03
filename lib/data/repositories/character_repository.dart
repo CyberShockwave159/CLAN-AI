@@ -56,10 +56,6 @@ class CharacterRepository {
     await _vectorStore.deleteCharacterEmbeddings(id);
   }
 
-  Future<void> deleteCharacterEmbeddings(String characterId) async {
-    await _vectorStore.deleteCharacterEmbeddings(characterId);
-  }
-
   Future<void> deleteEmbeddingsForMessages(String characterId, List<String> messageIds) async {
     await _vectorStore.deleteEmbeddingsForMessages(characterId: characterId, messageIds: messageIds);
   }
