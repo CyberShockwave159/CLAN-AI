@@ -200,6 +200,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final settingsVM = context.watch<SettingsViewModel>();
     final chatVM = context.watch<ChatViewModel>();
+    final isRoleplay = settingsVM.appMode == AppMode.roleplay;
 
     return Scaffold(
       appBar: AppBar(
@@ -218,19 +219,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Profile Selector
-          _buildSectionHeader('Server Profiles', Icons.storage_rounded),
-          const SizedBox(height: 10),
-
-          ProfileSection(),
-
-          const SizedBox(height: 24),
-
-          // Section 1: Server Connection Configuration
+          // 1. Server Connection
           _buildSectionHeader('Server Connection', Icons.dns_rounded),
           const SizedBox(height: 10),
 
-          // Server URL Input
           TextField(
             controller: _urlController,
             decoration: InputDecoration(
@@ -254,7 +246,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           const SizedBox(height: 12),
 
-          // API Key Input
           TextField(
             controller: _apiKeyController,
             obscureText: _obscureApiKey,
@@ -272,7 +263,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           const SizedBox(height: 12),
 
-          // Protocol Selector
           Row(
             children: [
               Expanded(
@@ -289,7 +279,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       icon: Icon(Icons.memory_rounded, size: 16),
                     ),
                   ],
-                  selected: {settingsVM.connectionDetails?.protocol ?? ApiProtocol.openAi},
+                  selected: {settingsVM.config.protocol},
                   onSelectionChanged: (selected) {
                     settingsVM.updateProtocol(selected.first);
                   },
@@ -300,7 +290,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           const SizedBox(height: 14),
 
-          // Test Connection Button & Error Banner
           FilledButton.icon(
             icon: settingsVM.isTestingConnection
                 ? const SizedBox(
@@ -342,46 +331,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           const SizedBox(height: 24),
 
-          // Section 2: Model Selection & Context
-          _buildSectionHeader('Model Selection', Icons.smart_toy_rounded),
+          // 2. Server Profiles
+          _buildSectionHeader('Server Profiles', Icons.storage_rounded),
           const SizedBox(height: 10),
-
-          if (settingsVM.availableModels.isNotEmpty)
-            DropdownButtonFormField<String>(
-              initialValue: settingsVM.config.selectedModel ?? settingsVM.availableModels.first.id,
-              decoration: const InputDecoration(
-                labelText: 'Active Model',
-                prefixIcon: Icon(Icons.model_training_rounded),
-              ),
-              items: settingsVM.availableModels.map((m) {
-                return DropdownMenuItem(
-                  value: m.id,
-                  child: Text(m.name, overflow: TextOverflow.ellipsis),
-                );
-              }).toList(),
-              onChanged: (val) {
-                if (val != null) {
-                  settingsVM.updateSelectedModel(val);
-                }
-              },
-            )
-          else
-            Text(
-              'No models fetched yet. Click "Test Connection" while the server is running to query available models.',
-              style: TextStyle(
-                color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
-                fontSize: 13,
-              ),
-            ),
+          ProfileSection(),
 
           const SizedBox(height: 24),
 
-          if (settingsVM.appMode == AppMode.assistant) ...[
-            // Section 3: System Prompt Configuration
+          // 3. System Prompt / Persona Templates
+          if (!isRoleplay) ...[
             _buildSectionHeader('System Prompt Customization', Icons.psychology_rounded),
             const SizedBox(height: 10),
 
-            // Active thread indicator
             if (chatVM.activeThread != null)
               Container(
                 margin: const EdgeInsets.only(bottom: 12),
@@ -418,7 +379,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 final trimmed = val.trim();
                 settingsVM.updateSystemPrompt(trimmed);
 
-                // If active thread has a system prompt, update the thread too
                 if (chatVM.activeThread != null && chatVM.activeThread!.systemPrompt != null) {
                   chatVM.updateActiveThreadSystemPrompt(trimmed);
                 }
@@ -427,7 +387,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
             const SizedBox(height: 8),
 
-            // Saved Templates Section
             Row(
               children: [
                 Text(
@@ -493,12 +452,85 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   },
                 ),
               ),
+          ] else ...[
+            _buildSectionHeader('Persona Templates', Icons.person_outline_rounded),
+            const SizedBox(height: 10),
+
+            FutureBuilder<List<PersonaTemplate>>(
+              future: _loadPersonaTemplates(),
+              builder: (ctx, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                }
+                final templates = snapshot.data ?? [];
+
+                if (templates.isEmpty) {
+                  return Text(
+                    'No persona templates yet. Click "New" to create one.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                    ),
+                  );
+                }
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      height: 44,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: templates.length,
+                        itemBuilder: (context, templateIndex) {
+                          final template = templates[templateIndex];
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: GestureDetector(
+                              onTap: () => _showEditPersonaTemplateDialog(template),
+                              child: Chip(
+                                avatar: Icon(Icons.person_outline_rounded, size: 16, color: AppTheme.accentPrimary),
+                                label: Text(template.name, style: const TextStyle(fontSize: 12)),
+                                onDeleted: () => _deletePersonaTemplate(template.id),
+                                deleteIconColor: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  side: BorderSide(
+                                    color: AppTheme.accentPrimary.withValues(alpha: 0.3),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+
+            const SizedBox(height: 12),
+
+            FilledButton.icon(
+              icon: const Icon(Icons.add_rounded, size: 18),
+              label: const Text('New Persona Template'),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: () => _showEditPersonaTemplateDialog(null),
+            ),
           ],
 
           const SizedBox(height: 24),
 
-          // Section 4: Hyperparameters
-          _buildSectionHeader('Generation Sampling Defaults', Icons.tune_rounded),
+          // 4. Generation Sampling
+          _buildSectionHeader('Generation Sampling', Icons.tune_rounded),
           const SizedBox(height: 10),
 
           OutlinedButton.icon(
@@ -513,16 +545,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           const SizedBox(height: 24),
 
-          // Section 5: Safety & Convenience
+          // 5. Safety & Convenience
           _buildSectionHeader('Safety & Convenience', Icons.security_rounded),
           const SizedBox(height: 10),
 
           SafetySection(),
 
-          const SizedBox(height: 40),
+          const SizedBox(height: 24),
 
-          // Section 6: RAG Memory Management (roleplay only)
-          if (settingsVM.appMode == AppMode.roleplay) ...[
+          // 6. App Mode
+          _buildSectionHeader('App Mode', Icons.view_agenda_rounded),
+          const SizedBox(height: 10),
+
+          AppModeSection(),
+
+          const SizedBox(height: 24),
+
+          // 7. RAG Memory (roleplay only)
+          if (isRoleplay) ...[
             _buildSectionHeader('RAG Memory', Icons.auto_stories_rounded),
             const SizedBox(height: 10),
 
@@ -624,92 +664,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ],
-
-          const SizedBox(height: 40),
-
-          // Section: Persona Templates (roleplay mode only)
-          if (settingsVM.appMode == AppMode.roleplay) ...[
-            _buildSectionHeader('Persona Templates', Icons.person_outline_rounded),
-            const SizedBox(height: 10),
-
-  FutureBuilder<List<PersonaTemplate>>(
-            future: _loadPersonaTemplates(),
-            builder: (ctx, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  child: Center(child: CircularProgressIndicator()),
-                );
-              }
-              final templates = snapshot.data ?? [];
-
-              if (templates.isEmpty) {
-                return Text(
-                  'No persona templates yet. Click "New" to create one.',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
-                  ),
-                );
-              }
-
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    height: 44,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: templates.length,
-                      itemBuilder: (context, templateIndex) {
-                        final template = templates[templateIndex];
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: GestureDetector(
-                            onTap: () => _showEditPersonaTemplateDialog(template),
-                            child: Chip(
-                              avatar: Icon(Icons.person_outline_rounded, size: 16, color: AppTheme.accentPrimary),
-                              label: Text(template.name, style: const TextStyle(fontSize: 12)),
-                              onDeleted: () => _deletePersonaTemplate(template.id),
-                              deleteIconColor: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
-                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                side: BorderSide(
-                                  color: AppTheme.accentPrimary.withValues(alpha: 0.3),
-                                ),
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-
-          const SizedBox(height: 12),
-
-          FilledButton.icon(
-            icon: const Icon(Icons.add_rounded, size: 18),
-            label: const Text('New Persona Template'),
-            style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            onPressed: () => _showEditPersonaTemplateDialog(null),
-          ),
-          ],
-
-          const SizedBox(height: 40),
-
-          // Section: App Mode
-          _buildSectionHeader('App Mode', Icons.view_agenda_rounded),
-          const SizedBox(height: 10),
-
-          AppModeSection(),
 
           const SizedBox(height: 40),
         ],

@@ -571,11 +571,11 @@ void main() {
       expect(config.defaultParams.temperature, equals(0.7));
     });
 
-    test('copyWith preserves legacy fields', () {
+    test('copyWith preserves connection fields', () {
       final config = ServerConfig(
-        legacyBaseUrl: 'http://localhost:8080',
-        legacyApiKey: 'secret',
-        legacyProtocol: ApiProtocol.llamaNative,
+        baseUrl: 'http://localhost:8080',
+        apiKey: 'secret',
+        protocol: ApiProtocol.llamaNative,
       );
       final copied = config.copyWith(name: 'New Name');
 

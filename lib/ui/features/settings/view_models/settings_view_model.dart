@@ -122,9 +122,10 @@ class SettingsViewModel extends ChangeNotifier {
       final updated = profile.copyWith(baseUrl: url);
       await _serverRepository.updateProfile(updated);
       _profiles = await _serverRepository.loadProfiles();
-      notifyListeners();
+      _config = _config.copyWith(baseUrl: url);
+      await _saveConfig();
     }
-    _config = _config.copyWith(name: config.name);
+    notifyListeners();
   }
 
   Future<void> updateApiKey(String? key) async {
@@ -133,9 +134,10 @@ class SettingsViewModel extends ChangeNotifier {
       final updated = profile.copyWith(apiKey: key);
       await _serverRepository.updateProfile(updated);
       _profiles = await _serverRepository.loadProfiles();
-      notifyListeners();
+      _config = _config.copyWith(apiKey: key);
+      await _saveConfig();
     }
-    _config = _config.copyWith(name: config.name);
+    notifyListeners();
   }
 
   Future<void> updateProtocol(ApiProtocol protocol) async {
@@ -144,9 +146,10 @@ class SettingsViewModel extends ChangeNotifier {
       final updated = profile.copyWith(protocol: protocol);
       await _serverRepository.updateProfile(updated);
       _profiles = await _serverRepository.loadProfiles();
-      notifyListeners();
+      _config = _config.copyWith(protocol: protocol);
+      await _saveConfig();
     }
-    _config = _config.copyWith(name: config.name);
+    notifyListeners();
   }
 
   Future<void> updateSelectedModel(String modelId) async {
@@ -321,26 +324,34 @@ class SettingsViewModel extends ChangeNotifier {
     if (_isTestingConnection) return;
     final conn = connectionDetails;
     if (conn == null) {
-      _config = _config.copyWith(
-        healthStatus: ServerHealthStatus.offline,
-        latencyMs: -1,
-      );
-      notifyListeners();
+      if (_config.healthStatus != ServerHealthStatus.offline || _config.latencyMs != -1) {
+        _config = _config.copyWith(
+          healthStatus: ServerHealthStatus.offline,
+          latencyMs: -1,
+        );
+        notifyListeners();
+      }
       return;
     }
     try {
       final pingRes = await _serverRepository.testConnection(conn.baseUrl, apiKey: conn.apiKey);
-      _config = _config.copyWith(
-        healthStatus: pingRes.status,
-        latencyMs: pingRes.latencyMs,
-      );
-      notifyListeners();
+      final newStatus = pingRes.status;
+      final newLatency = pingRes.latencyMs;
+      if (_config.healthStatus != newStatus || _config.latencyMs != newLatency) {
+        _config = _config.copyWith(
+          healthStatus: newStatus,
+          latencyMs: newLatency,
+        );
+        notifyListeners();
+      }
     } catch (_) {
-      _config = _config.copyWith(
-        healthStatus: ServerHealthStatus.offline,
-        latencyMs: -1,
-      );
-      notifyListeners();
+      if (_config.healthStatus != ServerHealthStatus.offline || _config.latencyMs != -1) {
+        _config = _config.copyWith(
+          healthStatus: ServerHealthStatus.offline,
+          latencyMs: -1,
+        );
+        notifyListeners();
+      }
     }
   }
 

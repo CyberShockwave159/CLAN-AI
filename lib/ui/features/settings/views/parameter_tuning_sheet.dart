@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:clan_ai/core/constants/app_theme.dart';
 import 'package:clan_ai/domain/models/generation_params.dart';
+import 'package:clan_ai/ui/features/settings/view_models/settings_view_model.dart';
 
 class ParameterTuningSheet extends StatefulWidget {
   final GenerationParams initialParams;
@@ -26,6 +28,9 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
   late int _contextSize;
   late TextEditingController _contextSizeController;
   late TextEditingController _maxTokensController;
+  final int? _modelContextLength;
+
+  _ParameterTuningSheetState() : _modelContextLength = null;
 
   @override
   void initState() {
@@ -36,7 +41,13 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
     _minP = widget.initialParams.minP;
     _repeatPenalty = widget.initialParams.repeatPenalty;
     _maxTokens = widget.initialParams.maxTokens;
-    _contextSize = widget.initialParams.contextSize;
+
+    final vm = context.read<SettingsViewModel>();
+    final modelCtxLen = vm.getSelectedModelContextLength();
+    final defaultContext = modelCtxLen != null && modelCtxLen >= 128
+        ? modelCtxLen
+        : widget.initialParams.contextSize;
+    _contextSize = defaultContext;
     _maxTokensController = TextEditingController(text: _maxTokens.toString());
     _contextSizeController = TextEditingController(text: _contextSize.toString());
   }
@@ -138,7 +149,7 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
                 ],
               ),
 
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
 
               // Max Tokens Input
               _buildNumberInput(
@@ -154,9 +165,12 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
               // Context Window Size with custom input
               _buildContextSizeInput(
                 title: 'Context Window (n_ctx)',
-                subtitle: 'Max tokens the model can process (up to 1,000,000)',
+                subtitle: _modelContextLength != null
+                    ? 'Model max: ${(_modelContextLength / 1000).toStringAsFixed(0)}k tokens. Adjust if you need shorter context.'
+                    : 'Max tokens the model can process (up to 1,000,000). Defaults to model max if available.',
                 value: _contextSize,
                 controller: _contextSizeController,
+                maxContext: _modelContextLength,
                 onChanged: (v) => setState(() => _contextSize = v),
               ),
 
@@ -165,7 +179,7 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
               // Temperature Slider
               _buildSlider(
                 title: 'Temperature',
-                subtitle: 'Controls randomness (lower = more deterministic)',
+                subtitle: 'Controls creativity and randomness. Lower values produce more predictable, focused outputs. Higher values make the model more creative and varied.',
                 value: _temperature,
                 min: 0.0,
                 max: 2.0,
@@ -176,7 +190,7 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
               // Top-P Slider
               _buildSlider(
                 title: 'Top-P (Nucleus Sampling)',
-                subtitle: 'Considers tokens with top_p probability mass',
+                subtitle: 'Limits token selection to the most probable tokens whose combined probability mass equals top_p. Lower values produce more coherent, focused text.',
                 value: _topP,
                 min: 0.0,
                 max: 1.0,
@@ -187,7 +201,7 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
               // Min-P Slider
               _buildSlider(
                 title: 'Min-P Sampling',
-                subtitle: 'Minimum base probability cutoff relative to top token',
+                subtitle: 'Filters tokens below a minimum probability threshold relative to the top token. Works alongside temperature to control output variety.',
                 value: _minP,
                 min: 0.0,
                 max: 0.5,
@@ -198,7 +212,7 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
               // Repeat Penalty Slider
               _buildSlider(
                 title: 'Repeat Penalty',
-                subtitle: 'Penalizes repetition of previously generated tokens',
+                subtitle: 'Penalizes the model for repeating previously generated tokens. Higher values reduce repetition but may make text sound unnatural.',
                 value: _repeatPenalty,
                 min: 1.0,
                 max: 1.5,
@@ -209,7 +223,7 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
               // Top-K Slider
               _buildSlider(
                 title: 'Top-K',
-                subtitle: 'Limits pool to K most likely tokens',
+                subtitle: 'Limits the model to only consider the K most likely tokens at each step. Lower values produce more focused, consistent outputs.',
                 value: _topK.toDouble(),
                 min: 0,
                 max: 100,
@@ -291,6 +305,16 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
               min: min,
               max: max,
               onChanged: onChanged,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: 11,
+                color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+              ),
             ),
           ),
         ],
@@ -380,8 +404,10 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
     required int value,
     required TextEditingController controller,
     required ValueChanged<int> onChanged,
+    int? maxContext,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final effectiveMax = maxContext != null && maxContext > 0 ? maxContext : 1000000;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
@@ -411,7 +437,7 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
                     fontFamily: 'monospace',
                   ),
                   decoration: InputDecoration(
-                    hintText: '1000000',
+                    hintText: maxContext != null ? '${(maxContext / 1000).toStringAsFixed(0)}k' : '1000000',
                     contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(6),
@@ -434,7 +460,7 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
                   ),
                   onChanged: (val) {
                     final parsed = int.tryParse(val);
-                    if (parsed != null && parsed >= 128 && parsed <= 1000000) {
+                    if (parsed != null && parsed >= 128 && parsed <= effectiveMax) {
                       onChanged(parsed);
                     }
                   },

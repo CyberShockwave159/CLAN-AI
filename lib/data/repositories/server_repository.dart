@@ -117,6 +117,9 @@ class ServerRepository {
     if (profile != null) {
       globalConfig = globalConfig.copyWith(
         name: profile.name,
+        baseUrl: profile.baseUrl,
+        apiKey: profile.apiKey,
+        protocol: profile.protocol,
       );
     }
     return globalConfig;
@@ -130,6 +133,9 @@ class ServerRepository {
       if (index != -1) {
         profiles[index] = profiles[index].copyWith(
           name: config.name,
+          baseUrl: config.baseUrl,
+          apiKey: config.apiKey,
+          protocol: config.protocol,
         );
         await saveProfiles(profiles);
         return;

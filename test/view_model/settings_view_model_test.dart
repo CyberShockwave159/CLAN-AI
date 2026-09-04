@@ -80,7 +80,7 @@ void main() {
     });
 
     test('updates profile', () async {
-      final profile = await fakeServerRepo.createProfile('Test');
+      final profile = await fakeServerRepo.createProfile('Test', baseUrl: 'http://localhost:8080');
       await vm.createProfile(
         name: 'Test',
         baseUrl: 'http://localhost:8080',
@@ -107,8 +107,8 @@ void main() {
     });
 
     test('switches profile', () async {
-      final profile1 = await fakeServerRepo.createProfile('Profile 1');
-      final profile2 = await fakeServerRepo.createProfile('Profile 2');
+      final profile1 = await fakeServerRepo.createProfile('Profile 1', baseUrl: 'http://localhost:8080');
+      final profile2 = await fakeServerRepo.createProfile('Profile 2', baseUrl: 'http://localhost:8080');
       await vm.reloadProfiles();
 
       await vm.switchProfile(profile2.id);

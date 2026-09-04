@@ -13,6 +13,7 @@ class FakeServerRepository extends ServerRepository {
   List<ServerProfile> get all => _profiles;
   String? get activeProfileId => _activeProfileId;
   ServerConfig? get activeConfig => _activeConfig;
+  set activeConfig(ServerConfig? config) => _activeConfig = config;
   PingResult? get lastPingResult => _lastPingResult;
 
   @override
@@ -30,7 +31,7 @@ class FakeServerRepository extends ServerRepository {
   @override
   Future<ServerProfile> createProfile(
     String name, {
-    String? baseUrl,
+    required String baseUrl,
     String? apiKey,
     ApiProtocol protocol = ApiProtocol.openAi,
   }) async {
@@ -45,11 +46,12 @@ class FakeServerRepository extends ServerRepository {
   }
 
   @override
-  Future<void> updateProfile(ServerProfile profile) async {
+  Future<ServerProfile> updateProfile(ServerProfile profile) async {
     final index = _profiles.indexWhere((p) => p.id == profile.id);
     if (index != -1) {
       _profiles[index] = profile;
     }
+    return profile;
   }
 
   @override

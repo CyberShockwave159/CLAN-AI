@@ -129,6 +129,9 @@ PersonaTemplate buildPersonaTemplate({
 
 ServerConfig buildServerConfig({
   String name = 'Test Server',
+  String baseUrl = 'http://127.0.0.1:8080',
+  String? apiKey,
+  ApiProtocol protocol = ApiProtocol.openAi,
   String? selectedModel,
   GenerationParams? defaultParams,
   ServerHealthStatus healthStatus = ServerHealthStatus.offline,
@@ -136,11 +139,12 @@ ServerConfig buildServerConfig({
   String? systemPrompt,
   bool confirmDeleteMessage = true,
   bool reasoning = false,
-  String? legacyBaseUrl,
-  String? legacyApiKey,
 }) {
   return ServerConfig(
     name: name,
+    baseUrl: baseUrl,
+    apiKey: apiKey,
+    protocol: protocol,
     selectedModel: selectedModel,
     defaultParams: defaultParams ?? const GenerationParams(),
     healthStatus: healthStatus,
@@ -148,8 +152,6 @@ ServerConfig buildServerConfig({
     systemPrompt: systemPrompt ?? 'You are a helpful AI.',
     confirmDeleteMessage: confirmDeleteMessage,
     reasoning: reasoning,
-    legacyBaseUrl: legacyBaseUrl,
-    legacyApiKey: legacyApiKey,
   );
 }
 
