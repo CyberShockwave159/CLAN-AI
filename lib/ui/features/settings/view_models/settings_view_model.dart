@@ -18,12 +18,14 @@ class SettingsViewModel extends ChangeNotifier {
 
   ServerConfig _config = const ServerConfig();
   ServerConfig get config => _config;
+  set config(ServerConfig v) => _config = v;
 
   AppMode _appMode = AppMode.assistant;
   AppMode get appMode => _appMode;
 
   List<ModelInfo> _availableModels = [];
   List<ModelInfo> get availableModels => _availableModels;
+  set availableModels(List<ModelInfo> v) => _availableModels = v;
 
   List<SystemPromptTemplate> _templates = [];
   List<SystemPromptTemplate> get templates => _templates;

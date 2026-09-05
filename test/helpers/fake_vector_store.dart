@@ -49,7 +49,7 @@ class FakeVectorStore extends VectorStore {
 
   @override
   Future<void> deleteCharacterEmbeddings(String characterId) async {
-    _embeddings.remove(characterId);
+    _embeddings[characterId] = [];
   }
 
   @override
@@ -61,6 +61,24 @@ class FakeVectorStore extends VectorStore {
     if (list != null) {
       list.removeWhere((e) => messageIds.contains(e['id']));
     }
+  }
+
+  @override
+  Future<void> deleteEmbedding(String embeddingId) async {
+    for (final charList in _embeddings.values) {
+      charList.removeWhere((e) => e['id'] == embeddingId);
+    }
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> getAllMemories(String characterId) async {
+    final charList = _embeddings[characterId] ?? [];
+    return charList.map((e) {
+      return {
+        ...e,
+        'similarity': 0.0,
+      };
+    }).toList();
   }
 
   @override

@@ -28,6 +28,8 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
   late int _contextSize;
   late TextEditingController _contextSizeController;
   late TextEditingController _maxTokensController;
+  late int _ragTopK;
+  late double _ragMinScore;
   final int? _modelContextLength;
 
   _ParameterTuningSheetState() : _modelContextLength = null;
@@ -50,6 +52,8 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
     _contextSize = defaultContext;
     _maxTokensController = TextEditingController(text: _maxTokens.toString());
     _contextSizeController = TextEditingController(text: _contextSize.toString());
+    _ragTopK = widget.initialParams.ragTopK;
+    _ragMinScore = widget.initialParams.ragMinScore;
   }
 
   @override
@@ -68,6 +72,8 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
       _repeatPenalty = 1.1;
       _maxTokens = 4096;
       _contextSize = 4096;
+      _ragTopK = 3;
+      _ragMinScore = 0.0;
       _maxTokensController.text = '4096';
       _contextSizeController.text = '4096';
     });
@@ -96,6 +102,8 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
       repeatPenalty: _repeatPenalty,
       maxTokens: parsedMaxTokens,
       contextSize: parsedContext,
+      ragTopK: _ragTopK,
+      ragMinScore: _ragMinScore,
     );
     widget.onSave(updated);
     Navigator.of(context).pop();
@@ -229,6 +237,30 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
                 max: 100,
                 displayValue: _topK.toString(),
                 onChanged: (v) => setState(() => _topK = v.round()),
+              ),
+
+              const Divider(height: 1),
+
+              // RAG Top-K Slider
+              _buildSlider(
+                title: 'RAG Memory Count',
+                subtitle: 'Number of memories to retrieve for roleplay context. Higher values provide more context but may dilute relevance.',
+                value: _ragTopK.toDouble(),
+                min: 1,
+                max: 10,
+                displayValue: _ragTopK.toString(),
+                onChanged: (v) => setState(() => _ragTopK = v.round()),
+              ),
+
+              // RAG Min Score Slider
+              _buildSlider(
+                title: 'RAG Minimum Relevance',
+                subtitle: 'Minimum similarity threshold for memories (0.0 = accept all, 1.0 = only exact matches). Lower values include more memories.',
+                value: _ragMinScore,
+                min: 0.0,
+                max: 1.0,
+                displayValue: _ragMinScore.toStringAsFixed(2),
+                onChanged: (v) => setState(() => _ragMinScore = v),
               ),
 
               const SizedBox(height: 16),

@@ -48,13 +48,22 @@ class ServerRepository {
         final profile = ServerProfile(
           name: name,
           baseUrl: baseUrl,
-          apiKey: apiKey,
+          apiKey: null,
           protocol: protocol,
         );
         profiles.add(profile);
         await saveProfiles(profiles);
+        if (apiKey != null && apiKey.isNotEmpty) {
+          await _localDb.saveProfileApiKey(profile.id, apiKey);
+        }
         await setActiveProfileId(profile.id);
-        result = profile;
+        result = ServerProfile(
+          id: profile.id,
+          name: profile.name,
+          baseUrl: profile.baseUrl,
+          apiKey: apiKey,
+          protocol: profile.protocol,
+        );
       });
     } catch (_) {}
     return result ?? ServerProfile(name: name, baseUrl: baseUrl, protocol: protocol);
@@ -67,9 +76,23 @@ class ServerRepository {
         final profiles = await loadProfiles();
         final index = profiles.indexWhere((p) => p.id == profile.id);
         if (index != -1) {
-          profiles[index] = profile.copyWith();
+          final updatedProfile = profiles[index].copyWith(
+            name: profile.name,
+            baseUrl: profile.baseUrl,
+            protocol: profile.protocol,
+          );
+          profiles[index] = updatedProfile;
           await saveProfiles(profiles);
-          result = profiles[index];
+          if (profile.apiKey != null && profile.apiKey!.isNotEmpty) {
+            await _localDb.saveProfileApiKey(profile.id, profile.apiKey);
+          }
+          result = ServerProfile(
+            id: profiles[index].id,
+            name: profiles[index].name,
+            baseUrl: profiles[index].baseUrl,
+            apiKey: profile.apiKey,
+            protocol: profiles[index].protocol,
+          );
         } else {
           result = profile;
         }
@@ -83,6 +106,7 @@ class ServerRepository {
       final profiles = await loadProfiles();
       profiles.removeWhere((p) => p.id == profileId);
       await saveProfiles(profiles);
+      await _localDb.saveProfileApiKey(profileId, null);
       final activeId = await getActiveProfileId();
       if (activeId == profileId) {
         if (profiles.isNotEmpty) {
@@ -114,14 +138,16 @@ class ServerRepository {
   Future<ServerConfig> loadActiveConfig() async {
     ServerConfig globalConfig = await _localDb.loadActiveServerConfig();
     final profile = await getActiveProfile();
-    if (profile != null) {
-      globalConfig = globalConfig.copyWith(
-        name: profile.name,
-        baseUrl: profile.baseUrl,
-        apiKey: profile.apiKey,
-        protocol: profile.protocol,
-      );
+    String? apiKey = profile?.apiKey;
+    if (apiKey == null || apiKey.isEmpty) {
+      apiKey = await _localDb.getProfileApiKey(profile?.id ?? '');
     }
+    globalConfig = globalConfig.copyWith(
+      name: profile?.name ?? globalConfig.name,
+      baseUrl: profile?.baseUrl ?? globalConfig.baseUrl,
+      apiKey: apiKey,
+      protocol: profile?.protocol ?? globalConfig.protocol,
+    );
     return globalConfig;
   }
 
@@ -134,10 +160,12 @@ class ServerRepository {
         profiles[index] = profiles[index].copyWith(
           name: config.name,
           baseUrl: config.baseUrl,
-          apiKey: config.apiKey,
           protocol: config.protocol,
         );
         await saveProfiles(profiles);
+        if (config.apiKey != null && config.apiKey!.isNotEmpty) {
+          await _localDb.saveProfileApiKey(activeId, config.apiKey);
+        }
         return;
       }
     }

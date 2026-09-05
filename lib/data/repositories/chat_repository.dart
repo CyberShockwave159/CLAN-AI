@@ -48,12 +48,14 @@ class ChatRepository {
     String? systemPrompt,
     String? modelId,
     GenerationParams? customParams,
+    String? characterId,
   }) async {
     final thread = ChatThread(
       title: title,
       systemPrompt: systemPrompt,
       modelId: modelId,
       customParams: customParams,
+      characterId: characterId,
     );
     await _localDb.insertThread(thread);
     return thread;

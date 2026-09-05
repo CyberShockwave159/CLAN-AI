@@ -8,12 +8,12 @@ import 'package:clan_ai/domain/models/generation_params.dart';
 
 class FakeChatRepository extends ChatRepository {
   final List<ChatThread> _threads = [];
+  List<ChatThread> get allThreads => _threads;
   final Map<String, List<ChatMessage>> _threadMessages = {};
   final Map<String, List<StreamChunk>> _streamFragments = {};
   ChatMessage? _lastSavedMessage;
   ChatMessage? _lastUpdatedMessage;
   bool _shouldThrowStreamError = false;
-  bool _shouldCancel = false;
 
   ChatMessage? get lastSavedMessage => _lastSavedMessage;
   ChatMessage? get lastUpdatedMessage => _lastUpdatedMessage;
@@ -24,10 +24,6 @@ class FakeChatRepository extends ChatRepository {
 
   void shouldThrowStreamError(bool value) {
     _shouldThrowStreamError = value;
-  }
-
-  void shouldCancel(bool value) {
-    _shouldCancel = value;
   }
 
   @override
@@ -48,12 +44,14 @@ class FakeChatRepository extends ChatRepository {
     String? systemPrompt,
     String? modelId,
     GenerationParams? customParams,
+    String? characterId,
   }) async {
     final thread = ChatThread(
       title: title,
       systemPrompt: systemPrompt,
       modelId: modelId,
       customParams: customParams,
+      characterId: characterId,
     );
     _threads.insert(0, thread);
     _threadMessages[thread.id] = [];

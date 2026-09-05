@@ -4,6 +4,21 @@
 
 ### ✨ New Features
 
+**Reasoning/Thinking Block Support**
+- Settings toggle "Show Reasoning" in Safety & Convenience section to request reasoning/thinking content from models
+- API payload includes `"reasoning": true` and `"include_reasoning": true` for OpenAI protocol
+- SSE parser extracts reasoning from multiple field names: `delta.reasoning`, `delta.reasoning_content`, `delta.thought`, `reasoning`, `reasoning_content`, `thought`
+- Inline thinking tag processing handles ````xml`, `<thought>`, `<reasoning>` tags in both OpenAI and native formats
+- `MessageBubble` renders collapsible "Thinking" block with expand/collapse animation (psychology icon + `AnimatedContainer`)
+- `reasoningContent` field stored in `ChatMessage` model and SQLite `reasoning_content` column (schema v7)
+- Works with OpenAI o1/o3, DeepSeek R1, Qwen, and other reasoning-capable models; requires llama.cpp v1.7.7+ for native reasoning support
+- `_pendingReasoningBuffer` in `StreamMutationMixin` accumulates reasoning tokens alongside content tokens
+
+**Secure API Key Storage**
+- `flutter_secure_storage` integration for storing API keys in iOS Keychain / Android KeyStore / Linux Secret Service
+- `lib/data/datasources/secure_storage_service.dart` — encapsulates `FlutterSecureStorage` with `saveApiKey`, `getApiKey`, `deleteApiKey` methods
+- API keys removed from plaintext SharedPreferences; `ServerRepository` uses secure storage for profile keys via `saveProfileApiKey` / `getProfileApiKey`
+
 **Mobile File Save (Platform Channels)**
 - Conversations export opens native save dialogs on mobile (Android SAF, iOS UIDocumentPicker) so users choose the destination folder
 - `lib/core/utils/file_saver.dart` — Dart-side platform channel wrapper; falls back to app documents directory on desktop
@@ -13,7 +28,7 @@
 **AI Roleplay Mode**
 - Toggle between assistant and roleplay modes in Settings
 - Roleplay mode mirrors assistant mode UI/UX — same layout, same drawer, same chat bubbles
-- Character creation wizard (3 steps: name/personality/first message, setting/world, user persona)
+- Character creation wizard (4 steps: name/personality/first message, setting/world, user persona + persona template, advanced prompt settings)
 - Optional character avatar upload (defaults to initials in colored circle)
 - Per-character isolated chat sessions with no bleed between characters
 - Auto-resumes last active roleplay session when switching back from assistant mode
@@ -65,13 +80,15 @@
 - `lib/data/models/character_profile.dart` — Character model with optional avatar
 - `lib/data/models/system_prompt_template.dart` — Template model for saved system prompts
 - `lib/data/models/server_profile.dart` — Profile model storing baseUrl, apiKey, protocol
-- `lib/data/repositories/character_repository.dart` — CRUD for characters (SharedPreferences)
+- `lib/data/repositories/character_repository.dart` — CRUD for characters (SQLite `characters` table)
+- `lib/data/repositories/persona_template_repository.dart` — CRUD for persona templates (SQLite `persona_templates` table)
 - `lib/data/repositories/system_prompt_templates_repository.dart` — CRUD for templates (SharedPreferences)
 - `lib/core/utils/hash_embedding.dart` — Pure Dart 256-dim feature hashing via char trigrams
 - `lib/core/utils/file_saver.dart` — Platform channel file saver (SAF on Android, UIDocumentPicker on iOS)
 - `lib/data/datasources/vector_store.dart` — SQLite vector store with cosine similarity
 - `lib/data/datasources/embedding_service.dart` — Embedding service layer (hash-based)
 - `lib/core/utils/roleplay_prompt_formatter.dart` — System prompt with RAG memories
+- `lib/data/datasources/secure_storage_service.dart` — Secure API key storage via `flutter_secure_storage`
 - `lib/core/utils/roleplay_context_builder.dart` — RAG pipeline orchestration
 - `lib/ui/features/roleplay/views/roleplay_screen.dart` — Roleplay chat screen
 - `lib/ui/features/roleplay/views/roleplay_drawer.dart` — Character list sidebar
@@ -82,8 +99,8 @@
 - `pubspec.yaml` — Added `image_picker` dependency
 - `lib/main.dart` — Added `_initSqliteFfi()` (called once), 3 root providers, mode-based home route
 - `lib/data/models/chat_thread.dart` — Added `characterId` field
-- `lib/data/models/server_config.dart` — Added `appMode` field
-- `lib/data/datasources/local_storage.dart` — Added appMode, characters, vector store persistence; schema v3→v4
+- `lib/data/models/server_config.dart` — Added `appMode`, `reasoning` fields; secure API key integration
+- `lib/data/datasources/local_storage.dart` — Added appMode, characters, persona templates, vector store persistence; schema v3→v4→v5→v6→v7→v8
 - `lib/ui/features/settings/view_models/settings_view_model.dart` — Added appMode state, save/load last roleplay thread ID
 - `lib/ui/features/settings/views/settings_screen.dart` — Added "Roleplay Mode" toggle; hidden system prompt section in roleplay; rewrote with Server Profiles and saved templates chips
 - `lib/ui/features/chat/view_models/chat_view_model.dart` — Filters out roleplay threads; uses FileSaver for export
@@ -122,6 +139,7 @@
 - `_showEditDialog` returns `Future<CharacterProfile>`; passes `CharacterRepository` as parameter to avoid context issues
 
 ### 🔧 Dependencies
+- Added `flutter_secure_storage: ^9.2.2` for secure API key storage (iOS Keychain / Android KeyStore / Linux Secret Service)
 - Added `file_picker: ^8.1.2` for JSON file selection
 - Uses existing `http` package for avatar downloads
 

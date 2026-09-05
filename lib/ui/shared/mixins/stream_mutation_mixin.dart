@@ -1,10 +1,8 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:uuid/uuid.dart';
 import 'package:clan_ai/core/constants/app_constants.dart';
 import 'package:clan_ai/core/errors/app_exception.dart';
 import 'package:clan_ai/core/network/sse_client.dart';
-import 'package:clan_ai/data/datasources/local_storage.dart';
 import 'package:clan_ai/data/models/chat_message.dart';
 import 'package:clan_ai/data/models/chat_thread.dart';
 import 'package:clan_ai/data/models/server_config.dart';
@@ -58,9 +56,9 @@ mixin StreamMutationMixin on ChangeNotifier {
     final historySlice = _messagesSublist(upToIndex, assistantMessageId);
     final effectiveSystemPrompt = activeThread?.systemPrompt ?? serverConfig.systemPrompt;
 
-    uiThrottleTimer = Timer.periodic(uiThrottleInterval, (_) {
-      final currentMsgIndex = messages.indexWhere((m) => m.id == assistantMessageId);
-      if (pendingStreamBuffer.isNotEmpty &&
+        uiThrottleTimer = Timer.periodic(uiThrottleInterval, (_) {
+            final currentMsgIndex = messages.indexWhere((m) => m.id == assistantMessageId);
+            if (pendingStreamBuffer.isNotEmpty &&
           currentMsgIndex >= 0 &&
           currentMsgIndex < messages.length) {
         final currentMsg = messages[currentMsgIndex];
@@ -115,13 +113,13 @@ mixin StreamMutationMixin on ChangeNotifier {
         errorMessage = '$errorMessage\n\nTip: ${e.recoverySuggestion}';
       }
     } finally {
-      uiThrottleTimer?.cancel();
+            uiThrottleTimer?.cancel();
       uiThrottleTimer = null;
 
       final finalMsgIndex = messages.indexWhere((m) => m.id == assistantMessageId);
       if (finalMsgIndex >= 0 && finalMsgIndex < messages.length) {
         final currentMsg = messages[finalMsgIndex];
-        final finalContent = currentMsg.content + pendingStreamBuffer;
+                final finalContent = currentMsg.content + pendingStreamBuffer;
         pendingStreamBuffer = '';
 
         final completedMsg = currentMsg.copyWith(
@@ -147,7 +145,7 @@ mixin StreamMutationMixin on ChangeNotifier {
       isGenerating = false;
       currentCancelToken = null;
       notifyListeners();
-    }
+          }
   }
 
   List<ChatMessage> _messagesSublist(int? upToIndex, String assistantMessageId) {

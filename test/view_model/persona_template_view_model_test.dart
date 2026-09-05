@@ -2,18 +2,18 @@ import 'package:clan_ai/data/repositories/persona_template_repository.dart';
 import 'package:clan_ai/ui/features/roleplay/view_models/persona_template_view_model.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../helpers/fake_persona_template_repository.dart';
-import '../helpers/test_model_factories.dart';
+
 
 void main() {
   late FakePersonaTemplateRepository fakeRepo;
   late PersonaTemplateViewModel vm;
 
   setUp(() {
-    fakeRepo = FakePersonaTemplateRepository([]);
+    fakeRepo = FakePersonaTemplateRepository();
     vm = PersonaTemplateViewModel(repository: fakeRepo);
   });
 
-  group('PersonaTemplateViewModel loadTemplates', () async {
+  group('PersonaTemplateViewModel loadTemplates', () {
     test('returns loaded templates', () async {
       final templates = await fakeRepo.loadTemplates();
       expect(templates, isEmpty);
@@ -28,7 +28,7 @@ void main() {
     });
   });
 
-  group('PersonaTemplateViewModel addTemplate', () async {
+  group('PersonaTemplateViewModel addTemplate', () {
     test('adds template', () async {
       await vm.addTemplate('Test Template', 'Test description');
 
@@ -51,7 +51,7 @@ void main() {
     });
   });
 
-  group('PersonaTemplateViewModel updateTemplate', () async {
+  group('PersonaTemplateViewModel updateTemplate', () {
     test('updates template', () async {
       await vm.addTemplate('Original', 'Old description');
       final template = vm.templates.first;
@@ -70,7 +70,7 @@ void main() {
       await Future.delayed(const Duration(milliseconds: 10));
       await vm.updateTemplate(template.id, 'Test', 'Updated');
 
-      expect(vm.templates.first.updatedAt, isAfter(originalUpdated));
+      expect(vm.templates.first.updatedAt.isAfter(originalUpdated), isTrue);
     });
 
     test('does not update non-existent template', () async {
@@ -82,7 +82,7 @@ void main() {
     });
   });
 
-  group('PersonaTemplateViewModel deleteTemplate', () async {
+  group('PersonaTemplateViewModel deleteTemplate', () {
     test('deletes template', () async {
       await vm.addTemplate('Delete Me', 'Description');
 
@@ -111,7 +111,7 @@ void main() {
     });
   });
 
-  group('PersonaTemplateViewModel templates getter', () async {
+  group('PersonaTemplateViewModel templates getter', () {
     test('returns current templates list', () async {
       await vm.addTemplate('Template 1', 'Desc 1');
       await vm.addTemplate('Template 2', 'Desc 2');
@@ -124,7 +124,7 @@ void main() {
     });
   });
 
-  group('PersonaTemplateViewModel dispose', () async {
+  group('PersonaTemplateViewModel dispose', () {
     test('disposes without error', () async {
       await vm.addTemplate('Test', 'Desc');
       vm.dispose();

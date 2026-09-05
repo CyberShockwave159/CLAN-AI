@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import 'package:clan_ai/core/network/sse_client.dart';
@@ -214,6 +215,8 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
       characterSystemPrompt: character.systemPrompt,
       postHistoryInstructions: character.postHistoryInstructions,
       userInput: '',
+      ragTopK: customParams?.ragTopK ?? 3,
+      ragMinScore: customParams?.ragMinScore ?? 0.0,
     );
 
     final newThread = await _chatRepository.createThread(
@@ -298,6 +301,8 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
       characterSystemPrompt: character.systemPrompt,
       postHistoryInstructions: character.postHistoryInstructions,
       userInput: prompt,
+      ragTopK: customParams?.ragTopK ?? 3,
+      ragMinScore: customParams?.ragMinScore ?? 0.0,
     );
 
     // 3. Update thread system prompt with retrieved memories
@@ -310,6 +315,9 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
     // 4. Prepare Assistant Message Placeholder
     final assistantMessageId = const Uuid().v4();
     final ragMemoryCount = context.memories.isNotEmpty ? context.memories.length : null;
+    final ragMemoryContents = context.memoryInfo.isNotEmpty
+        ? jsonEncode(context.memoryInfo.map((m) => m['content'] as String).toList())
+        : null;
     final assistantPlaceholder = ChatMessage(
       id: assistantMessageId,
       threadId: threadId,
@@ -318,6 +326,7 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
       content: '',
       status: MessageStatus.streaming,
       ragMemoryCount: ragMemoryCount,
+      ragMemoryContents: ragMemoryContents,
     );
 
     _messages.add(assistantPlaceholder);
@@ -436,6 +445,8 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
       characterSystemPrompt: _activeCharacter!.systemPrompt,
       postHistoryInstructions: _activeCharacter!.postHistoryInstructions,
       userInput: newContent,
+      ragTopK: customParams?.ragTopK ?? 3,
+      ragMinScore: customParams?.ragMinScore ?? 0.0,
     );
 
     final updatedThread = _activeThread!.copyWith(
@@ -447,6 +458,9 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
     final assistantMessageId = const Uuid().v4();
     final hasOldAssistant = oldAssistantId != null;
     final ragMemoryCount = context.memories.isNotEmpty ? context.memories.length : null;
+    final ragMemoryContents = context.memoryInfo.isNotEmpty
+        ? jsonEncode(context.memoryInfo.map((m) => m['content'] as String).toList())
+        : null;
 
     final assistantPlaceholder = ChatMessage(
       id: assistantMessageId,
@@ -459,6 +473,7 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
       totalVariants: hasOldAssistant ? 2 : 1,
       siblingIds: hasOldAssistant ? [oldAssistantId] : <String>[],
       ragMemoryCount: ragMemoryCount,
+      ragMemoryContents: ragMemoryContents,
     );
     _messages.add(assistantPlaceholder);
     notifyListeners();
@@ -681,8 +696,13 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
         characterSystemPrompt: _activeCharacter!.systemPrompt,
         postHistoryInstructions: _activeCharacter!.postHistoryInstructions,
         userInput: lastUserMsg.content,
+        ragTopK: customParams?.ragTopK ?? 3,
+        ragMinScore: customParams?.ragMinScore ?? 0.0,
       );
       final ragMemoryCount = context.memories.isNotEmpty ? context.memories.length : null;
+      final ragMemoryContents = context.memoryInfo.isNotEmpty
+          ? jsonEncode(context.memoryInfo.map((m) => m['content'] as String).toList())
+          : null;
 
       final newAssistantId = const Uuid().v4();
       final newAssistantMsg = ChatMessage(
@@ -693,6 +713,7 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
         content: '',
         status: MessageStatus.streaming,
         ragMemoryCount: ragMemoryCount,
+        ragMemoryContents: ragMemoryContents,
       );
 
       _messages.add(newAssistantMsg);
@@ -785,6 +806,50 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
     } catch (_) {
       // Embedding failure is non-critical — RAG is optional
       // Only show notification on first message (when user might notice)
+    }
+  }
+
+  Future<String?> exportCharacterWithRAG(CharacterProfile character) async {
+
+    try {
+      final memories = await VectorStore().getAllMemories(character.id);
+      final exportData = {
+        'character': {
+          'name': character.name,
+          'personality': character.personality,
+          'first_message': character.firstMessage,
+          'setting': character.setting,
+          'user_persona': character.userPersona,
+          'system_prompt': character.systemPrompt,
+          'post_history_instructions': character.postHistoryInstructions,
+          'alternate_greetings': character.alternateGreetings,
+          'created_at': character.createdAt.toIso8601String(),
+          'updated_at': character.updatedAt.toIso8601String(),
+        },
+        'rag_memories': memories.map((m) => {
+          'id': m['id'],
+          'message_id': m['message_id'],
+          'content': m['content'],
+          'created_at': m['created_at'],
+        }).toList(),
+        'export_info': {
+          'version': '1.0',
+          'exported_at': DateTime.now().toIso8601String(),
+          'app': 'CLAN AI',
+        },
+      };
+
+      final jsonContent = jsonEncode(exportData);
+      final sanitizedName = character.name.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+      final filename = 'clan_ai_character_${sanitizedName}_with_rag.json';
+
+      return await FileSaver.saveFile(
+        filename: filename,
+        content: jsonContent,
+        mimeType: 'application/json',
+      );
+    } catch (_) {
+      return null;
     }
   }
 

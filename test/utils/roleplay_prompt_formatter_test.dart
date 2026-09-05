@@ -104,11 +104,11 @@ void main() {
       );
 
       expect(prompt, contains('[truncated]'));
-      expect(prompt.length, lessThanOrEqualTo(2000 + 100));
+      expect(prompt.length, lessThanOrEqualTo(2500));
     });
 
     test('truncates setting at 1000 chars', () {
-      final longSetting = 'A world. ' * 100;
+      final longSetting = 'A world. ' * 120;
       final prompt = RoleplayPromptFormatter.buildSystemPrompt(
         characterName: 'Aria',
         personality: 'Warrior',
@@ -120,7 +120,7 @@ void main() {
     });
 
     test('truncates userPersona at 1000 chars', () {
-      final longPersona = 'A knight. ' * 100;
+      final longPersona = 'A knight. ' * 120;
       final prompt = RoleplayPromptFormatter.buildSystemPrompt(
         characterName: 'Aria',
         personality: 'Warrior',

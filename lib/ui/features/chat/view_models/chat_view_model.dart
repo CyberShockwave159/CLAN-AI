@@ -71,10 +71,41 @@ class ChatViewModel extends ChangeNotifier with StreamMutationMixin {
     loadThreads();
   }
 
+  List<ChatThread> _filteredThreads = [];
+
   List<ChatThread> get filteredThreads {
     if (_searchQuery.trim().isEmpty) return _threads;
+    if (_filteredThreads.isNotEmpty) return _filteredThreads;
     final q = _searchQuery.toLowerCase();
     return _threads.where((t) => t.title.toLowerCase().contains(q)).toList();
+  }
+
+  Future<List<ChatThread>> searchThreads() async {
+    if (_searchQuery.trim().isEmpty) return _threads;
+    final q = _searchQuery.toLowerCase();
+    _isLoadingThreads = true;
+    notifyListeners();
+
+    try {
+      final matches = <ChatThread>[];
+      for (final thread in _threads) {
+        if (thread.title.toLowerCase().contains(q)) {
+          matches.add(thread);
+          continue;
+        }
+        final messages = await _chatRepository.getMessagesForThread(thread.id);
+        for (final msg in messages) {
+          if (msg.content.toLowerCase().contains(q)) {
+            matches.add(thread);
+            break;
+          }
+        }
+      }
+      return matches;
+    } finally {
+      _isLoadingThreads = false;
+      notifyListeners();
+    }
   }
 
   Future<void> loadThreads() async {
@@ -159,6 +190,11 @@ class ChatViewModel extends ChangeNotifier with StreamMutationMixin {
 
   void setSearchQuery(String query) {
     _searchQuery = query;
+    notifyListeners();
+  }
+
+  void setFilteredThreads(List<ChatThread> threads) {
+    _filteredThreads = threads;
     notifyListeners();
   }
 
@@ -461,7 +497,7 @@ class ChatViewModel extends ChangeNotifier with StreamMutationMixin {
     GenerationParams? customParams,
     int? modelContextLength,
   }) async {
-    if (_isGenerating || messageIndex < 0 || messageIndex >= _messages.length || _activeThread == null) return;
+        if (_isGenerating || messageIndex < 0 || messageIndex >= _messages.length || _activeThread == null) return;
 
     final branchPoint = _messages[messageIndex];
     final messagesToCopy = _messages.sublist(0, messageIndex + 1);
@@ -516,7 +552,8 @@ class ChatViewModel extends ChangeNotifier with StreamMutationMixin {
     await _chatRepository.updateThread(branchThreadWithLink);
 
     // Refresh threads list (getAssistantThreads filters out roleplay threads)
-    _threads = await _chatRepository.getAssistantThreads();
+    final refreshed = await _chatRepository.getAssistantThreads();
+        _threads = refreshed;
 
     // Select the new thread
     await selectThread(branchThreadWithLink);

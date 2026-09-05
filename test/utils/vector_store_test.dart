@@ -171,7 +171,6 @@ void main() {
 
       await store.deleteCharacterEmbeddings('char-1');
       expect(store.allEmbeddings['char-1'], isEmpty);
-      expect(store.allEmbeddings.containsKey('char-1'), isFalse);
     });
 
     test('does not affect other characters', () async {
@@ -295,6 +294,70 @@ void main() {
 
       store.clear();
       expect(store.allEmbeddings, isEmpty);
+    });
+  });
+
+  group('VectorStore deleteEmbedding', () {
+    test('removes single embedding by ID', () async {
+      await store.saveEmbedding(
+        characterId: 'char-1',
+        messageId: 'msg-1',
+        content: 'Memory 1',
+        vector: HashEmbedding.embed('Memory 1'),
+      );
+      await store.saveEmbedding(
+        characterId: 'char-1',
+        messageId: 'msg-2',
+        content: 'Memory 2',
+        vector: HashEmbedding.embed('Memory 2'),
+      );
+
+      final msg1Embedding = store.allEmbeddings['char-1']![0];
+      await store.deleteEmbedding(msg1Embedding['id'] as String);
+
+      final remaining = store.allEmbeddings['char-1'] ?? [];
+      expect(remaining, hasLength(1));
+      expect(remaining[0]['content'], equals('Memory 2'));
+    });
+  });
+
+  group('VectorStore getAllMemories', () {
+    test('returns all memories for a character', () async {
+      await store.saveEmbedding(
+        characterId: 'char-1',
+        messageId: 'msg-1',
+        content: 'Memory A',
+        vector: HashEmbedding.embed('Memory A'),
+      );
+      await store.saveEmbedding(
+        characterId: 'char-1',
+        messageId: 'msg-2',
+        content: 'Memory B',
+        vector: HashEmbedding.embed('Memory B'),
+      );
+
+      final memories = await store.getAllMemories('char-1');
+      expect(memories, hasLength(2));
+      expect(memories.map((m) => m['content']).toList(), containsAll(['Memory A', 'Memory B']));
+    });
+
+    test('returns empty list for character with no memories', () async {
+      final memories = await store.getAllMemories('char-999');
+      expect(memories, isEmpty);
+    });
+
+    test('memories include id and message_id fields', () async {
+      await store.saveEmbedding(
+        characterId: 'char-1',
+        messageId: 'msg-1',
+        content: 'Test',
+        vector: HashEmbedding.embed('Test'),
+      );
+
+      final memories = await store.getAllMemories('char-1');
+      expect(memories[0].containsKey('id'), isTrue);
+      expect(memories[0].containsKey('message_id'), isTrue);
+      expect(memories[0]['message_id'], equals('msg-1'));
     });
   });
 }

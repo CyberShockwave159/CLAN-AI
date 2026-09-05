@@ -1,6 +1,8 @@
+import 'dart:convert';
+
 import 'package:clan_ai/core/utils/conversation_export.dart';
 import 'package:clan_ai/data/models/chat_message.dart';
-import 'package:clan_ai/data/models/chat_thread.dart';
+import 'package:clan_ai/domain/models/generation_params.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../helpers/test_model_factories.dart';
 

@@ -54,7 +54,7 @@ class ParsedCharacterCard {
     final name = (data['name'] as String?)?.trim() ?? '';
     final description = (data['description'] as String?) ?? '';
     final personalityField = (data['personality'] as String?) ?? '';
-    final firstMes = (data['first_mes'] as String?) ?? '';
+    final firstMes = (data['first_mes'] as String?)?.trim() ?? '';
     final scenario = (data['scenario'] as String?)?.trim();
     final userPersona = (data['user_persona'] as String?)?.trim();
     final avatar = (data['avatar'] as String?)?.trim();

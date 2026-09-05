@@ -24,7 +24,7 @@ Frontier-class cross-platform llama.cpp client. A Flutter app that connects to a
 - **Alternate Greetings** — Characters can have multiple opening messages shown as selectable chips above the prompt input
 - **Character System Prompt Override** — Per-character system prompts with `{{original}}` prefix support to prepend to default prompt
 - **Post History Instructions** — Additional text appended after each AI response for style reminders or state tracking
-- **Client-Side RAG** — Pure Dart feature hashing embeddings (256-dim, char trigrams) with SQLite cosine similarity; zero ML dependencies
+- Client-Side RAG — Pure Dart feature hashing embeddings (256-dim, char trigrams) with SQLite cosine similarity; zero ML dependencies. Configurable Top-K (1-10) and minimum relevance threshold (0.0-1.0) in Generation Parameters sheet
 - **Conversation branching** — Regenerate and edit responses to create sibling variants
 - SQLite local persistence with full thread/message history
 - Automatic server health polling with fallback endpoints (`/health` → `/props` → `/v1/models`)
@@ -110,6 +110,9 @@ Characters can have multiple opening messages:
 - **Thread isolation**: `ChatThread.characterId` distinguishes assistant vs roleplay threads
 - **FileSaver**: Native mobile save dialogs via platform channels (Android SAF, iOS UIDocumentPicker); desktop falls back to app documents directory
 - **SillyTavern Import**: `lib/core/utils/silly_tavern_card_parser.dart` parses `chara_card_v2` JSON; extracts `system_prompt`, `post_history_instructions`, and `alternate_greetings` in addition to core fields. `lib/core/utils/st_avatar_downloader.dart` fetches avatars; auto-edit dialog for imported characters via `CharacterEditDialog` (proper StatefulWidget)
+- **Memory chip**: Assistant messages display a memory chip showing count of RAG memories used. Tapping reveals the actual memory content that was injected into the system prompt. `ragMemoryContents` field stores JSON-encoded memory strings on `ChatMessage`
+- **Memory management**: `lib/ui/features/roleplay/widgets/character_memories_dialog.dart` — Per-character memory viewer and pruner. List all vector embeddings for a character; delete individual memories or clear all. Accessible via character popup menu → "Manage Memories"
+- **Configurable RAG**: `GenerationParams` includes `ragTopK` (1-10) and `ragMinScore` (0.0-1.0). Adjustable in Settings → Generation Parameters. `RoleplayContextBuilder` filters memories by minimum similarity score
 - **Character system prompt override**: If a character has a `systemPrompt`, it replaces the default prompt. Use `{{original}}` prefix to prepend to the standard prompt. `postHistoryInstructions` are appended after every AI response.
 - **Persona Templates**: Global reusable user personas stored in SharedPreferences. Applied via dropdown selector in character creation, editing, and SillyTavern import dialogs. `CharacterEditDialog` uses `context.watch` for reactive template loading.
 - **`{{char}}` / `{{user}}` replacement**: Parser automatically substitutes these tokens with the character name and user persona in all fields, including system prompt and post history instructions.
@@ -118,13 +121,13 @@ Characters can have multiple opening messages:
 
 ```bash
 flutter analyze        # lint + typecheck
-flutter test           # runs all 23 test files (~150+ tests across all layers)
+flutter test           # runs all 26 test files (~150+ tests across all layers)
 flutter run            # launch app
 ```
 
 ### Testing
 
-23 test files across 8 layers (~150+ tests). All tests use fake repositories (no real SQLite or network). ViewModels expose private state via setters for test injection.
+26 test files across 8 layers (~150+ tests). All tests use fake repositories (no real SQLite or network). ViewModels expose private state via setters for test injection.
 
 **Coverage by layer:**
 - **Domain** — `GenerationParams` serialization (OpenAI & native payloads, TextSanitizer segment parsing, reasoning flags), model roundtrip serialization (ChatThread, ChatMessage, CharacterProfile, PersonaTemplate, ServerConfig)
@@ -141,13 +144,15 @@ flutter run            # launch app
 - **Conversation branching**: Regenerate and edit operations truncate at the parent message and create new sibling branches. Navigation between variants uses `variantIndex` + `siblingIds`.
 - **Android networking**: `127.0.0.1` refers to the Android device's loopback, not your host machine. Use `10.0.2.2` for the Android emulator or your host's LAN IP for physical devices.
 - **SQLite desktop FFI**: On Linux/Windows/macOS, `sqflite_common_ffi` is initialized **once** in `main.dart` (`_initSqliteFfi()`). Do not call `sqfliteFfiInit()` again — it will trigger a warning.
-- **Database migration**: DB schema is version 7 (added `rag_memory_count` and `reasoning_content` columns to messages table). If you encounter schema errors, clear the app's local storage or delete `clan_ai.db`.
+- **Database migration**: DB schema is version 8 (added `characters` and `persona_templates` tables with SharedPreferences migration). If you encounter schema errors, clear the app's local storage or delete `clan_ai.db`.
 - **Reasoning block streaming**: The `ReasoningBlock` widget displays thinking/reasoning content when the "View Thinking" toggle is enabled in Settings. Models can provide reasoning via dedicated fields (`delta.reasoning`, `delta.reasoning_content`, `delta.thought`) or inline tags (```xml, `<thought>`, `<reasoning>`). The `filterReasoning` stream pipeline handles both formats. Older llama.cpp versions may not return reasoning content.
 - **Roleplay thread separation**: `ChatViewModel.loadThreads()` filters out threads with `characterId != null` (roleplay threads). `RoleplayViewModel.loadLastChat()` loads threads with `characterId != null` (or falls back for legacy threads).
 - **RAG isolation**: Each character's embeddings are stored with `character_id` in the vector store. Queries are strictly `WHERE character_id = ?` — no cross-character memory leakage.
+- **RAG params**: `ragTopK` (default 3) controls how many memories are retrieved. `ragMinScore` (default 0.0) filters memories below this cosine similarity threshold. Both configurable in Settings → Generation Parameters. `RoleplayContextBuilder.build()` accepts these as parameters.
+- **Memory chip**: Assistant messages show a chip with `ragMemoryCount` when RAG memories were injected. Tapping displays the actual memory content from `ragMemoryContents` field (JSON-encoded list). `vector_store.getAllMemories()` lists all embeddings for a character.
 - **Export**: Chat export is only available via context menus in the chat drawer and character drawer. On mobile, tapping export opens a native save dialog (Android SAF / iOS UIDocumentPicker) so users choose the destination. On desktop, files write to the app documents directory.
 - **Roleplay system prompt**: In roleplay mode the system prompt is fully managed by the RAG context builder, which respects per-character `systemPrompt` overrides and appends `postHistoryInstructions`. The System Prompt Customization section in Settings is hidden when roleplay mode is active.
-- **Character fields**: `CharacterProfile` now includes `systemPrompt` (per-character system prompt override), `postHistoryInstructions` (text appended after AI responses), and `alternateGreetings` (list of alternative opening messages). All stored in SharedPreferences as JSON.
+- **Character fields**: `CharacterProfile` now includes `systemPrompt` (per-character system prompt override), `postHistoryInstructions` (text appended after AI responses), and `alternateGreetings` (list of alternative opening messages). Stored in SQLite `characters` table (migrated from SharedPreferences in v8).
 - **SillyTavern parser**: `ParsedCharacterCard` now extracts `system_prompt`, `post_history_instructions`, and `alternate_greetings` from SillyTavern `.json` files. The `system_prompt` may start with `{{original}}` to prepend to the default prompt.
 
 ## License

@@ -12,6 +12,7 @@ import 'package:clan_ai/data/models/character_profile.dart';
 import 'package:clan_ai/data/repositories/character_repository.dart';
 import 'package:clan_ai/ui/features/roleplay/widgets/character_creation_wizard.dart';
 import 'package:clan_ai/ui/features/roleplay/widgets/character_edit_dialog.dart';
+import 'package:clan_ai/ui/features/roleplay/widgets/character_memories_dialog.dart';
 import 'package:clan_ai/ui/features/roleplay/view_models/roleplay_view_model.dart';
 import 'package:clan_ai/ui/features/settings/view_models/settings_view_model.dart';
 import 'package:clan_ai/ui/features/settings/views/settings_screen.dart';
@@ -426,10 +427,37 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
                                           if (mounted) {
                                             setState(() {});
                                           }
+                                        } else if (action == 'manage_memories') {
+                                          Navigator.of(context).pop();
+                                          if (context.mounted) {
+                                            showDialog(
+                                              context: context,
+                                              builder: (ctx) => CharacterMemoriesDialog(
+                                                characterId: character.id,
+                                                characterName: character.name,
+                                              ),
+                                            );
+                                          }
+                                        } else if (action == 'export_character') {
+                                          Navigator.of(context).pop();
+                                          final roleplayVM = context.read<RoleplayViewModel>();
+                                          final path = await roleplayVM.exportCharacterWithRAG(character);
+                                          if (path != null && context.mounted) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(
+                                                content: Text('Exported to $path'),
+                                                duration: const Duration(seconds: 3),
+                                                behavior: SnackBarBehavior.floating,
+                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                              ),
+                                            );
+                                          }
                                         }
                                       },
                                       itemBuilder: (ctx) => [
                                         const PopupMenuItem(value: 'toggle_favorite', child: Text('Toggle Favorite')),
+                                        const PopupMenuItem(value: 'manage_memories', child: Text('Manage Memories')),
+                                        const PopupMenuItem(value: 'export_character', child: Text('Export Character + Memories')),
                                         const PopupMenuItem(value: 'edit', child: Text('Edit')),
                                         const PopupMenuItem(
                                           value: 'delete',

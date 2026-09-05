@@ -1,9 +1,7 @@
 import 'dart:convert';
+
 import 'package:clan_ai/core/utils/conversation_export.dart';
 import 'package:clan_ai/data/models/chat_message.dart';
-import 'package:clan_ai/data/models/chat_thread.dart';
-import 'package:clan_ai/data/models/server_config.dart';
-import 'package:clan_ai/data/repositories/chat_repository.dart';
 import 'package:clan_ai/domain/models/generation_params.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../helpers/fake_chat_repository.dart';
@@ -113,7 +111,7 @@ void main() {
 
     await Future.delayed(const Duration(milliseconds: 10));
 
-    final updated = original.copyWith(title: 'Updated');
+    final updated = original.copyWith(title: 'Updated', updatedAt: DateTime.now());
     await repo.updateThread(updated);
 
     final reloaded = await repo.getThreads();

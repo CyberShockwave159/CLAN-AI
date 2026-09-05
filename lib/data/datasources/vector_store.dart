@@ -175,6 +175,32 @@ class VectorStore {
     );
   }
 
+  /// Delete a single embedding by ID.
+  Future<void> deleteEmbedding(String embeddingId) async {
+    final db = await _getDb();
+    await db.delete('embeddings', where: 'id = ?', whereArgs: [embeddingId]);
+  }
+
+  /// Get all memories for a character with their content and similarity scores.
+  Future<List<Map<String, dynamic>>> getAllMemories(String characterId) async {
+    final db = await _getDb();
+    final results = await db.query(
+      'embeddings',
+      where: 'character_id = ?',
+      whereArgs: [characterId],
+      orderBy: 'created_at DESC',
+    );
+    return results.map((row) {
+      return {
+        'id': row['id'] as String,
+        'message_id': row['message_id'] as String,
+        'content': row['content'] as String,
+        'created_at': row['created_at'] as String,
+        'similarity': 0.0,
+      };
+    }).toList();
+  }
+
   /// Get total embedding count for a character.
   Future<int> getEmbeddingCount(String characterId) async {
     final db = await _getDb();

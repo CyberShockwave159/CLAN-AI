@@ -1,12 +1,6 @@
-import 'dart:async';
 import 'package:clan_ai/core/network/sse_client.dart';
 import 'package:clan_ai/core/utils/conversation_export.dart';
 import 'package:clan_ai/data/models/chat_message.dart';
-import 'package:clan_ai/data/models/chat_thread.dart';
-import 'package:clan_ai/data/models/server_config.dart';
-import 'package:clan_ai/data/models/server_profile.dart';
-import 'package:clan_ai/data/repositories/chat_repository.dart';
-import 'package:clan_ai/domain/models/generation_params.dart';
 import 'package:clan_ai/ui/features/chat/view_models/chat_view_model.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../helpers/fake_chat_repository.dart';
@@ -14,12 +8,16 @@ import '../helpers/test_model_factories.dart';
 
 /// Integration test: Full assistant chat flow without network.
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   late FakeChatRepository repo;
   late ChatViewModel vm;
 
   setUp(() {
     repo = FakeChatRepository();
     vm = ChatViewModel(chatRepository: repo);
+    // Clear auto-created thread from ChatViewModel constructor
+    vm.threads = [];
+    vm.activeThread = null;
   });
 
   tearDown(() {
@@ -158,8 +156,8 @@ void main() {
       id: 'assistant-1',
       parentId: 'user-1',
     );
-    vm.threads; [originalThread];
-    vm.activeThread; originalThread;
+    vm.threads = [originalThread];
+    vm.activeThread = originalThread;
     vm.messages = [userMsg, assistantMsg];
 
     fakeStreamSetup(repo, originalThread.id, 'Branch response');

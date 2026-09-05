@@ -12,6 +12,8 @@ class GenerationParams {
   final List<String> stopSequences;
   final String? grammar;
   final bool reasoning;
+  final int ragTopK;
+  final double ragMinScore;
 
   const GenerationParams({
     this.temperature = 0.7,
@@ -26,6 +28,8 @@ class GenerationParams {
     this.stopSequences = const [],
     this.grammar,
     this.reasoning = false,
+    this.ragTopK = 3,
+    this.ragMinScore = 0.0,
   });
 
   GenerationParams copyWith({
@@ -41,6 +45,8 @@ class GenerationParams {
     List<String>? stopSequences,
     String? grammar,
     bool? reasoning,
+    int? ragTopK,
+    double? ragMinScore,
   }) {
     return GenerationParams(
       temperature: temperature ?? this.temperature,
@@ -55,6 +61,8 @@ class GenerationParams {
       stopSequences: stopSequences ?? this.stopSequences,
       grammar: grammar ?? this.grammar,
       reasoning: reasoning ?? this.reasoning,
+      ragTopK: ragTopK ?? this.ragTopK,
+      ragMinScore: ragMinScore ?? this.ragMinScore,
     );
   }
 
@@ -136,6 +144,8 @@ class GenerationParams {
       'stop_sequences': stopSequences,
       'grammar': grammar,
       'reasoning': reasoning,
+      'rag_top_k': ragTopK,
+      'rag_min_score': ragMinScore,
     };
   }
 
@@ -152,7 +162,9 @@ class GenerationParams {
       contextSize: (map['context_size'] as num?)?.toInt() ?? 4096,
       stopSequences: (map['stop_sequences'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? const [],
       grammar: map['grammar'] as String?,
-      reasoning: (map['reasoning'] as num?)?.toInt() == 1,
+      reasoning: map['reasoning'] == true,
+      ragTopK: (map['rag_top_k'] as num?)?.toInt() ?? 3,
+      ragMinScore: (map['rag_min_score'] as num?)?.toDouble() ?? 0.0,
     );
   }
 }

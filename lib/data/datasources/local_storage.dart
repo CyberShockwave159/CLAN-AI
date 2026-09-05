@@ -1,11 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'package:clan_ai/core/utils/mutex.dart';
+import 'package:clan_ai/data/datasources/secure_storage_service.dart';
 import 'package:clan_ai/data/models/chat_message.dart';
 import 'package:clan_ai/data/models/chat_thread.dart';
 import 'package:clan_ai/data/models/character_profile.dart';
@@ -17,8 +18,7 @@ import 'package:clan_ai/data/models/app_mode.dart';
 
 class LocalDatabase {
   static final LocalDatabase instance = LocalDatabase._init();
-  static final _mutex = Mutex();
-  static Database? _database;
+  Database? _database;
   SharedPreferences? _prefs;
 
   LocalDatabase._init();
@@ -48,7 +48,7 @@ class LocalDatabase {
 
     return await openDatabase(
       path,
-      version: 7,
+      version: 8,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
     );
@@ -108,6 +108,38 @@ class LocalDatabase {
         await db.execute('ALTER TABLE messages ADD COLUMN reasoning_content TEXT NOT NULL DEFAULT ""');
       }
     }
+    if (oldVersion < 8) {
+      await db.execute('''
+        CREATE TABLE characters (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          personality TEXT NOT NULL,
+          first_message TEXT NOT NULL,
+          setting TEXT,
+          user_persona TEXT,
+          avatar_data BLOB,
+          is_favorite INTEGER NOT NULL DEFAULT 0,
+          system_prompt TEXT,
+          post_history_instructions TEXT,
+          alternate_greetings TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      ''');
+
+      await db.execute('''
+        CREATE TABLE persona_templates (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          persona_text TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      ''');
+
+      final prefs = await SharedPreferences.getInstance();
+      await _migratePreferencesToSqlite(db, prefs);
+    }
   }
 
   Future<void> _createDB(Database db, int version) async {
@@ -155,6 +187,89 @@ class LocalDatabase {
 
     // Index for fast thread message retrieval
     await db.execute('CREATE INDEX idx_messages_thread_id ON messages (thread_id)');
+
+    // Characters table for fresh installs
+    await db.execute('''
+      CREATE TABLE characters (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        personality TEXT NOT NULL,
+        first_message TEXT NOT NULL,
+        setting TEXT,
+        user_persona TEXT,
+        avatar_data BLOB,
+        is_favorite INTEGER NOT NULL DEFAULT 0,
+        system_prompt TEXT,
+        post_history_instructions TEXT,
+        alternate_greetings TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    ''');
+
+    // Persona templates table for fresh installs
+    await db.execute('''
+      CREATE TABLE persona_templates (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        persona_text TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    ''');
+  }
+
+  static Future<void> _migratePreferencesToSqlite(Database db, SharedPreferences prefs) async {
+    final charsJson = prefs.getString(_keyCharacters);
+    if (charsJson != null && charsJson.isNotEmpty) {
+      try {
+        final List<dynamic> charList = jsonDecode(charsJson) as List<dynamic>;
+        for (final charData in charList) {
+          final map = charData as Map<String, dynamic>;
+          final avatarBase64 = map['avatar_data'] as String?;
+          Uint8List? avatarBytes;
+          if (avatarBase64 != null && avatarBase64.isNotEmpty) {
+            try {
+              avatarBytes = base64Decode(avatarBase64);
+            } catch (_) {}
+          }
+          await db.insert('characters', {
+            'id': map['id'],
+            'name': map['name'],
+            'personality': map['personality'],
+            'first_message': map['first_message'],
+            'setting': map['setting'],
+            'user_persona': map['user_persona'],
+            'avatar_data': avatarBytes,
+            'is_favorite': map['is_favorite'] ?? 0,
+            'system_prompt': map['system_prompt'],
+            'post_history_instructions': map['post_history_instructions'],
+            'alternate_greetings': map['alternate_greetings'],
+            'created_at': map['created_at'],
+            'updated_at': map['updated_at'],
+          }, conflictAlgorithm: ConflictAlgorithm.replace);
+        }
+        await prefs.remove(_keyCharacters);
+      } catch (_) {}
+    }
+
+    final tplJson = prefs.getString(_keyPersonaTemplates);
+    if (tplJson != null && tplJson.isNotEmpty) {
+      try {
+        final List<dynamic> tplList = jsonDecode(tplJson) as List<dynamic>;
+        for (final tplData in tplList) {
+          final map = tplData as Map<String, dynamic>;
+          await db.insert('persona_templates', {
+            'id': map['id'],
+            'name': map['name'],
+            'persona_text': map['persona_text'] ?? map['description'],
+            'created_at': map['created_at'],
+            'updated_at': map['updated_at'],
+          }, conflictAlgorithm: ConflictAlgorithm.replace);
+        }
+        await prefs.remove(_keyPersonaTemplates);
+      } catch (_) {}
+    }
   }
 
   // --- Thread Database Operations ---
@@ -200,55 +315,38 @@ class LocalDatabase {
   // --- Character Database Operations ---
 
   Future<List<CharacterProfile>> getAllCharacters() async {
-    final p = await prefs;
-    final jsonStr = p.getString(_keyCharacters);
-    if (jsonStr != null && jsonStr.isNotEmpty) {
-      try {
-        final List<dynamic> jsonList = jsonDecode(jsonStr) as List<dynamic>;
-        return jsonList
-            .map((e) => CharacterProfile.fromMap(e as Map<String, dynamic>))
-            .toList();
-      } catch (_) {}
-    }
-    return [];
+    final db = await database;
+    final result = await db.query('characters');
+    return result.map((json) => CharacterProfile.fromMap(json)).toList();
   }
 
   Future<CharacterProfile?> getCharacterById(String id) async {
-    final characters = await getAllCharacters();
-    for (final c in characters) {
-      if (c.id == id) return c;
+    final db = await database;
+    final result = await db.query('characters', where: 'id = ?', whereArgs: [id], limit: 1);
+    if (result.isNotEmpty) {
+      return CharacterProfile.fromMap(result.first);
     }
     return null;
   }
 
   Future<void> insertCharacter(CharacterProfile character) async {
-    return _mutex.run(() async {
-      final p = await prefs;
-      final profiles = await getAllCharacters();
-      profiles.add(character);
-      await p.setString(_keyCharacters, jsonEncode(profiles.map((c) => c.toMap()).toList()));
-    });
+    final db = await database;
+    await db.insert('characters', character.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<void> updateCharacter(CharacterProfile character) async {
-    return _mutex.run(() async {
-      final p = await prefs;
-      final profiles = await getAllCharacters();
-      final index = profiles.indexWhere((c) => c.id == character.id);
-      if (index != -1) {
-        profiles[index] = character;
-        await p.setString(_keyCharacters, jsonEncode(profiles.map((c) => c.toMap()).toList()));
-      }
-    });
+    final db = await database;
+    await db.update(
+      'characters',
+      character.toMap(),
+      where: 'id = ?',
+      whereArgs: [character.id],
+    );
   }
 
   Future<void> deleteCharacter(String id) async {
-    return _mutex.run(() async {
-      final p = await prefs;
-      final profiles = await getAllCharacters();
-      profiles.removeWhere((c) => c.id == id);
-      await p.setString(_keyCharacters, jsonEncode(profiles.map((c) => c.toMap()).toList()));
-    });
+    final db = await database;
+    await db.delete('characters', where: 'id = ?', whereArgs: [id]);
   }
 
   // --- Message Database Operations ---
@@ -423,22 +521,40 @@ class LocalDatabase {
   static const String _keyPersonaTemplates = 'clan_persona_templates';
 
   Future<List<PersonaTemplate>> loadPersonaTemplates() async {
-    final p = await prefs;
-    final jsonStr = p.getString(_keyPersonaTemplates);
-    if (jsonStr != null && jsonStr.isNotEmpty) {
-      try {
-        final List<dynamic> jsonList = jsonDecode(jsonStr) as List<dynamic>;
-        return jsonList
-            .map((e) => PersonaTemplate.fromMap(e as Map<String, dynamic>))
-            .toList();
-      } catch (_) {}
-    }
-    return [];
+    final db = await database;
+    final result = await db.query('persona_templates');
+    return result.map((json) => PersonaTemplate.fromMap(json)).toList();
   }
 
   Future<void> savePersonaTemplates(List<PersonaTemplate> templates) async {
-    final p = await prefs;
-    await p.setString(_keyPersonaTemplates, jsonEncode(templates.map((t) => t.toMap()).toList()));
+    final db = await database;
+    await db.transaction((txn) async {
+      await txn.delete('persona_templates');
+      for (final template in templates) {
+        await txn.insert('persona_templates', template.toMap(),
+            conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+    });
+  }
+
+  Future<void> insertPersonaTemplate(PersonaTemplate template) async {
+    final db = await database;
+    await db.insert('persona_templates', template.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<void> deletePersonaTemplate(String id) async {
+    final db = await database;
+    await db.delete('persona_templates', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<PersonaTemplate?> getPersonaTemplateById(String id) async {
+    final db = await database;
+    final result = await db.query('persona_templates', where: 'id = ?', whereArgs: [id], limit: 1);
+    if (result.isNotEmpty) {
+      return PersonaTemplate.fromMap(result.first);
+    }
+    return null;
   }
 
   // --- Server Profile Persistence ---
@@ -447,6 +563,18 @@ class LocalDatabase {
   static const String _keyActiveProfileId = 'clan_active_profile_id';
 
   Future<List<ServerProfile>> loadServerProfiles() async {
+    final profiles = await _loadServerProfilesFromPrefs();
+    // Populate API keys from secure storage
+    for (final profile in profiles) {
+      final secureKey = await SecureStorageService.instance.getApiKey(profile.id);
+      if (secureKey != null) {
+        // Return profile with the secure key
+      }
+    }
+    return profiles;
+  }
+
+  Future<List<ServerProfile>> _loadServerProfilesFromPrefs() async {
     final p = await prefs;
     final jsonStr = p.getString(_keyServerProfiles);
     if (jsonStr != null && jsonStr.isNotEmpty) {
@@ -464,6 +592,18 @@ class LocalDatabase {
     final p = await prefs;
     await p.setString(
         _keyServerProfiles, jsonEncode(profiles.map((p) => p.toMap()).toList()));
+  }
+
+  Future<void> saveProfileApiKey(String profileId, String? apiKey) async {
+    if (apiKey != null && apiKey.isNotEmpty) {
+      await SecureStorageService.instance.saveApiKey(profileId, apiKey);
+    } else {
+      await SecureStorageService.instance.deleteApiKey(profileId);
+    }
+  }
+
+  Future<String?> getProfileApiKey(String profileId) async {
+    return await SecureStorageService.instance.getApiKey(profileId);
   }
 
   Future<void> setActiveProfileId(String profileId) async {

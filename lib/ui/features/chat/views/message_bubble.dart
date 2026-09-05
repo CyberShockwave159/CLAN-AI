@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:clan_ai/core/constants/app_constants.dart';
@@ -185,6 +187,60 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
+  void _showMemoriesDialog(BuildContext context, List<String> memories) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('RAG Memories Used'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: memories.length,
+            itemBuilder: (ctx, index) {
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: isDark ? AppTheme.darkSurfaceVariant : AppTheme.lightSurfaceVariant,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Memory ${index + 1}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    SelectableText(
+                      memories[index],
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isUser = message.role == MessageRole.user;
@@ -361,25 +417,33 @@ class MessageBubble extends StatelessWidget {
             if (message.ragMemoryCount != null && message.ragMemoryCount! > 0)
               Padding(
                 padding: const EdgeInsets.only(bottom: 4),
-                child: Tooltip(
-                  message: '${message.ragMemoryCount} memory${message.ragMemoryCount! == 1 ? '' : 's'} retrieved via RAG',
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.memory_rounded,
-                        size: 12,
-                        color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${message.ragMemoryCount}',
-                        style: TextStyle(
-                          fontSize: 10,
+                child: GestureDetector(
+                  onTap: () {
+                    if (message.ragMemoryContents != null && message.ragMemoryContents!.isNotEmpty) {
+                      final memories = List<String>.from(jsonDecode(message.ragMemoryContents!));
+                      _showMemoriesDialog(context, memories);
+                    }
+                  },
+                  child: Tooltip(
+                    message: 'Tap to view ${message.ragMemoryCount} memory${message.ragMemoryCount! == 1 ? '' : 's'} retrieved via RAG',
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.memory_rounded,
+                          size: 12,
                           color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 4),
+                        Text(
+                          '${message.ragMemoryCount}',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

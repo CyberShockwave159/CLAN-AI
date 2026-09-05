@@ -1,4 +1,3 @@
-import 'package:clan_ai/data/models/character_profile.dart';
 import 'package:clan_ai/data/repositories/character_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../helpers/fake_character_repository.dart';
@@ -11,7 +10,7 @@ void main() {
     repo = FakeCharacterRepository();
   });
 
-  group('CharacterRepository getAllCharacters', () async {
+  group('CharacterRepository getAllCharacters', () {
     test('returns empty list when no characters', () async {
       final characters = await repo.getAllCharacters();
       expect(characters, isEmpty);
@@ -26,7 +25,7 @@ void main() {
     });
   });
 
-  group('CharacterRepository getCharacterById', () async {
+  group('CharacterRepository getCharacterById', () {
     test('returns character by id', () async {
       final char = buildCharacter(name: 'Test', id: 'char-1');
       await repo.createCharacter(char);
@@ -42,7 +41,7 @@ void main() {
     });
   });
 
-  group('CharacterRepository createCharacter', () async {
+  group('CharacterRepository createCharacter', () {
     test('creates new character', () async {
       final char = buildCharacter(name: 'New Character');
       await repo.createCharacter(char);
@@ -85,7 +84,7 @@ void main() {
     });
   });
 
-  group('CharacterRepository updateCharacter', () async {
+  group('CharacterRepository updateCharacter', () {
     test('updates character fields', () async {
       final char = buildCharacter(name: 'Old Name', id: 'char-1');
       await repo.createCharacter(char);
@@ -126,7 +125,7 @@ void main() {
     });
   });
 
-  group('CharacterRepository deleteCharacter', () async {
+  group('CharacterRepository deleteCharacter', () {
     test('removes character', () async {
       final char = buildCharacter(name: 'Delete Me', id: 'char-1');
       await repo.createCharacter(char);
@@ -162,7 +161,7 @@ void main() {
     });
   });
 
-  group('CharacterRepository deleteEmbeddingsForMessages', () async {
+  group('CharacterRepository deleteEmbeddingsForMessages', () {
     test('removes specific message embeddings', () async {
       final char = buildCharacter(name: 'Test', id: 'char-1');
       await repo.createCharacter(char);
@@ -186,7 +185,7 @@ void main() {
     });
   });
 
-  group('CharacterRepository lastUpdated', () async {
+  group('CharacterRepository lastUpdated', () {
     test('tracks last updated character', () async {
       final char = buildCharacter(name: 'Test', id: 'char-1');
       await repo.createCharacter(char);

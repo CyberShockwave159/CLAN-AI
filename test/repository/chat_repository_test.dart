@@ -1,7 +1,6 @@
 import 'package:clan_ai/data/models/chat_message.dart';
 import 'package:clan_ai/data/models/chat_thread.dart';
 import 'package:clan_ai/data/models/server_config.dart';
-import 'package:clan_ai/data/models/server_profile.dart';
 import 'package:clan_ai/data/repositories/chat_repository.dart';
 import 'package:clan_ai/core/network/sse_client.dart';
 import 'package:clan_ai/domain/models/generation_params.dart';
@@ -126,7 +125,7 @@ void main() {
     });
   });
 
-  group('ChatRepository updateThread', () async {
+  group('ChatRepository updateThread', () {
     test('updates thread title', () async {
       final thread = await repo.createThread(title: 'Old Title');
       final updated = thread.copyWith(title: 'New Title');
@@ -149,7 +148,7 @@ void main() {
     });
   });
 
-  group('ChatRepository deleteThread', () async {
+  group('ChatRepository deleteThread', () {
     test('removes thread from list', () async {
       final thread = await repo.createThread(title: 'Delete Me');
       await repo.deleteThread(thread.id);
@@ -172,7 +171,7 @@ void main() {
     });
   });
 
-  group('ChatRepository saveMessage', () async {
+  group('ChatRepository saveMessage', () {
     test('persists message to thread', () async {
       final thread = await repo.createThread(title: 'Thread');
       final message = buildMessage(
@@ -204,7 +203,7 @@ void main() {
     });
   });
 
-  group('ChatRepository updateMessage', () async {
+  group('ChatRepository updateMessage', () {
     test('updates message in repository', () async {
       final thread = await repo.createThread(title: 'Thread');
       final message = buildMessage(
@@ -238,7 +237,7 @@ void main() {
     });
   });
 
-  group('ChatRepository deleteMessage', () async {
+  group('ChatRepository deleteMessage', () {
     test('removes message from thread', () async {
       final thread = await repo.createThread(title: 'Thread');
       final message = buildMessage(
@@ -284,7 +283,7 @@ void main() {
     });
   });
 
-  group('ChatRepository getMessagesForThread', () async {
+  group('ChatRepository getMessagesForThread', () {
     test('returns messages for thread', () async {
       final thread = await repo.createThread(title: 'Thread');
       await repo.saveMessage(buildMessage(
@@ -325,7 +324,7 @@ void main() {
     });
   });
 
-  group('ChatRepository streamCompletion', () async {
+  group('ChatRepository streamCompletion', () {
     test('returns stream chunks from repository', () async {
       final thread = await repo.createThread(title: 'Thread');
       repo.setStreamFragments(thread.id, [
@@ -394,7 +393,7 @@ void main() {
     });
   });
 
-  group('ChatRepository getThreads', () async {
+  group('ChatRepository getThreads', () {
     test('returns all threads', () async {
       await repo.createThread(title: 'Thread 1');
       final t2 = await repo.createThread(title: 'Thread 2'); await repo.updateThread(t2.copyWith(characterId: 'char-1'));

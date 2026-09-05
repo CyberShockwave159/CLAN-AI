@@ -1,9 +1,13 @@
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
+/// Maximum allowed avatar size: 5MB.
+const _maxAvatarSizeBytes = 5 * 1024 * 1024;
+
 /// Downloads avatar image bytes from a URL.
 ///
-/// Returns null on any failure (timeout, non-200 status, parse error).
+/// Returns null on any failure (timeout, non-200 status, oversized payload,
+/// or non-image content-type).
 /// Avatar is optional — callers should handle null gracefully.
 class StAvatarDownloader {
   final http.Client _client;
@@ -13,7 +17,8 @@ class StAvatarDownloader {
 
   /// Fetches image bytes from [url].
   ///
-  /// Times out after 30 seconds. Returns null if download fails or the
+  /// Times out after 30 seconds. Validates content-type header and payload
+  /// size. Returns null if download fails, payload exceeds 5MB, or the
   /// response is not an image.
   Future<Uint8List?> downloadAvatar(String url) async {
     try {
@@ -25,7 +30,26 @@ class StAvatarDownloader {
         return null;
       }
 
-      return response.bodyBytes;
+      // Validate Content-Type header starts with "image/"
+      final contentType = response.headers['content-type'] ?? '';
+      if (!contentType.startsWith('image/')) {
+        return null;
+      }
+
+      // Check Content-Length if available
+      if (response.contentLength != null &&
+          response.contentLength! > _maxAvatarSizeBytes) {
+        return null;
+      }
+
+      final bytes = response.bodyBytes;
+
+      // Enforce hard limit on actual payload size
+      if (bytes.length > _maxAvatarSizeBytes) {
+        return null;
+      }
+
+      return bytes;
     } catch (_) {
       return null;
     }

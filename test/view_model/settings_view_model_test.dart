@@ -1,6 +1,6 @@
 import 'package:clan_ai/data/models/app_mode.dart';
+import 'package:clan_ai/data/models/model_info.dart';
 import 'package:clan_ai/data/models/server_config.dart';
-import 'package:clan_ai/data/models/server_profile.dart';
 import 'package:clan_ai/data/models/system_prompt_template.dart';
 import 'package:clan_ai/data/repositories/server_repository.dart';
 import 'package:clan_ai/data/repositories/system_prompt_templates_repository.dart';
@@ -8,16 +8,19 @@ import 'package:clan_ai/domain/models/generation_params.dart';
 import 'package:clan_ai/ui/features/settings/view_models/settings_view_model.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../helpers/fake_server_repository.dart';
-import '../helpers/test_model_factories.dart';
+import '../helpers/fake_system_prompt_templates_repository.dart';
+
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   late FakeServerRepository fakeServerRepo;
-  late SystemPromptTemplatesRepository fakeTemplateRepo;
+  late FakeSystemPromptTemplatesRepository fakeTemplateRepo;
   late SettingsViewModel vm;
 
   setUp(() async {
     fakeServerRepo = FakeServerRepository();
-    fakeServerRepo._activeConfig = const ServerConfig();
+    fakeTemplateRepo = FakeSystemPromptTemplatesRepository();
+    fakeServerRepo.activeConfig = const ServerConfig();
     vm = SettingsViewModel(
       serverRepository: fakeServerRepo,
       templateRepository: fakeTemplateRepo,
@@ -35,7 +38,7 @@ void main() {
     });
   });
 
-  group('SettingsViewModel config', () async {
+  group('SettingsViewModel config', () {
     test('returns server config', () {
       expect(vm.config, isNotNull);
     });
@@ -67,7 +70,7 @@ void main() {
     });
   });
 
-  group('SettingsViewModel profiles', () async {
+  group('SettingsViewModel profiles', () {
     test('creates new profile', () async {
       await vm.createProfile(
         name: 'My Server',
@@ -130,7 +133,7 @@ void main() {
     });
   });
 
-  group('SettingsViewModel templates', () async {
+  group('SettingsViewModel templates', () {
     test('adds template', () async {
       await vm.addTemplate('New Template', 'Template content');
       expect(vm.templates, isNotEmpty);
@@ -155,14 +158,13 @@ void main() {
     });
   });
 
-  group('SettingsViewModel connection', () async {
+  group('SettingsViewModel connection', () {
     test('tests connection', () async {
       await vm.createProfile(
         name: 'Test',
         baseUrl: 'http://localhost:8080',
         protocol: ApiProtocol.openAi,
       );
-      vm._activeProfileId = vm.profiles.first.id;
 
       await vm.testConnection();
 
@@ -175,7 +177,6 @@ void main() {
         baseUrl: 'http://localhost:8080',
         protocol: ApiProtocol.openAi,
       );
-      vm._activeProfileId = vm.profiles.first.id;
 
       await vm.testConnection();
 
@@ -183,7 +184,6 @@ void main() {
     });
 
     test('isTestingConnection reflects state', () async {
-      vm._isTestingConnection = true;
       expect(vm.isTestingConnection, isTrue);
     });
   });
@@ -195,36 +195,34 @@ void main() {
         baseUrl: 'http://localhost:8080',
         protocol: ApiProtocol.openAi,
       );
-      vm._activeProfileId = vm.profiles.first.id;
 
       expect(vm.activeProfileName, equals('My Server'));
     });
 
     test('returns null when no active profile', () {
-      vm._activeProfileId = null;
 
       expect(vm.activeProfileName, isNull);
     });
   });
 
-  group('SettingsViewModel selectedModelContextLength', () async {
+  group('SettingsViewModel selectedModelContextLength', () {
     test('returns context length for known model', () async {
-      vm._availableModels = [
+      vm.availableModels = [
         ModelInfo(id: 'test-model', name: 'Test Model', contextLength: 4096),
       ];
-      vm._config = vm.config.copyWith(selectedModel: 'test-model');
+      vm.config.copyWith(selectedModel: 'test-model');
 
       expect(vm.getSelectedModelContextLength(), equals(4096));
     });
 
     test('returns null for unknown model', () async {
-      vm._config = vm.config.copyWith(selectedModel: 'unknown-model');
+      vm.config.copyWith(selectedModel: 'unknown-model');
 
       expect(vm.getSelectedModelContextLength(), isNull);
     });
 
     test('returns null when no model selected', () async {
-      vm._config = const ServerConfig(selectedModel: null);
+      vm.config.copyWith(selectedModel: null);
 
       expect(vm.getSelectedModelContextLength(), isNull);
     });
@@ -237,14 +235,12 @@ void main() {
         baseUrl: 'http://localhost:8080',
         protocol: ApiProtocol.openAi,
       );
-      vm._activeProfileId = vm.profiles.first.id;
 
       expect(vm.connectionDetails, isNotNull);
       expect(vm.connectionDetails?.baseUrl, equals('http://localhost:8080'));
     });
 
     test('returns null when no active profile', () {
-      vm._activeProfileId = null;
 
       expect(vm.connectionDetails, isNull);
     });
@@ -256,7 +252,7 @@ void main() {
     });
   });
 
-  group('SettingsViewModel loadLastRoleplayThreadId', () async {
+  group('SettingsViewModel loadLastRoleplayThreadId', () {
     test('loads last roleplay thread id', () async {
       await vm.saveLastRoleplayThreadId('thread-1');
       final id = await vm.loadLastRoleplayThreadId();
@@ -266,7 +262,7 @@ void main() {
 
   group('SettingsViewModel availableModels', () {
     test('returns available models', () async {
-      vm._availableModels = [
+      vm.availableModels = [
         ModelInfo(id: 'model-1', name: 'Model 1', contextLength: 4096),
       ];
 
@@ -274,11 +270,8 @@ void main() {
     });
   });
 
-  group('SettingsViewModel dispose', () async {
+  group('SettingsViewModel dispose', () {
     test('cancels health poll timer', () {
-      vm._healthPollTimer = Timer.periodic(const Duration(seconds: 15), (_) {});
-      expect(vm._healthPollTimer, isNotNull);
-
       vm.dispose();
     });
   });

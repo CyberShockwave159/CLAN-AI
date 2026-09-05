@@ -198,7 +198,15 @@ class _ChatDrawerState extends State<ChatDrawer> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: TextField(
-                onChanged: (val) => chatVM.setSearchQuery(val),
+                onChanged: (val) async {
+                  chatVM.setSearchQuery(val);
+                  if (val.trim().isNotEmpty) {
+                    final results = await chatVM.searchThreads();
+                    if (context.mounted) {
+                      chatVM.setFilteredThreads(results);
+                    }
+                  }
+                },
                 decoration: InputDecoration(
                   hintText: 'Search chats...',
                   prefixIcon: const Icon(Icons.search_rounded, size: 20),

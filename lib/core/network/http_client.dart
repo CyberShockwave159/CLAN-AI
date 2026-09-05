@@ -104,7 +104,7 @@ class ApiHttpClient {
 
       if (streamedResponse.statusCode >= 400) {
         final errBody = await streamedResponse.stream.bytesToString();
-        _throwForStatusCode(streamedResponse.statusCode, errBody, uri);
+        throwForStatusCode(streamedResponse.statusCode, errBody, uri);
       }
 
       return streamedResponse;
@@ -131,10 +131,10 @@ class ApiHttpClient {
       }
     }
 
-    _throwForStatusCode(response.statusCode, response.body, uri);
+    throwForStatusCode(response.statusCode, response.body, uri);
   }
 
-  void _throwForStatusCode(int statusCode, String body, Uri uri) {
+  void throwForStatusCode(int statusCode, String body, Uri uri) {
     String errorMsg = 'HTTP $statusCode error from ${uri.host}';
     try {
       final decoded = jsonDecode(body);

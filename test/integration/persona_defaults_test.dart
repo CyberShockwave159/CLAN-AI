@@ -1,6 +1,3 @@
-import 'package:clan_ai/data/models/character_profile.dart';
-import 'package:clan_ai/data/models/persona_template.dart';
-import 'package:clan_ai/data/repositories/character_repository.dart';
 import 'package:clan_ai/data/repositories/persona_template_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../helpers/fake_character_repository.dart';

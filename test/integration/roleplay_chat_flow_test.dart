@@ -1,15 +1,6 @@
-import 'dart:async';
-import 'dart:convert';
 import 'package:clan_ai/core/network/sse_client.dart';
 import 'package:clan_ai/core/utils/conversation_export.dart';
 import 'package:clan_ai/data/models/chat_message.dart';
-import 'package:clan_ai/data/models/chat_thread.dart';
-import 'package:clan_ai/data/models/character_profile.dart';
-import 'package:clan_ai/data/models/server_config.dart';
-import 'package:clan_ai/data/models/server_profile.dart';
-import 'package:clan_ai/data/repositories/character_repository.dart';
-import 'package:clan_ai/data/repositories/chat_repository.dart';
-import 'package:clan_ai/domain/models/generation_params.dart';
 import 'package:clan_ai/ui/features/roleplay/view_models/roleplay_view_model.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../helpers/fake_chat_repository.dart';
@@ -19,6 +10,7 @@ import '../helpers/test_model_factories.dart';
 
 /// Integration test: Full roleplay flow without network.
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   late FakeChatRepository chatRepo;
   late FakeCharacterRepository charRepo;
   late FakeVectorStore vectorStore;
@@ -246,11 +238,11 @@ void main() {
 
   test('RAG isolation: different characters have separate memories', () async {
     // Add memories for character 1
-    vectorStore.saveEmbedding('char-1', 'msg-1', 'Aria memory.');
-    vectorStore.saveEmbedding('char-1', 'msg-2', 'Aria fact.');
+    vectorStore.saveEmbedding(characterId: 'char-1', messageId: 'msg-1', content: 'Aria memory.', vector: [0.0, ...List<double>.filled(255, 0.0)]);
+    vectorStore.saveEmbedding(characterId: 'char-1', messageId: 'msg-2', content: 'Aria fact.', vector: [0.0, ...List<double>.filled(255, 0.0)]);
 
     // Add memories for character 2
-    vectorStore.saveEmbedding('char-2', 'msg-3', 'Bob memory.');
+    vectorStore.saveEmbedding(characterId: 'char-2', messageId: 'msg-3', content: 'Bob memory.', vector: [0.0, ...List<double>.filled(255, 0.0)]);
 
     // Search for character 1
     final results1 = await vectorStore.searchSimilar(
@@ -287,8 +279,8 @@ void main() {
     vm.activeCharacter = character;
 
     // Add embeddings for thread messages
-    vectorStore.saveEmbedding('char-1', 'msg-1', 'Message 1.');
-    vectorStore.saveEmbedding('char-1', 'msg-2', 'Message 2.');
+    vectorStore.saveEmbedding(characterId: 'char-1', messageId: 'msg-1', content: 'Message 1.', vector: [0.0, ...List<double>.filled(255, 0.0)]);
+    vectorStore.saveEmbedding(characterId: 'char-1', messageId: 'msg-2', content: 'Message 2.', vector: [0.0, ...List<double>.filled(255, 0.0)]);
 
     // Delete thread
     await vm.deleteThread(thread.id);

@@ -1,17 +1,15 @@
-import 'dart:async';
 import 'package:clan_ai/core/network/sse_client.dart';
+import 'package:clan_ai/core/utils/conversation_export.dart';
 import 'package:clan_ai/data/models/chat_message.dart';
-import 'package:clan_ai/data/models/chat_thread.dart';
 import 'package:clan_ai/data/models/server_config.dart';
-import 'package:clan_ai/data/models/server_profile.dart';
 import 'package:clan_ai/data/repositories/chat_repository.dart';
-import 'package:clan_ai/domain/models/generation_params.dart';
 import 'package:clan_ai/ui/features/chat/view_models/chat_view_model.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../helpers/fake_chat_repository.dart';
 import '../helpers/test_model_factories.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   late FakeChatRepository fakeRepo;
   late ChatViewModel vm;
 
@@ -84,7 +82,7 @@ void main() {
     });
   });
 
-  group('ChatViewModel deleteThread', () async {
+  group('ChatViewModel deleteThread', () {
     test('deletes thread from list', () async {
       final thread = await fakeRepo.createThread(title: 'Delete Me');
       vm.threads = await fakeRepo.getAssistantThreads();
@@ -133,7 +131,7 @@ void main() {
     });
   });
 
-  group('ChatViewModel sendMessage', () async {
+  group('ChatViewModel sendMessage', () {
     test('creates user message and assistant placeholder', () async {
       final thread = await fakeRepo.createThread(title: 'Chat');
       vm.activeThread = thread;
@@ -269,7 +267,7 @@ void main() {
     });
   });
 
-  group('ChatViewModel regenerateMessage', () async {
+  group('ChatViewModel regenerateMessage', () {
     test('creates new variant with incremented indices', () async {
       final thread = await fakeRepo.createThread(title: 'Chat');
       final userMsg = buildMessage(
@@ -384,7 +382,7 @@ void main() {
     });
   });
 
-  group('ChatViewModel deleteMessage', () async {
+  group('ChatViewModel deleteMessage', () {
     test('deletes message and regenerates if assistant deleted', () async {
       final thread = await fakeRepo.createThread(title: 'Chat');
       final userMsg = buildMessage(
@@ -517,7 +515,7 @@ void main() {
     });
   });
 
-  group('ChatViewModel undoDelete', () async {
+  group('ChatViewModel undoDelete', () {
     test('restores deleted message', () async {
       final thread = await fakeRepo.createThread(title: 'Chat');
       final userMsg = buildMessage(
@@ -547,7 +545,7 @@ void main() {
     });
   });
 
-  group('ChatViewModel updateActiveThreadSystemPrompt', () async {
+  group('ChatViewModel updateActiveThreadSystemPrompt', () {
     test('updates thread system prompt', () async {
       final thread = await fakeRepo.createThread(title: 'Chat');
       vm.activeThread = thread;
@@ -572,7 +570,7 @@ void main() {
     });
   });
 
-  group('ChatViewModel renameThread', () async {
+  group('ChatViewModel renameThread', () {
     test('updates thread title', () async {
       final thread = await fakeRepo.createThread(title: 'Old Title');
       vm.threads = [thread];
@@ -608,7 +606,7 @@ void main() {
   });
 
   group('ChatViewModel filteredThreads', () {
-    test('returns all threads when no search query', () {
+    test('returns all threads when no search query', () async {
       fakeRepo.createThread(title: 'Thread 1');
       fakeRepo.createThread(title: 'Thread 2');
       vm.threads = await fakeRepo.getAssistantThreads();
@@ -616,7 +614,7 @@ void main() {
       expect(vm.filteredThreads, hasLength(2));
     });
 
-    test('filters threads by query', () {
+    test('filters threads by query', () async {
       fakeRepo.createThread(title: 'Important Chat');
       fakeRepo.createThread(title: 'Random Chat');
       vm.threads = await fakeRepo.getAssistantThreads();
@@ -626,7 +624,7 @@ void main() {
       expect(vm.filteredThreads.first.title, contains('Important'));
     });
 
-    test('case-insensitive search', () {
+    test('case-insensitive search', () async {
       fakeRepo.createThread(title: 'Test Chat');
       vm.threads = await fakeRepo.getAssistantThreads();
       vm.setSearchQuery('test');
@@ -634,7 +632,7 @@ void main() {
       expect(vm.filteredThreads, hasLength(1));
     });
 
-    test('returns empty when no matches', () {
+    test('returns empty when no matches', () async {
       fakeRepo.createThread(title: 'Test');
       vm.threads = await fakeRepo.getAssistantThreads();
       vm.setSearchQuery('nonexistent');
@@ -643,7 +641,7 @@ void main() {
     });
   });
 
-  group('ChatViewModel selectThread', () async {
+  group('ChatViewModel selectThread', () {
     test('loads messages for thread', () async {
       final thread = await fakeRepo.createThread(title: 'Chat');
       await fakeRepo.saveMessage(buildMessage(
@@ -668,7 +666,7 @@ void main() {
     });
   });
 
-  group('ChatViewModel exportThread', () async {
+  group('ChatViewModel exportThread', () {
     test('returns path for txt export', () async {
       final thread = await fakeRepo.createThread(title: 'Test Chat');
       vm.activeThread = thread;
@@ -702,7 +700,7 @@ void main() {
     });
   });
 
-  group('ChatViewModel branchConversation', () async {
+  group('ChatViewModel branchConversation', () {
     test('creates new thread with copied messages', () async {
       final thread = await fakeRepo.createThread(title: 'Original');
       final userMsg = buildMessage(
@@ -724,7 +722,7 @@ void main() {
       ]);
 
       await vm.branchConversation(
-        messageIndex: 0,
+        messageIndex: 1,
         serverConfig: buildServerConfig(),
         connection: null,
         customParams: null,
@@ -741,10 +739,11 @@ void main() {
       vm.activeThread = thread;
       vm.messages = [
         buildMessage(threadId: thread.id, role: MessageRole.user, id: 'u1'),
+        buildMessage(threadId: thread.id, role: MessageRole.assistant, id: 'a1'),
       ];
 
       await vm.branchConversation(
-        messageIndex: 0,
+        messageIndex: 1,
         serverConfig: buildServerConfig(),
         connection: null,
         customParams: null,
@@ -779,7 +778,7 @@ void main() {
     });
   });
 
-  group('ChatViewModel switchVariant', () async {
+  group('ChatViewModel switchVariant', () {
     test('switches to sibling variant', () async {
       final thread = await fakeRepo.createThread(title: 'Chat');
       final variant1 = buildMessage(
@@ -826,7 +825,7 @@ void main() {
     });
   });
 
-  group('ChatViewModel stopGeneration', () async {
+  group('ChatViewModel stopGeneration', () {
     test('cancels active generation', () async {
       vm.isGenerating = true;
       vm.currentCancelToken = CancelToken();
@@ -845,13 +844,13 @@ void main() {
     });
   });
 
-  group('ChatViewModel isLoadingThreads', () async {
+  group('ChatViewModel isLoadingThreads', () {
     test('is false when not loading', () {
       expect(vm.isLoadingThreads, isFalse);
     });
   });
 
-  group('ChatViewModel isGenerating', () async {
+  group('ChatViewModel isGenerating', () {
     test('reflects generation state', () {
       vm.isGenerating = true;
       expect(vm.isGenerating, isTrue);

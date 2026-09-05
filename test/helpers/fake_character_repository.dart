@@ -1,8 +1,5 @@
-import 'dart:typed_data';
 import 'package:clan_ai/data/models/character_profile.dart';
 import 'package:clan_ai/data/repositories/character_repository.dart';
-import 'package:clan_ai/data/datasources/vector_store.dart';
-import 'package:clan_ai/core/utils/hash_embedding.dart';
 
 class FakeCharacterRepository extends CharacterRepository {
   final List<CharacterProfile> _characters = [];
@@ -78,15 +75,5 @@ class FakeCharacterRepository extends CharacterRepository {
 
   int getEmbeddingCount(String characterId) {
     return _embeddings[characterId]?.length ?? 0;
-  }
-}
-
-extension<T> on Iterable<T> {
-  T? get orNull {
-    final iterator = this.iterator;
-    if (iterator.moveNext()) {
-      return iterator.current;
-    }
-    return null;
   }
 }

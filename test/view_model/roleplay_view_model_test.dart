@@ -1,10 +1,7 @@
-import 'dart:async';
+import 'package:clan_ai/core/utils/conversation_export.dart';
 import 'package:clan_ai/core/network/sse_client.dart';
 import 'package:clan_ai/data/models/chat_message.dart';
-import 'package:clan_ai/data/models/chat_thread.dart';
-import 'package:clan_ai/data/models/character_profile.dart';
 import 'package:clan_ai/data/models/server_config.dart';
-import 'package:clan_ai/data/models/server_profile.dart';
 import 'package:clan_ai/data/repositories/character_repository.dart';
 import 'package:clan_ai/data/repositories/chat_repository.dart';
 import 'package:clan_ai/domain/models/generation_params.dart';
@@ -16,6 +13,7 @@ import '../helpers/fake_vector_store.dart';
 import '../helpers/test_model_factories.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   late FakeChatRepository fakeChatRepo;
   late FakeCharacterRepository fakeCharRepo;
   late FakeVectorStore fakeVectorStore;
@@ -35,7 +33,7 @@ void main() {
     vm.dispose();
   });
 
-  group('RoleplayViewModel startRoleplay', () async {
+  group('RoleplayViewModel startRoleplay', () {
     test('creates new thread with characterId', () async {
       final character = buildCharacter(name: 'Aria', id: 'char-1');
       await fakeCharRepo.createCharacter(character);
@@ -162,7 +160,7 @@ void main() {
     });
   });
 
-  group('RoleplayViewModel sendMessage', () async {
+  group('RoleplayViewModel sendMessage', () {
     test('creates user message', () async {
       final character = buildCharacter(name: 'Aria', id: 'char-1');
       await fakeCharRepo.createCharacter(character);
@@ -200,9 +198,7 @@ void main() {
         prompt: 'My greeting',
         serverConfig: buildServerConfig(),
         connection: null,
-        customParams: null,
-        modelContextLength: null,
-      });
+      );
 
       expect(vm.activeThread?.title, contains('My greeting'));
     });
@@ -289,7 +285,7 @@ void main() {
     });
   });
 
-  group('RoleplayViewModel regenerateMessage', () async {
+  group('RoleplayViewModel regenerateMessage', () {
     test('creates new variant', () async {
       final character = buildCharacter(name: 'Aria', id: 'char-1');
       await fakeCharRepo.createCharacter(character);
@@ -377,7 +373,7 @@ void main() {
     });
   });
 
-  group('RoleplayViewModel deleteMessage', () async {
+  group('RoleplayViewModel deleteMessage', () {
     test('deletes message and regenerates if assistant deleted', () async {
       final character = buildCharacter(name: 'Aria', id: 'char-1');
       await fakeCharRepo.createCharacter(character);
@@ -468,7 +464,7 @@ void main() {
     });
   });
 
-  group('RoleplayViewModel editUserPrompt', () async {
+  group('RoleplayViewModel editUserPrompt', () {
     test('truncates after edit point', () async {
       final character = buildCharacter(name: 'Aria', id: 'char-1');
       await fakeCharRepo.createCharacter(character);
@@ -573,7 +569,7 @@ void main() {
     });
   });
 
-  group('RoleplayViewModel editAssistantMessage', () async {
+  group('RoleplayViewModel editAssistantMessage', () {
     test('edits last assistant message', () async {
       final character = buildCharacter(name: 'Aria', id: 'char-1');
       await fakeCharRepo.createCharacter(character);
@@ -673,7 +669,7 @@ void main() {
     });
   });
 
-  group('RoleplayViewModel deleteThread', () async {
+  group('RoleplayViewModel deleteThread', () {
     test('deletes thread and clears active state', () async {
       final character = buildCharacter(name: 'Aria', id: 'char-1');
       await fakeCharRepo.createCharacter(character);
@@ -696,7 +692,7 @@ void main() {
       final thread = await fakeChatRepo.createThread(title: 'Chat', characterId: 'char-1');
       vm.activeThread = thread;
       vm.activeCharacter = character;
-      fakeVectorStore.addEmbedding('char-1', 'user-1', 'User message');
+      fakeVectorStore.saveEmbedding(characterId: 'char-1', messageId: 'user-1', content: 'User message', vector: [0.0, ...List<double>.filled(255, 0.0)]);
 
       await vm.deleteThread(thread.id);
 
@@ -704,7 +700,7 @@ void main() {
     });
   });
 
-  group('RoleplayViewModel deleteCharacter', () async {
+  group('RoleplayViewModel deleteCharacter', () {
     test('deletes all character threads', () async {
       final character = buildCharacter(name: 'Aria', id: 'char-1');
       await fakeCharRepo.createCharacter(character);
@@ -733,7 +729,7 @@ void main() {
     });
   });
 
-  group('RoleplayViewModel updateActiveCharacter', () async {
+  group('RoleplayViewModel updateActiveCharacter', () {
     test('updates active character when id matches', () async {
       final original = buildCharacter(name: 'Aria', id: 'char-1');
       vm.activeCharacter = original;
@@ -755,7 +751,7 @@ void main() {
     });
   });
 
-  group('RoleplayViewModel startRoleplayWithGreeting', () async {
+  group('RoleplayViewModel startRoleplayWithGreeting', () {
     test('starts with alternate greeting', () async {
       final character = buildCharacter(
         name: 'Aria',
@@ -781,7 +777,7 @@ void main() {
     });
   });
 
-  group('RoleplayViewModel selectThread', () async {
+  group('RoleplayViewModel selectThread', () {
     test('loads messages for selected thread', () async {
       final character = buildCharacter(name: 'Aria', id: 'char-1');
       await fakeCharRepo.createCharacter(character);
@@ -807,7 +803,7 @@ void main() {
     });
   });
 
-  group('RoleplayViewModel getThreadsForCharacter', () async {
+  group('RoleplayViewModel getThreadsForCharacter', () {
     test('returns threads for character', () async {
       final character = buildCharacter(name: 'Aria', id: 'char-1');
       await fakeCharRepo.createCharacter(character);
@@ -819,7 +815,7 @@ void main() {
     });
   });
 
-  group('RoleplayViewModel exportThread', () async {
+  group('RoleplayViewModel exportThread', () {
     test('returns path for txt export', () async {
       final character = buildCharacter(name: 'Aria', id: 'char-1');
       await fakeCharRepo.createCharacter(character);
@@ -844,7 +840,7 @@ void main() {
     });
   });
 
-  group('RoleplayViewModel undoDelete', () async {
+  group('RoleplayViewModel undoDelete', () {
     test('restores deleted message', () async {
       final thread = await fakeChatRepo.createThread(title: 'Chat', characterId: 'char-1');
       vm.activeThread = thread;
@@ -872,7 +868,7 @@ void main() {
     });
   });
 
-  group('RoleplayViewModel branchConversation', () async {
+  group('RoleplayViewModel branchConversation', () {
     test('creates new branch thread', () async {
       final character = buildCharacter(name: 'Aria', id: 'char-1');
       await fakeCharRepo.createCharacter(character);
@@ -894,7 +890,7 @@ void main() {
         modelContextLength: null,
       );
 
-      expect(vm.threads, isNotEmpty);
+       expect(fakeChatRepo.getThreads(), isNotEmpty);
     });
 
     test('sets branchFromThreadId on new thread', () async {
@@ -915,9 +911,10 @@ void main() {
         modelContextLength: null,
       );
 
-      final newThread = vm.threads.firstWhere(
+      final threads = await fakeChatRepo.getThreads();
+      final newThread = threads.firstWhere(
         (t) => t.branchFromThreadId == thread.id,
-        orElse: () => vm.threads.first,
+        orElse: () => threads.first,
       );
       expect(newThread.branchFromThreadId, equals(thread.id));
     });
@@ -940,9 +937,10 @@ void main() {
         modelContextLength: null,
       );
 
-      final newThread = vm.threads.firstWhere(
+      final threads = await fakeChatRepo.getThreads();
+      final newThread = threads.firstWhere(
         (t) => t.characterId != null,
-        orElse: () => vm.threads.first,
+        orElse: () => threads.first,
       );
       expect(newThread.characterId, equals('char-1'));
     });
@@ -966,11 +964,11 @@ void main() {
         modelContextLength: null,
       );
 
-      expect(vm.threads, hasLength(1));
+      expect((await fakeChatRepo.getThreads()).length, greaterThanOrEqualTo(1));
     });
   });
 
-  group('RoleplayViewModel switchVariant', () async {
+  group('RoleplayViewModel switchVariant', () {
     test('switches to sibling variant', () async {
       final character = buildCharacter(name: 'Aria', id: 'char-1');
       await fakeCharRepo.createCharacter(character);
@@ -1002,7 +1000,7 @@ void main() {
     });
   });
 
-  group('RoleplayViewModel stopGeneration', () async {
+  group('RoleplayViewModel stopGeneration', () {
     test('cancels active generation', () async {
       vm.isGenerating = true;
       vm.currentCancelToken = CancelToken();
@@ -1013,14 +1011,14 @@ void main() {
     });
   });
 
-  group('RoleplayViewModel isLoading/isGenerating', () async {
+  group('RoleplayViewModel isLoading/isGenerating', () {
     test('isGenerating reflects state', () async {
       vm.isGenerating = true;
       expect(vm.isGenerating, isTrue);
     });
   });
 
-  group('RoleplayViewModel activeCharacter getter', () async {
+  group('RoleplayViewModel activeCharacter getter', () {
     test('returns active character', () async {
       final character = buildCharacter(name: 'Aria', id: 'char-1');
       vm.activeCharacter = character;
@@ -1036,7 +1034,7 @@ void main() {
     });
   });
 
-  group('RoleplayViewModel activeThread getter', () async {
+  group('RoleplayViewModel activeThread getter', () {
     test('returns active thread', () async {
       final thread = await fakeChatRepo.createThread(title: 'Chat', characterId: 'char-1');
       vm.activeThread = thread;

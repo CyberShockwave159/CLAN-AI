@@ -13,6 +13,9 @@ class RoleplayContextBuilder {
       : _vectorStore = vectorStore ?? VectorStore();
 
   /// Build the full roleplay context for a character and user input.
+  /// 
+  /// [ragTopK] controls how many memories to retrieve (1-10). Defaults to 3.
+  /// [ragMinScore] filters memories below this similarity threshold (0.0-1.0). Defaults to 0.0.
   Future<RoleplayContext> build({
     required String characterId,
     required String characterName,
@@ -22,6 +25,8 @@ class RoleplayContextBuilder {
     String? characterSystemPrompt,
     String? postHistoryInstructions,
     required String userInput,
+    int ragTopK = 3,
+    double ragMinScore = 0.0,
   }) async {
     // 1. Embed the user input (kept for search but not stored in result)
     final queryVector = HashEmbedding.embed(userInput);
@@ -30,11 +35,12 @@ class RoleplayContextBuilder {
     final memories = await _vectorStore.searchSimilar(
       characterId: characterId,
       queryVector: queryVector,
-      topK: 3,
+      topK: ragTopK,
     );
 
-    // 3. Extract content strings
-    final memoryTexts = memories
+    // 3. Filter by minimum similarity score
+    final filteredMemories = memories
+        .where((m) => (m['similarity'] as double) >= ragMinScore)
         .map((m) => m['content'] as String)
         .toList();
 
@@ -44,14 +50,24 @@ class RoleplayContextBuilder {
       personality: personality,
       setting: setting,
       userPersona: userPersona,
-      retrievedMemories: memoryTexts,
+      retrievedMemories: filteredMemories,
       characterSystemPrompt: characterSystemPrompt,
       postHistoryInstructions: postHistoryInstructions,
     );
 
+    // Build full memory info for UI display (content + similarity score)
+    final fullMemoryInfo = filteredMemories.map((content) {
+      final matching = memories.where((m) => m['content'] == content).toList();
+      return {
+        'content': content,
+        'similarity': matching.isNotEmpty ? (matching.first['similarity'] as double) : 0.0,
+      };
+    }).toList();
+
     return RoleplayContext(
       systemPrompt: systemPrompt,
-      memories: memoryTexts,
+      memories: filteredMemories,
+      memoryInfo: fullMemoryInfo,
     );
   }
 }
@@ -60,9 +76,11 @@ class RoleplayContextBuilder {
 class RoleplayContext {
   final String systemPrompt;
   final List<String> memories;
+  final List<Map<String, dynamic>> memoryInfo;
 
   RoleplayContext({
     required this.systemPrompt,
     required this.memories,
+    this.memoryInfo = const [],
   });
 }

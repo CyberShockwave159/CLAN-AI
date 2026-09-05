@@ -47,6 +47,7 @@ class ChatMessage {
   final bool isEdited;
   final DateTime? updatedAt;
   final int? ragMemoryCount;
+  final String? ragMemoryContents;
   final String reasoningContent;
 
   ChatMessage({
@@ -68,6 +69,7 @@ class ChatMessage {
     this.isEdited = false,
     this.updatedAt,
     this.ragMemoryCount,
+    this.ragMemoryContents,
     this.reasoningContent = '',
   })  : id = id ?? const Uuid().v4(),
         createdAt = createdAt ?? DateTime.now();
@@ -91,6 +93,7 @@ class ChatMessage {
     bool? isEdited,
     DateTime? updatedAt,
     int? ragMemoryCount,
+    String? ragMemoryContents,
     String? reasoningContent,
   }) {
     return ChatMessage(
@@ -112,6 +115,7 @@ class ChatMessage {
       isEdited: isEdited ?? this.isEdited,
       updatedAt: updatedAt ?? this.updatedAt,
       ragMemoryCount: ragMemoryCount ?? this.ragMemoryCount,
+      ragMemoryContents: ragMemoryContents ?? this.ragMemoryContents,
       reasoningContent: reasoningContent ?? this.reasoningContent,
     );
   }
@@ -136,6 +140,7 @@ class ChatMessage {
       'is_edited': isEdited ? 1 : 0,
       'updated_at': updatedAt?.toIso8601String(),
       'rag_memory_count': ragMemoryCount,
+      'rag_memory_contents': ragMemoryContents,
       'reasoning_content': reasoningContent,
     };
   }
@@ -170,6 +175,7 @@ class ChatMessage {
           ? DateTime.tryParse(map['updated_at'] as String)
           : null,
       ragMemoryCount: (map['rag_memory_count'] as num?)?.toInt(),
+      ragMemoryContents: map['rag_memory_contents'] as String?,
       reasoningContent: (map['reasoning_content'] as String?) ?? '',
     );
   }

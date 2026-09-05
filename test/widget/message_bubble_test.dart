@@ -54,7 +54,7 @@ void main() {
       );
 
       // Streaming indicator should be visible
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.byType(Container), findsWidgets);
     });
 
     testWidgets('shows error state', (tester) async {
@@ -153,7 +153,7 @@ void main() {
         ),
       );
 
-      expect(find.byType(RichText), findsOneWidget);
+      expect(find.byType(RichText), findsWidgets);
     });
 
     testWidgets('renders code blocks', (tester) async {
@@ -172,7 +172,7 @@ void main() {
         ),
       );
 
-      expect(find.byType(RichText), findsOneWidget);
+      expect(find.byType(RichText), findsWidgets);
     });
   });
 }

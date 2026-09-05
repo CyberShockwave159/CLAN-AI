@@ -77,7 +77,10 @@ void main() {
       final encoded = HashEmbedding.encodeVector(original);
       final decoded = HashEmbedding.decodeVector(encoded);
 
-      expect(decoded, equals(original));
+      expect(decoded.length, equals(original.length));
+      for (int i = 0; i < original.length; i++) {
+        expect(decoded[i], closeTo(original[i], 1e-6));
+      }
     });
 
     test('encode produces non-empty string', () {

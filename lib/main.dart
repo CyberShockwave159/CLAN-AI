@@ -17,6 +17,7 @@ import 'package:clan_ai/ui/features/roleplay/views/roleplay_screen.dart';
 import 'package:clan_ai/ui/features/roleplay/view_models/persona_template_view_model.dart';
 import 'package:clan_ai/ui/features/roleplay/view_models/roleplay_view_model.dart';
 import 'package:clan_ai/ui/features/settings/view_models/settings_view_model.dart';
+import 'package:clan_ai/ui/shared/widgets/desktop_keyboard_shortcuts.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 // Global flag to track if SQLite FFI factory has been initialized
@@ -49,6 +50,7 @@ void main() async {
   );
   final serverRepository = ServerRepository(apiService: apiService);
   final chatRepository = ChatRepository(apiService: apiService);
+  final characterRepository = CharacterRepository();
 
   runApp(
     MultiProvider(
@@ -65,14 +67,14 @@ void main() async {
         ChangeNotifierProvider(
           create: (_) => RoleplayViewModel(
             chatRepository: chatRepository,
-            characterRepository: CharacterRepository(),
+            characterRepository: characterRepository,
           ),
         ),
-        Provider(
-          create: (_) => CharacterRepository(),
-        ),
+        Provider<CharacterRepository>.value(value: characterRepository),
       ],
-      child: ClanAiApp(httpClient: sharedHttpClient),
+      child: DesktopKeyboardShortcuts(
+        child: ClanAiApp(httpClient: sharedHttpClient),
+      ),
     ),
   );
 }

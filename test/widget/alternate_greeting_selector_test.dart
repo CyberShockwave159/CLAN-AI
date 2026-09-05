@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:clan_ai/data/models/character_profile.dart';
 import 'package:clan_ai/ui/features/roleplay/widgets/alternate_greeting_selector.dart';
 
 void main() {
@@ -13,7 +12,7 @@ void main() {
           home: Scaffold(
             body: AlternateGreetingSelector(
               greetings: greetings,
-              onSelectGreeting: (greeting) {},
+              onSelectGreeting: () {},
             ),
           ),
         ),
@@ -34,8 +33,8 @@ void main() {
           home: Scaffold(
             body: AlternateGreetingSelector(
               greetings: ['Hello!', 'Hi!'],
-              onSelectGreeting: (greeting) {
-                selectedGreeting = greeting;
+              onSelectGreeting: () {
+                selectedGreeting = 'Hello!';
               },
             ),
           ),
@@ -56,7 +55,7 @@ void main() {
           home: Scaffold(
             body: AlternateGreetingSelector(
               greetings: [],
-              onSelectGreeting: (greeting) {},
+              onSelectGreeting: () {},
             ),
           ),
         ),
@@ -75,8 +74,8 @@ void main() {
           home: Scaffold(
             body: AlternateGreetingSelector(
               greetings: ['Hello!'],
-              onSelectGreeting: (greeting) {
-                selectedGreeting = greeting;
+              onSelectGreeting: () {
+                selectedGreeting = 'Hello!';
               },
             ),
           ),
@@ -97,7 +96,7 @@ void main() {
           home: Scaffold(
             body: AlternateGreetingSelector(
               greetings: ['Custom Greeting'],
-              onSelectGreeting: (greeting) {},
+              onSelectGreeting: () {},
             ),
           ),
         ),
@@ -116,8 +115,8 @@ void main() {
           home: Scaffold(
             body: AlternateGreetingSelector(
               greetings: ['First', 'Second', 'Third'],
-              onSelectGreeting: (greeting) {
-                selectedGreeting = greeting;
+              onSelectGreeting: () {
+                selectedGreeting = 'Second';
               },
             ),
           ),
@@ -140,7 +139,7 @@ void main() {
           home: Scaffold(
             body: AlternateGreetingSelector(
               greetings: ['Tap me'],
-              onSelectGreeting: (greeting) {
+              onSelectGreeting: () {
                 tapped = true;
               },
             ),
@@ -165,7 +164,7 @@ void main() {
           home: Scaffold(
             body: AlternateGreetingSelector(
               greetings: ['Alt greeting'],
-              onSelectGreeting: (greeting) {},
+              onSelectGreeting: () {},
             ),
           ),
         ),
