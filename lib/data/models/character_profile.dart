@@ -104,7 +104,9 @@ class CharacterProfile {
       setting: map['setting'] as String?,
       userPersona: map['user_persona'] as String?,
       avatarData: map['avatar_data'] != null
-          ? base64Decode(map['avatar_data'] as String)
+          ? map['avatar_data'] is Uint8List
+              ? map['avatar_data'] as Uint8List
+              : base64Decode(map['avatar_data'] as String)
           : null,
       isFavorite: (map['is_favorite'] as int?) == 1,
       systemPrompt: map['system_prompt'] as String?,

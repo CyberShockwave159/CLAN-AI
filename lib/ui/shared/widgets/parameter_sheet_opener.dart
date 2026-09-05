@@ -5,7 +5,7 @@ import 'package:clan_ai/ui/features/settings/views/parameter_tuning_sheet.dart';
 
 /// Shared parameter sheet opener used by both ChatScreen and RoleplayScreen.
 /// Eliminates duplicate `_openParameterSheet` methods.
-void openParameterSheet(BuildContext context) {
+void openParameterSheet(BuildContext context, {bool isRoleplay = false}) {
   final settingsVM = context.read<SettingsViewModel>();
   showModalBottomSheet(
     context: context,
@@ -14,6 +14,7 @@ void openParameterSheet(BuildContext context) {
     builder: (_) => ParameterTuningSheet(
       initialParams: settingsVM.config.defaultParams,
       onSave: (newParams) => settingsVM.updateDefaultParams(newParams),
+      isRoleplay: isRoleplay,
     ),
   );
 }

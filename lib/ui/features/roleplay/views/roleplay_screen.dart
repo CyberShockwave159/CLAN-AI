@@ -38,6 +38,7 @@ class _RoleplayScreenState extends State<RoleplayScreen> with AutoScrollMixin {
       builder: (_) => ParameterTuningSheet(
         initialParams: settingsVM.config.defaultParams,
         onSave: (newParams) => settingsVM.updateDefaultParams(newParams),
+        isRoleplay: true,
       ),
     );
   }

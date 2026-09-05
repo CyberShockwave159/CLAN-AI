@@ -96,6 +96,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (_) => ParameterTuningSheet(
         initialParams: vm.config.defaultParams,
         onSave: (newParams) => vm.updateDefaultParams(newParams),
+        isRoleplay: vm.appMode == AppMode.roleplay,
       ),
     );
   }

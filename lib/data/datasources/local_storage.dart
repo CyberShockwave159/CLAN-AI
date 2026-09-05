@@ -48,7 +48,7 @@ class LocalDatabase {
 
     return await openDatabase(
       path,
-      version: 8,
+      version: 9,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
     );
@@ -140,6 +140,14 @@ class LocalDatabase {
       final prefs = await SharedPreferences.getInstance();
       await _migratePreferencesToSqlite(db, prefs);
     }
+    if (oldVersion < 9) {
+      final columns = await db.rawQuery("PRAGMA table_info(messages)");
+      final hasRagMemoryContents = (columns as List<dynamic>)
+          .any((col) => (col as Map<String, dynamic>)['name'] == 'rag_memory_contents');
+      if (!hasRagMemoryContents) {
+        await db.execute('ALTER TABLE messages ADD COLUMN rag_memory_contents TEXT DEFAULT NULL');
+      }
+    }
   }
 
   Future<void> _createDB(Database db, int version) async {
@@ -180,6 +188,7 @@ class LocalDatabase {
         is_edited INTEGER NOT NULL DEFAULT 0,
         updated_at TEXT,
         rag_memory_count INTEGER DEFAULT NULL,
+        rag_memory_contents TEXT DEFAULT NULL,
         reasoning_content TEXT NOT NULL DEFAULT "",
         FOREIGN KEY (thread_id) REFERENCES threads (id) ON DELETE CASCADE
       )

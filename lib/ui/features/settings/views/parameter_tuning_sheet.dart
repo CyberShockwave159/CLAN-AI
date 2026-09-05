@@ -7,11 +7,13 @@ import 'package:clan_ai/ui/features/settings/view_models/settings_view_model.dar
 class ParameterTuningSheet extends StatefulWidget {
   final GenerationParams initialParams;
   final Function(GenerationParams updatedParams) onSave;
+  final bool isRoleplay;
 
   const ParameterTuningSheet({
     super.key,
     required this.initialParams,
     required this.onSave,
+    this.isRoleplay = false,
   });
 
   @override
@@ -242,28 +244,30 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
               const Divider(height: 1),
 
               // RAG Top-K Slider
-              _buildSlider(
-                title: 'RAG Memory Count',
-                subtitle: 'Number of memories to retrieve for roleplay context. Higher values provide more context but may dilute relevance.',
-                value: _ragTopK.toDouble(),
-                min: 1,
-                max: 10,
-                displayValue: _ragTopK.toString(),
-                onChanged: (v) => setState(() => _ragTopK = v.round()),
-              ),
+              if (widget.isRoleplay) ...[
+                _buildSlider(
+                  title: 'RAG Memory Count',
+                  subtitle: 'Number of memories to retrieve for roleplay context. Higher values provide more context but may dilute relevance.',
+                  value: _ragTopK.toDouble(),
+                  min: 1,
+                  max: 10,
+                  displayValue: _ragTopK.toString(),
+                  onChanged: (v) => setState(() => _ragTopK = v.round()),
+                ),
 
-              // RAG Min Score Slider
-              _buildSlider(
-                title: 'RAG Minimum Relevance',
-                subtitle: 'Minimum similarity threshold for memories (0.0 = accept all, 1.0 = only exact matches). Lower values include more memories.',
-                value: _ragMinScore,
-                min: 0.0,
-                max: 1.0,
-                displayValue: _ragMinScore.toStringAsFixed(2),
-                onChanged: (v) => setState(() => _ragMinScore = v),
-              ),
+                // RAG Min Score Slider
+                _buildSlider(
+                  title: 'RAG Minimum Relevance',
+                  subtitle: 'Minimum similarity threshold for memories (0.0 = accept all, 1.0 = only exact matches). Lower values include more memories.',
+                  value: _ragMinScore,
+                  min: 0.0,
+                  max: 1.0,
+                  displayValue: _ragMinScore.toStringAsFixed(2),
+                  onChanged: (v) => setState(() => _ragMinScore = v),
+                ),
 
-              const SizedBox(height: 16),
+                const SizedBox(height: 16),
+              ],
 
               // Save Action Button
               FilledButton(
