@@ -90,7 +90,7 @@ void main() {
     // 4. Regenerate assistant response
     fakeStreamSetup(chatRepo, vm.activeThread!.id, 'New response');
     await vm.regenerateMessage(
-      messageIndex: 1,
+      messageIndex: 2,
       serverConfig: buildServerConfig(),
       connection: null,
       customParams: null,
@@ -98,17 +98,17 @@ void main() {
     );
     await Future.delayed(const Duration(milliseconds: 50));
 
-    expect(vm.messages[1].variantIndex, equals(1));
-    expect(vm.messages[1].totalVariants, equals(2));
+    expect(vm.messages[2].variantIndex, equals(1));
+    expect(vm.messages[2].totalVariants, equals(2));
 
     // 5. Edit assistant message (must be last)
     await vm.editAssistantMessage(
-      messageIndex: 1,
+      messageIndex: 2,
       newContent: 'Edited response',
     );
 
-    expect(vm.messages[1].content, equals('Edited response'));
-    expect(vm.messages[1].isEdited, isTrue);
+    expect(vm.messages[2].content, equals('Edited response'));
+    expect(vm.messages[2].isEdited, isTrue);
 
     // 6. Export conversation
     final path = await vm.exportThread(ExportFormat.txt);

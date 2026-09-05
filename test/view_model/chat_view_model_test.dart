@@ -538,16 +538,21 @@ void main() {
   group('ChatViewModel undoDelete', () {
     test('restores deleted message', () async {
       final thread = await fakeRepo.createThread(title: 'Chat');
-      final userMsg = buildMessage(
+      final userMsg1 = buildMessage(
         threadId: thread.id,
         role: MessageRole.user,
         id: 'user-1',
       );
-      vm.messages = [userMsg];
+      final userMsg2 = buildMessage(
+        threadId: thread.id,
+        role: MessageRole.user,
+        id: 'user-2',
+      );
+      vm.messages = [userMsg1, userMsg2];
       vm.activeThread = thread;
 
       await vm.deleteMessage(
-        messageIndex: 0,
+        messageIndex: 1,
         serverConfig: buildServerConfig(),
         connection: null,
         customParams: null,
@@ -558,7 +563,7 @@ void main() {
       expect(vm.canUndo, isTrue);
 
       // Re-add the message for undo to work
-      await fakeRepo.saveMessage(userMsg);
+      await fakeRepo.saveMessage(userMsg2);
 
       await vm.undoDelete();
 
