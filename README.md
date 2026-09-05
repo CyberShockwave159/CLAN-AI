@@ -16,6 +16,7 @@ Frontier-class cross-platform llama.cpp client. A Flutter app that connects to a
 ## Features
 
 - Real-time streaming chat with both OpenAI-compatible and native llama.cpp endpoints
+- **Server Health Status** — Chat and roleplay screens display a red warning banner when server is unreachable, with quick link to Settings
 - **Reasoning/Thinking Block View** — Toggle in Settings to request and display model reasoning/thinking as a collapsible block. Supports dedicated reasoning fields (`delta.reasoning`), inline tags (```xml, `<thought>`), and multiple field name conventions across models
 - **AI Roleplay Mode** — Toggle from Settings; mirrors assistant mode UI with per-character isolated sessions and client-side RAG memory
 - **Character Creation** — 4-step wizard (personality, setting/world, user persona, advanced prompt settings) with optional avatar upload and persona template selector
@@ -104,7 +105,9 @@ Characters can have multiple opening messages:
 - **ServerProfile consolidation:** `ServerConnectionDetails` removed; `ServerProfile` serves as connection details throughout
 - **Dependency wiring** in `lib/main.dart` via constructor injection
 - **Four root providers**: `SettingsViewModel`, `ChatViewModel`, `RoleplayViewModel`, `PersonaTemplateViewModel`
-- **SQLite** via `sqflite` (desktop uses `sqflite_common_ffi`, mobile uses native)
+- **SQLite** via `sqflite` (desktop uses `sqflite_common_ffi`, mobile uses native), schema version 8 (`threads`, `messages`, `characters`, `persona_templates` tables)
+- **Secure API keys** stored in OS Keychain/KeyStore via `SecureStorageService` (`flutter_secure_storage`)
+- **Single `CharacterRepository`** instance injected via constructor throughout the app
 - **Streaming** via Server-Sent Events with 20ms UI throttling to prevent frame drops
 - **Reasoning pipeline**: `SseClient.parseStream()` extracts reasoning from multiple field names (`reasoning`, `reasoning_content`, `thought`) across OpenAI and native formats. `SseClient.filterReasoning()` processes inline thinking tags and forwards dedicated reasoning fields through a stream pipeline. Both OpenAI and llama.cpp native protocols support the `reasoning` parameter.
 - **Thread isolation**: `ChatThread.characterId` distinguishes assistant vs roleplay threads
@@ -114,20 +117,22 @@ Characters can have multiple opening messages:
 - **Memory management**: `lib/ui/features/roleplay/widgets/character_memories_dialog.dart` — Per-character memory viewer and pruner. List all vector embeddings for a character; delete individual memories or clear all. Accessible via character popup menu → "Manage Memories"
 - **Configurable RAG**: `GenerationParams` includes `ragTopK` (1-10) and `ragMinScore` (0.0-1.0). Adjustable in Settings → Generation Parameters. `RoleplayContextBuilder` filters memories by minimum similarity score
 - **Character system prompt override**: If a character has a `systemPrompt`, it replaces the default prompt. Use `{{original}}` prefix to prepend to the standard prompt. `postHistoryInstructions` are appended after every AI response.
-- **Persona Templates**: Global reusable user personas stored in SharedPreferences. Applied via dropdown selector in character creation, editing, and SillyTavern import dialogs. `CharacterEditDialog` uses `context.watch` for reactive template loading.
+- **Persona Templates**: Global reusable user personas stored in SQLite (persona_templates table). Applied via dropdown selector in character creation, editing, and SillyTavern import dialogs. `CharacterEditDialog` uses `context.watch` for reactive template loading.
 - **`{{char}}` / `{{user}}` replacement**: Parser automatically substitutes these tokens with the character name and user persona in all fields, including system prompt and post history instructions.
+- **Keyboard Shortcuts Help**: Press `Ctrl+/` or `F1` to open the ShortcutsHelpDialog showing all keyboard shortcuts. Platform-aware labels (`Cmd` on macOS, `Ctrl` on other platforms).
+- **Avatar file storage**: Large avatars (over 500KB) are stored as files on disk via `AvatarStorageService` to keep SQLite lightweight. Small avatars remain inline.
 
 ## Development
 
 ```bash
 flutter analyze        # lint + typecheck
-flutter test           # runs all 26 test files (~150+ tests across all layers)
+flutter test           # runs all 28 test files (~463 total tests, includes reasoning)
 flutter run            # launch app
 ```
 
 ### Testing
 
-26 test files across 8 layers (~150+ tests). All tests use fake repositories (no real SQLite or network). ViewModels expose private state via setters for test injection.
+28 test files, ~465 total tests. All tests use fake repositories (no real SQLite or network). ViewModels expose private state via setters for test injection.
 
 **Coverage by layer:**
 - **Domain** — `GenerationParams` serialization (OpenAI & native payloads, TextSanitizer segment parsing, reasoning flags), model roundtrip serialization (ChatThread, ChatMessage, CharacterProfile, PersonaTemplate, ServerConfig)
@@ -141,7 +146,7 @@ flutter run            # launch app
 
 ## Gotchas
 
-- **Conversation branching**: Regenerate and edit operations truncate at the parent message and create new sibling branches. Navigation between variants uses `variantIndex` + `siblingIds`.
+- **Conversation branching**: Regenerate and edit operations truncate at the parent message and create new sibling branches. Navigation between variants uses `variantIndex` + `siblingIds`. Branches are linked via `branchFromThreadId` on `ChatThread`.
 - **Android networking**: `127.0.0.1` refers to the Android device's loopback, not your host machine. Use `10.0.2.2` for the Android emulator or your host's LAN IP for physical devices.
 - **SQLite desktop FFI**: On Linux/Windows/macOS, `sqflite_common_ffi` is initialized **once** in `main.dart` (`_initSqliteFfi()`). Do not call `sqfliteFfiInit()` again — it will trigger a warning.
 - **Database migration**: DB schema is version 8 (added `characters` and `persona_templates` tables with SharedPreferences migration). If you encounter schema errors, clear the app's local storage or delete `clan_ai.db`.

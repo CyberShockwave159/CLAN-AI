@@ -10,6 +10,7 @@ import 'package:clan_ai/ui/features/roleplay/view_models/persona_template_view_m
 import 'package:clan_ai/ui/features/roleplay/widgets/character_edit_dialog.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import '../helpers/mock_path_provider.dart';
 
 class FakePersonaTemplateRepository extends PersonaTemplateRepository {
   final List<PersonaTemplate> _stored;
@@ -29,8 +30,9 @@ class FakeCharacterRepository extends CharacterRepository {
 }
 
 void main() {
-  setUpAll(() {
+  setUpAll(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
+    setupMockPathProvider();
     SharedPreferences.setMockInitialValues({});
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;

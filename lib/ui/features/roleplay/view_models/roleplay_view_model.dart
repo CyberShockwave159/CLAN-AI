@@ -513,10 +513,11 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
       title: newTitle,
       systemPrompt: _activeThread!.systemPrompt,
       modelId: _activeThread!.modelId,
+      characterId: _activeCharacter!.id,
+      branchFromThreadId: _activeThread!.id,
     );
 
     final branchThreadWithLink = newThread.copyWith(
-      characterId: _activeCharacter!.id,
       branchFromThreadId: _activeThread!.id,
       updatedAt: DateTime.now(),
     );

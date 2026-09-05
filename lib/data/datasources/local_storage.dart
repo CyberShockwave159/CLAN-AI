@@ -473,13 +473,6 @@ class LocalDatabase {
     return p.getString(_keyLastRoleplayThread);
   }
 
-  // --- Character Persistence ---
-
-  Future<void> saveCharacters(List<CharacterProfile> characters) async {
-    final p = await prefs;
-    await p.setString(_keyCharacters, jsonEncode(characters.map((c) => c.toMap()).toList()));
-  }
-
   // --- System Prompt Template Persistence ---
 
   static const String _keySystemPromptTemplates = 'clan_system_prompt_templates';
@@ -564,14 +557,15 @@ class LocalDatabase {
 
   Future<List<ServerProfile>> loadServerProfiles() async {
     final profiles = await _loadServerProfilesFromPrefs();
-    // Populate API keys from secure storage
-    for (final profile in profiles) {
-      final secureKey = await SecureStorageService.instance.getApiKey(profile.id);
-      if (secureKey != null) {
-        // Return profile with the secure key
-      }
-    }
-    return profiles;
+    return await Future.wait(
+      profiles.map((profile) async {
+        final secureKey = await SecureStorageService.instance.getApiKey(profile.id);
+        if (secureKey != null && secureKey.isNotEmpty) {
+          return profile.copyWith(apiKey: secureKey);
+        }
+        return profile;
+      }),
+    );
   }
 
   Future<List<ServerProfile>> _loadServerProfilesFromPrefs() async {

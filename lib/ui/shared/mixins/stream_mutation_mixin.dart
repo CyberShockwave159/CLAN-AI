@@ -182,7 +182,7 @@ mixin StreamMutationMixin on ChangeNotifier {
       DateTime.now().difference(_undoTimestamp!) <= undoTimeoutDuration;
 
   void doStopGeneration() {
-    if (isGenerating && currentCancelToken != null) {
+    if (isGenerating) {
       currentCancelToken?.cancel();
       isGenerating = false;
       notifyListeners();

@@ -58,6 +58,13 @@ class _DesktopKeyboardShortcutsState extends State<DesktopKeyboardShortcuts> {
     );
   }
 
+  void _handleShortcutsHelp() {
+    showDialog(
+      context: context,
+      builder: (_) => const ShortcutsHelpDialog(),
+    );
+  }
+
   void _handleStopGeneration() {
     final settingsVM = context.read<SettingsViewModel>();
     final appMode = settingsVM.appMode;
@@ -71,33 +78,124 @@ class _DesktopKeyboardShortcutsState extends State<DesktopKeyboardShortcuts> {
 
   @override
   Widget build(BuildContext context) {
-    return RawKeyboardListener(
+    return KeyboardListener(
       focusNode: FocusNode(),
       autofocus: true,
-      onKey: (event) {
-        if (event.logicalKey == LogicalKeyboardKey.escape) {
-          _handleStopGeneration();
-          return;
-        }
+      onKeyEvent: (event) {
+        if (event is KeyDownEvent) {
+          if (event.logicalKey == LogicalKeyboardKey.escape) {
+            _handleStopGeneration();
+            return;
+          }
 
-        final isMod = event.isControlPressed || event.isMetaPressed;
-        if (!isMod) return;
+          final isMod = HardwareKeyboard.instance.isControlPressed || HardwareKeyboard.instance.isMetaPressed;
+          if (!isMod) return;
 
-        switch (event.logicalKey) {
-          case LogicalKeyboardKey.keyN:
-            _handleNewChat();
-            break;
-          case LogicalKeyboardKey.keyK:
-            _handleSearch();
-            break;
-          case LogicalKeyboardKey.comma:
-            _handleSettings();
-            break;
-          default:
-            break;
+          switch (event.logicalKey) {
+            case LogicalKeyboardKey.keyN:
+              _handleNewChat();
+              break;
+            case LogicalKeyboardKey.keyK:
+              _handleSearch();
+              break;
+            case LogicalKeyboardKey.comma:
+              _handleSettings();
+              break;
+            case LogicalKeyboardKey.slash:
+              if (isMod) {
+                _handleShortcutsHelp();
+              }
+              break;
+            case LogicalKeyboardKey.f1:
+              _handleShortcutsHelp();
+              break;
+            default:
+              break;
+          }
         }
       },
       child: widget.child,
+    );
+  }
+}
+
+class ShortcutsHelpDialog extends StatelessWidget {
+  const ShortcutsHelpDialog({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final isMac = Theme.of(context).platform == TargetPlatform.macOS;
+    final modLabel = isMac ? 'Cmd' : 'Ctrl';
+
+    return Dialog(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.keyboard, size: 24),
+                const SizedBox(width: 12),
+                const Text(
+                  'Keyboard Shortcuts',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const Spacer(),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Close'),
+                ),
+              ],
+            ),
+            const Divider(height: 24),
+            _buildShortcutRow(modLabel, 'N', 'New Chat'),
+            _buildShortcutRow(modLabel, 'K', 'Search Threads'),
+            _buildShortcutRow(modLabel, ',', 'Open Settings'),
+            _buildShortcutRow(modLabel, '/', 'Keyboard Shortcuts Help'),
+            _buildShortcutRow('', 'F1', 'Keyboard Shortcuts Help'),
+            _buildShortcutRow('', 'Escape', 'Stop Generation'),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildShortcutRow(String mod, String key, String description) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(description, style: const TextStyle(fontSize: 14)),
+          ),
+          const SizedBox(width: 16),
+          Wrap(
+            spacing: 4,
+            children: [
+              if (mod.isNotEmpty)
+                _buildKey(mod),
+              _buildKey(key),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildKey(String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade800,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+      ),
     );
   }
 }

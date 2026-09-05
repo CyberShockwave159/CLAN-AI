@@ -3,7 +3,9 @@ import 'package:clan_ai/core/utils/conversation_export.dart';
 import 'package:clan_ai/data/models/chat_message.dart';
 import 'package:clan_ai/ui/features/chat/view_models/chat_view_model.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../helpers/fake_chat_repository.dart';
+import '../helpers/mock_path_provider.dart';
 import '../helpers/test_model_factories.dart';
 
 /// Integration test: Full assistant chat flow without network.
@@ -12,10 +14,14 @@ void main() {
   late FakeChatRepository repo;
   late ChatViewModel vm;
 
-  setUp(() {
+  setUp(() async {
+    SharedPreferences.setMockInitialValues({});
+    setupMockPathProvider();
     repo = FakeChatRepository();
     vm = ChatViewModel(chatRepository: repo);
-    // Clear auto-created thread from ChatViewModel constructor
+    // Allow unawaited constructor loadThreads() to complete
+    await Future.delayed(const Duration(milliseconds: 20));
+    repo.allThreads.clear();
     vm.threads = [];
     vm.activeThread = null;
   });
@@ -162,9 +168,9 @@ void main() {
 
     fakeStreamSetup(repo, originalThread.id, 'Branch response');
 
-    // Branch from user message
+    // Branch from assistant message (requires messagesToCopy.length >= 1)
     await vm.branchConversation(
-      messageIndex: 0,
+      messageIndex: 1,
       serverConfig: buildServerConfig(),
       connection: null,
       customParams: null,

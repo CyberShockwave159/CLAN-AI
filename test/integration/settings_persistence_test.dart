@@ -69,11 +69,13 @@ void main() {
     );
 
     await repo.saveMessage(buildMessage(
+      id: 'user-msg-1',
       threadId: thread.id,
       role: MessageRole.user,
       content: 'User message',
     ));
     await repo.saveMessage(buildMessage(
+      id: 'assistant-msg-1',
       threadId: thread.id,
       role: MessageRole.assistant,
       content: 'Assistant message',

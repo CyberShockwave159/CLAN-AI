@@ -1,16 +1,17 @@
-import 'package:clan_ai/data/models/character_profile.dart';
-import 'package:clan_ai/data/models/chat_thread.dart';
-import 'package:clan_ai/data/models/persona_template.dart';
-import 'package:clan_ai/data/repositories/character_repository.dart';
-import 'package:clan_ai/data/repositories/persona_template_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../helpers/fake_character_repository.dart';
-import '../helpers/fake_persona_template_repository.dart';
 import '../helpers/fake_vector_store.dart';
+import '../helpers/mock_path_provider.dart';
 import '../helpers/test_model_factories.dart';
 
 /// Tests: Character lifecycle with threads and embeddings.
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() async {
+    setupMockPathProvider();
+  });
+
   group('Character lifecycle with threads', () {
     test('create -> update -> delete character', () async {
       final repo = FakeCharacterRepository();

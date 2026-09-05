@@ -1,13 +1,14 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:clan_ai/core/utils/file_saver.dart';
 import 'package:clan_ai/core/utils/conversation_export.dart';
 import 'package:clan_ai/data/models/chat_message.dart';
 import 'package:clan_ai/data/models/chat_thread.dart';
+import '../helpers/mock_path_provider.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  setupMockPathProvider();
 
   group('FileSaver Export Tests', () {
     group('Desktop fallback', () {

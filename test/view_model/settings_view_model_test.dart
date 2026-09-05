@@ -1,12 +1,10 @@
 import 'package:clan_ai/data/models/app_mode.dart';
 import 'package:clan_ai/data/models/model_info.dart';
 import 'package:clan_ai/data/models/server_config.dart';
-import 'package:clan_ai/data/models/system_prompt_template.dart';
-import 'package:clan_ai/data/repositories/server_repository.dart';
-import 'package:clan_ai/data/repositories/system_prompt_templates_repository.dart';
 import 'package:clan_ai/domain/models/generation_params.dart';
 import 'package:clan_ai/ui/features/settings/view_models/settings_view_model.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../helpers/fake_server_repository.dart';
 import '../helpers/fake_system_prompt_templates_repository.dart';
 
@@ -18,6 +16,7 @@ void main() {
   late SettingsViewModel vm;
 
   setUp(() async {
+    SharedPreferences.setMockInitialValues({});
     fakeServerRepo = FakeServerRepository();
     fakeTemplateRepo = FakeSystemPromptTemplatesRepository();
     fakeServerRepo.activeConfig = const ServerConfig();
@@ -25,6 +24,8 @@ void main() {
       serverRepository: fakeServerRepo,
       templateRepository: fakeTemplateRepo,
     );
+    // Wait for async _init() to complete (includes testConnection which sets selectedModel)
+    await Future.delayed(const Duration(milliseconds: 300));
   });
 
   group('SettingsViewModel appMode', () {
@@ -79,11 +80,11 @@ void main() {
       );
 
       expect(vm.profiles, isNotEmpty);
-      expect(vm.profiles.first.name, equals('My Server'));
+      final myServer = vm.profiles.firstWhere((p) => p.name == 'My Server', orElse: () => throw StateError('Not found'));
+      expect(myServer.name, equals('My Server'));
     });
 
     test('updates profile', () async {
-      final profile = await fakeServerRepo.createProfile('Test', baseUrl: 'http://localhost:8080');
       await vm.createProfile(
         name: 'Test',
         baseUrl: 'http://localhost:8080',
@@ -110,7 +111,7 @@ void main() {
     });
 
     test('switches profile', () async {
-      final profile1 = await fakeServerRepo.createProfile('Profile 1', baseUrl: 'http://localhost:8080');
+      await fakeServerRepo.createProfile('Profile 1', baseUrl: 'http://localhost:8080');
       final profile2 = await fakeServerRepo.createProfile('Profile 2', baseUrl: 'http://localhost:8080');
       await vm.reloadProfiles();
 
@@ -184,7 +185,10 @@ void main() {
     });
 
     test('isTestingConnection reflects state', () async {
+      vm.testConnection();
       expect(vm.isTestingConnection, isTrue);
+      // Wait for testConnection to complete
+      await Future.delayed(const Duration(milliseconds: 200));
     });
   });
 
@@ -199,7 +203,8 @@ void main() {
       expect(vm.activeProfileName, equals('My Server'));
     });
 
-    test('returns null when no active profile', () {
+    test('returns null when no active profile', () async {
+      await vm.deleteProfile(vm.activeProfileId!);
 
       expect(vm.activeProfileName, isNull);
     });
@@ -216,13 +221,16 @@ void main() {
     });
 
     test('returns null for unknown model', () async {
-      vm.config.copyWith(selectedModel: 'unknown-model');
+      vm.config = vm.config.copyWith(selectedModel: 'unknown-model');
 
       expect(vm.getSelectedModelContextLength(), isNull);
     });
 
     test('returns null when no model selected', () async {
-      vm.config.copyWith(selectedModel: null);
+      // copyWith(selectedModel: null) keeps existing value due to ?? operator
+      // So we set a config with no selectedModel
+      final emptyConfig = ServerConfig(selectedModel: null);
+      vm.config = emptyConfig;
 
       expect(vm.getSelectedModelContextLength(), isNull);
     });
@@ -240,7 +248,8 @@ void main() {
       expect(vm.connectionDetails?.baseUrl, equals('http://localhost:8080'));
     });
 
-    test('returns null when no active profile', () {
+    test('returns null when no active profile', () async {
+      await vm.deleteProfile(vm.activeProfileId!);
 
       expect(vm.connectionDetails, isNull);
     });

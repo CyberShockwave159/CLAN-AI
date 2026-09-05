@@ -171,6 +171,11 @@ class ChatViewModel extends ChangeNotifier with StreamMutationMixin {
       }
       await _chatRepository.updateThread(updated);
       notifyListeners();
+    } else if (_activeThread?.id == threadId) {
+      final updated = _activeThread!.copyWith(title: newTitle, updatedAt: DateTime.now());
+      _activeThread = updated;
+      await _chatRepository.updateThread(updated);
+      notifyListeners();
     }
   }
 
@@ -497,8 +502,9 @@ class ChatViewModel extends ChangeNotifier with StreamMutationMixin {
     GenerationParams? customParams,
     int? modelContextLength,
   }) async {
-        if (_isGenerating || messageIndex < 0 || messageIndex >= _messages.length || _activeThread == null) return;
-
+        if (_isGenerating || messageIndex < 0 || messageIndex >= _messages.length || _activeThread == null) {
+    return;
+  }
     final branchPoint = _messages[messageIndex];
     final messagesToCopy = _messages.sublist(0, messageIndex + 1);
     final isUserBranchPoint = branchPoint.role == MessageRole.user;
@@ -526,6 +532,7 @@ class ChatViewModel extends ChangeNotifier with StreamMutationMixin {
       title: newTitle,
       systemPrompt: _activeThread!.systemPrompt,
       modelId: _activeThread!.modelId ?? serverConfig.selectedModel,
+      branchFromThreadId: _activeThread!.id,
     );
 
     // Copy messages to the new thread
@@ -553,7 +560,7 @@ class ChatViewModel extends ChangeNotifier with StreamMutationMixin {
 
     // Refresh threads list (getAssistantThreads filters out roleplay threads)
     final refreshed = await _chatRepository.getAssistantThreads();
-        _threads = refreshed;
+    _threads = refreshed;
 
     // Select the new thread
     await selectThread(branchThreadWithLink);

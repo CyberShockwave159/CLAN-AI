@@ -4,6 +4,56 @@
 
 ### ✨ New Features
 
+**Server Offline Warning Banner**
+- Chat screen and roleplay screen display a red warning banner when server health status is `offline`
+- Banner reads "Server unreachable. Verify your endpoint in Settings." with an "Open Settings" button that navigates to Settings screen
+- Uses `context.watch<SettingsViewModel>()` for reactive updates — banner appears/disappears automatically as health status changes
+
+**Keyboard Shortcuts Help Dialog**
+- Press `Ctrl+/` or `F1` to open a dialog listing all keyboard shortcuts
+- Dialog shows `New Chat`, `Search Threads`, `Open Settings`, `Keyboard Shortcuts Help`, and `Stop Generation` with platform-aware labels (`Cmd` on macOS, `Ctrl` on other platforms)
+- Replaces the previous help button with keyboard shortcut trigger
+
+**Avatar File Storage Service**
+- `lib/core/utils/avatar_storage_service.dart` — stores large character avatars as files on disk instead of inline in SQLite
+- Avatars under 500KB stay inline in the database; larger avatars are written to an `avatars/` directory in the app documents folder
+- `saveAvatar()`, `getAvatarBytes()`, `deleteAvatar()`, `clearAllAvatars()` methods
+
+### 🔧 Changes
+
+**Desktop Keyboard Shortcuts Migration**
+- `DesktopKeyboardShortcuts` migrated from deprecated `RawKeyboardListener` to `KeyboardListener` with `HardwareKeyboard.instance`
+- `onKey` callback replaced with `onKeyEvent` (`KeyDownEvent` check)
+- Modifier key detection now uses `HardwareKeyboard.instance.isControlPressed` / `isMetaPressed` instead of event parameters
+
+**Local Database Cleanup**
+- Removed `LocalDatabase.saveCharacters()` — character persistence now exclusively handled by `CharacterRepository` (SQLite)
+- Fixed `loadServerProfiles()` — properly hydrates API keys from secure storage using `copyWith(apiKey: secureKey)` in `Future.wait`
+
+**Stream Mutation Mixin**
+- `doStopGeneration()` now always clears `isGenerating` flag (removed `&& currentCancelToken != null` guard)
+
+**Android Network Security**
+- Base config now permits cleartext HTTP for all domains (`cleartextTrafficPermitted="true"` on base-config)
+- Removed hardcoded LAN IP entries (`192.168.0.1`, `192.168.1.1`, `172.16.0.1`) — localhost, 127.0.0.1, and 10.0.2.2 remain in explicit cleartext config
+
+**Roleplay Screen Spacing**
+- Reduced top margin from 28px to 12px on "Start your roleplay..." empty state text
+
+**Chat Repository**
+- `createThread()` now accepts optional `branchFromThreadId` parameter for conversation branching links
+
+### 🧹 Test Cleanups
+- Removed unused imports across test files (`model_roundtrips_test.dart`, `stream_mutation_mixin_test.dart`, `http_client_test.dart`, `roleplay_context_builder_test.dart`, `vector_store_test.dart`, `persona_template_view_model_test.dart`)
+- Added unique IDs to messages in `chat_repository_test.dart` to avoid ID collisions
+- Added `SharedPreferences.setMockInitialValues({})` and delays in `settings_view_model_test.dart`
+- Added `mock_path_provider.dart` to all tests using `path_provider` platform channel
+- Updated `stream_mutation_mixin_test.dart` — "no-op when no cancel token" test now expects `isGenerating` to be false
+
+## [v1.0.1] - SillyTavern Character Import
+
+### ✨ New Features
+
 **Reasoning/Thinking Block Support**
 - Settings toggle "Show Reasoning" in Safety & Convenience section to request reasoning/thinking content from models
 - API payload includes `"reasoning": true` and `"include_reasoning": true` for OpenAI protocol
@@ -74,6 +124,19 @@
 - Roleplay system prompt is fully managed by the RAG context builder
 
 ### 🏗 Architecture
+
+**SQLite Schema v8 Migration**
+- Migrated Character and Persona Template storage from SharedPreferences to SQLite (`characters` and `persona_templates` tables)
+- One-time migration via `_migratePreferencesToSqlite()` reads legacy SharedPreferences data on first schema v8 launch
+- `CharacterRepository` and `PersonaTemplateRepository` use dedicated SQLite repositories with mutex-protected CRUD
+- `SecureStorageService` now hydrates API keys on profile load via `copyWith(apiKey: secureKey)` in `loadServerProfiles()`
+- Android network security config updated to permit cleartext HTTP on base-config for LAN servers (previously limited to 3 hardcoded IPs)
+- Desktop keyboard shortcuts migrated from deprecated `RawKeyboardListener` to `KeyboardListener` with `HardwareKeyboard.instance`
+
+**RAG Memory Indicators**
+- `ragMemoryCount` and `ragMemoryContents` fields added to `ChatMessage` model for tracking injected memories
+- `MessageBubble` displays a memory chip tap to reveal actual memory content injected into system prompt
+- `CharacterMemoriesDialog` widget for per-character memory viewer and pruner (accessible via character popup menu)
 
 **New Files**
 - `lib/data/models/app_mode.dart` — AppMode enum (assistant/roleplay)

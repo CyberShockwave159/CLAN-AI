@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:clan_ai/core/network/sse_client.dart';
 import 'package:clan_ai/data/models/chat_message.dart';
 import 'package:clan_ai/data/models/chat_thread.dart';
-import 'package:clan_ai/data/models/server_config.dart';
 import 'package:clan_ai/data/repositories/chat_repository.dart';
 import 'package:clan_ai/ui/shared/mixins/stream_mutation_mixin.dart';
 import 'package:flutter/foundation.dart';
@@ -481,14 +480,14 @@ void main() {
       expect(vm.isGenerating, isFalse);
     });
 
-    test('no-op when no cancel token', () {
+    test('clears isGenerating when no cancel token', () {
       final vm = TestViewModel();
       vm.isGenerating = true;
       vm.currentCancelToken = null;
 
       vm.doStopGeneration();
 
-      expect(vm.isGenerating, isTrue);
+      expect(vm.isGenerating, isFalse);
     });
   });
 
@@ -612,9 +611,7 @@ void main() {
         content: 'Delete me',
       );
 
-      final before = DateTime.now();
       vm.storeUndoMessage(msg);
-      final after = DateTime.now();
 
       // canUndo should be true since within timeout
       expect(vm.canUndo, isTrue);

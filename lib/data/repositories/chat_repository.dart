@@ -49,6 +49,7 @@ class ChatRepository {
     String? modelId,
     GenerationParams? customParams,
     String? characterId,
+    String? branchFromThreadId,
   }) async {
     final thread = ChatThread(
       title: title,
@@ -56,6 +57,7 @@ class ChatRepository {
       modelId: modelId,
       customParams: customParams,
       characterId: characterId,
+      branchFromThreadId: branchFromThreadId,
     );
     await _localDb.insertThread(thread);
     return thread;

@@ -1,4 +1,3 @@
-import 'package:clan_ai/data/repositories/persona_template_repository.dart';
 import 'package:clan_ai/ui/features/roleplay/view_models/persona_template_view_model.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../helpers/fake_persona_template_repository.dart';

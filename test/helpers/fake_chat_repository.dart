@@ -11,6 +11,7 @@ class FakeChatRepository extends ChatRepository {
   List<ChatThread> get allThreads => _threads;
   final Map<String, List<ChatMessage>> _threadMessages = {};
   final Map<String, List<StreamChunk>> _streamFragments = {};
+  final Map<String, String> _messageThreadMap = {};
   ChatMessage? _lastSavedMessage;
   ChatMessage? _lastUpdatedMessage;
   bool _shouldThrowStreamError = false;
@@ -45,6 +46,7 @@ class FakeChatRepository extends ChatRepository {
     String? modelId,
     GenerationParams? customParams,
     String? characterId,
+    String? branchFromThreadId,
   }) async {
     final thread = ChatThread(
       title: title,
@@ -52,6 +54,7 @@ class FakeChatRepository extends ChatRepository {
       modelId: modelId,
       customParams: customParams,
       characterId: characterId,
+      branchFromThreadId: branchFromThreadId,
     );
     _threads.insert(0, thread);
     _threadMessages[thread.id] = [];
@@ -70,6 +73,7 @@ class FakeChatRepository extends ChatRepository {
   Future<void> deleteThread(String threadId) async {
     _threads.removeWhere((t) => t.id == threadId);
     _threadMessages.remove(threadId);
+    _messageThreadMap.removeWhere((msgId, tid) => tid == threadId);
   }
 
   @override
@@ -81,6 +85,7 @@ class FakeChatRepository extends ChatRepository {
   Future<void> saveMessage(ChatMessage message) async {
     _lastSavedMessage = message;
     _threadMessages.putIfAbsent(message.threadId, () => []);
+    _messageThreadMap[message.id] = message.threadId;
     final existingIndex = _threadMessages[message.threadId]
         ?.indexWhere((m) => m.id == message.id);
     if (existingIndex != null && existingIndex >= 0) {
@@ -103,9 +108,13 @@ class FakeChatRepository extends ChatRepository {
 
   @override
   Future<void> deleteMessage(String id) async {
-    final list = _threadMessages[id];
-    if (list != null) {
-      list.removeWhere((m) => m.id == id);
+    final threadId = _messageThreadMap[id];
+    if (threadId != null) {
+      final list = _threadMessages[threadId];
+      if (list != null) {
+        list.removeWhere((m) => m.id == id);
+      }
+      _messageThreadMap.remove(id);
     }
   }
 
@@ -123,6 +132,13 @@ class FakeChatRepository extends ChatRepository {
         ? history.first.threadId
         : 'unknown';
     final fragments = _streamFragments[threadId] ?? [];
+
+    if (fragments.isEmpty && _streamFragments.isNotEmpty) {
+      final first = _streamFragments.entries.first;
+      if (first.value.isNotEmpty) {
+        return Stream.fromIterable(first.value);
+      }
+    }
 
     if (_shouldThrowStreamError) {
       return Stream.fromIterable([

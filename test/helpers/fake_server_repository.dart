@@ -42,6 +42,7 @@ class FakeServerRepository extends ServerRepository {
       protocol: protocol,
     );
     _profiles.add(profile);
+    _activeProfileId = profile.id;
     return profile;
   }
 

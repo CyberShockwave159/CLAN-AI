@@ -1,10 +1,16 @@
-import 'package:clan_ai/data/repositories/character_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../helpers/fake_character_repository.dart';
+import '../helpers/mock_path_provider.dart';
 import '../helpers/test_model_factories.dart';
 
+late FakeCharacterRepository repo;
+
 void main() {
-  late FakeCharacterRepository repo;
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() async {
+    setupMockPathProvider();
+  });
 
   setUp(() {
     repo = FakeCharacterRepository();

@@ -21,7 +21,7 @@ CLAN AI is a cross-platform Flutter application built on a **Hybrid Clean Archit
 
 | Layer | Responsibility |
 |-------|---------------|
-| `models/` | Plain data classes with `toMap()`/`fromMap()` serialization (ChatThread, ChatMessage, CharacterProfile, ServerConfig, ServerProfile, GenerationParams) |
+| `models/` | Plain data classes with `toMap()`/`fromMap()` serialization (ChatThread, ChatMessage, CharacterProfile, ServerConfig, ServerProfile, GenerationParams, ModelInfo, SystemPromptTemplate) |
 | `repositories/` | Data access orchestration (ChatRepository, CharacterRepository, ServerRepository) — aggregate datasources, apply business rules |
 | `datasources/` | Raw data access (LocalDatabase, VectorStore, LlamaApiService) — SQLite, HTTP streams, secure storage |
 
@@ -33,6 +33,8 @@ CLAN AI is a cross-platform Flutter application built on a **Hybrid Clean Archit
 |-------|---------------|
 | `models/` | Business logic models (GenerationParams) — temperature, topP, repeatPenalty, context-fit logic, token/JSON serialization |
 | `errors/` | Exception hierarchy (AppException, ContextLimitExceededException, ServerOOMException) — error classification for UI handling |
+
+**Note:** `ModelInfo` lives in `lib/data/models/` (data layer) — it represents API response metadata from `/v1/models` and `/props` endpoints.
 
 ### Core Layer (`lib/core/`)
 

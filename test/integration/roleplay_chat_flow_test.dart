@@ -3,20 +3,29 @@ import 'package:clan_ai/core/utils/conversation_export.dart';
 import 'package:clan_ai/data/models/chat_message.dart';
 import 'package:clan_ai/ui/features/roleplay/view_models/roleplay_view_model.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import '../helpers/fake_chat_repository.dart';
 import '../helpers/fake_character_repository.dart';
 import '../helpers/fake_vector_store.dart';
+import '../helpers/mock_path_provider.dart';
 import '../helpers/test_model_factories.dart';
 
-/// Integration test: Full roleplay flow without network.
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(() {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  });
+
   late FakeChatRepository chatRepo;
   late FakeCharacterRepository charRepo;
   late FakeVectorStore vectorStore;
   late RoleplayViewModel vm;
 
-  setUp(() {
+  setUp(() async {
+    SharedPreferences.setMockInitialValues({});
+    setupMockPathProvider();
     chatRepo = FakeChatRepository();
     charRepo = FakeCharacterRepository();
     vectorStore = FakeVectorStore();
@@ -87,6 +96,7 @@ void main() {
       customParams: null,
       modelContextLength: null,
     );
+    await Future.delayed(const Duration(milliseconds: 50));
 
     expect(vm.messages[1].variantIndex, equals(1));
     expect(vm.messages[1].totalVariants, equals(2));

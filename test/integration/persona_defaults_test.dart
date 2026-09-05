@@ -1,11 +1,17 @@
-import 'package:clan_ai/data/repositories/persona_template_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../helpers/fake_character_repository.dart';
 import '../helpers/fake_persona_template_repository.dart';
+import '../helpers/mock_path_provider.dart';
 import '../helpers/test_model_factories.dart';
 
 /// Tests: Persona template isolation and application.
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() async {
+    setupMockPathProvider();
+  });
+
   late FakePersonaTemplateRepository templateRepo;
   late FakeCharacterRepository charRepo;
 

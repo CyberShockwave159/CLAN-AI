@@ -5,7 +5,7 @@ Recommended order: `pub get` → `analyze` → `test` → `run`.
 ```
 flutter pub get            # fetch dependencies (required after git pull)
 flutter analyze            # lint + typecheck (uses flutter_lints)
-flutter test               # runs all 28 test files (~150+ tests across all layers, includes reasoning)
+flutter test               # runs all 28 test files (~463 total tests, includes reasoning)
 flutter run -d <device>    # devices: linux, macos, windows, <android-id>
 ```
 
@@ -14,8 +14,8 @@ flutter run -d <device>    # devices: linux, macos, windows, <android-id>
 - **No codegen.** All JSON serialization is manual `jsonEncode`/`jsonDecode` + `toMap()`/`fromMap()`.
 - **No domain layer interfaces.** `lib/domain/models/` contains only `generation_params.dart`.
 - **Shared constants** in `lib/core/constants/app_constants.dart` — all magic numbers and default strings centralized.
-- **Shared mixin** `StreamMutationMixin` in `lib/ui/shared/mixins/stream_mutation_mixin.dart` — provides shared streaming, undo, switchVariant, stopGeneration logic for both ChatViewModel and RoleplayViewModel.
-- **Shared widgets** in `lib/ui/shared/widgets/` — `parameter_sheet_opener.dart`, `drawer_export_menu.dart`, `auto_scroll_mixin.dart`, `delete_message_handler.dart`, `desktop_keyboard_shortcuts.dart`.
+- **Shared mixin** `StreamMutationMixin` in `lib/ui/shared/mixins/stream_mutation_mixin.dart` — provides shared streaming, undo, switchVariant, stopGeneration logic for both ChatViewModel and RoleplayViewModel. `doStopGeneration()` always clears `isGenerating` flag.
+- **Shared widgets** in `lib/ui/shared/widgets/` — `parameter_sheet_opener.dart`, `drawer_export_menu.dart`, `desktop_keyboard_shortcuts.dart`. **Shared mixins** in `lib/ui/shared/mixins/` — `auto_scroll_mixin.dart`, `stream_mutation_mixin.dart`. **Shared utilities** in `lib/ui/shared/` — `avatar_utils.dart`, `delete_message_handler.dart`.
 - **Shared settings sections** in `lib/ui/features/settings/views/sections/` — `profile_section.dart`, `safety_section.dart`, `app_mode_section.dart`.
 - **Dependency wiring** in `lib/main.dart` via constructor injection.
 - **Four root providers:** `SettingsViewModel`, `ChatViewModel`, `RoleplayViewModel`, `PersonaTemplateViewModel`. `CharacterRepository` also exposed via `Provider`.
@@ -45,13 +45,14 @@ flutter run -d <device>    # devices: linux, macos, windows, <android-id>
 - `lib/ui/features/roleplay/widgets/silly_tavern_import_dialog.dart` — Preview/edit dialog for imported characters. Shows all parsed fields (including system prompt, post history, alternate greetings) with text editors and persona template selector dropdown.
 - `lib/ui/features/roleplay/widgets/character_edit_dialog.dart` — Proper StatefulWidget for editing existing characters. Uses `context.watch<PersonaTemplateViewModel>()` for template selection. `_applyTemplate()` wraps state updates in `setState` to ensure TextField updates. Returns `Future<CharacterProfile>` via `.then()`.
 - `lib/ui/features/roleplay/views/roleplay_drawer.dart` — Contains `_showEditDialog(CharacterProfile, CharacterRepository)` which delegates to `CharacterEditDialog`. Import flow: pick JSON → parse → save → auto-open edit dialog → start roleplay with updated character. Character export with RAG memories via `exportCharacterWithRAG()`.
-- `lib/ui/shared/widgets/desktop_keyboard_shortcuts.dart` — Wraps root app in `RawKeyboardListener`. Handles Ctrl+N/Cmd+N (New Chat), Ctrl+K/Cmd+K (Thread Search with `showSearch`/`SearchDelegate`), Ctrl+, (Settings), Escape (Stop generation).
+- `lib/ui/shared/widgets/desktop_keyboard_shortcuts.dart` — Wraps root app in `KeyboardListener` (migrated from deprecated `RawKeyboardListener`). Handles Ctrl+N/Cmd+N (New Chat), Ctrl+K/Cmd+K (Thread Search with `showSearch`/`SearchDelegate`), Ctrl+, (Settings), Escape (Stop generation), Ctrl+/ / F1 (Keyboard Shortcuts Help via `ShortcutsHelpDialog`).
 - `lib/ui/features/roleplay/widgets/character_creation_wizard.dart` — 4-step wizard with persona template selector, system prompt override, post history instructions, and alternate greetings input.
  - `lib/ui/features/roleplay/widgets/persona_template_dialog.dart` — Create/edit/delete persona templates dialog.
  - `lib/ui/features/roleplay/widgets/character_memories_dialog.dart` — Per-character memory viewer and pruner. Lists all vector embeddings for a character; allows deleting individual memories or clearing all.
 - `lib/ui/features/roleplay/widgets/alternate_greeting_selector.dart` — Displays alternate greetings as selectable chips above the chat input.
 - `lib/core/utils/roleplay_context_builder.dart` — Orchestrates RAG: embeds user input → searches memories → builds system prompt. Accepts `characterSystemPrompt` and `postHistoryInstructions` for per-character prompt overrides.
 - `lib/core/utils/roleplay_prompt_formatter.dart` — Compiles roleplay system prompt. Handles character system prompt override with `{{original}}` prefix support. Appends post history instructions after standard prompt.
+- `lib/core/utils/avatar_storage_service.dart` — Stores large character avatars as files on disk instead of inline in SQLite. 500KB threshold for file storage. Methods: `saveAvatar()`, `getAvatarBytes()`, `deleteAvatar()`, `clearAllAvatars()`.
 
 ## Key models
 - **`ChatThread`** (lib/data/models/chat_thread.dart) — owns messages via FK; `systemPrompt` (per-thread override), `modelId`, `customParams` (JSON), `isPinned`, `branchFromThreadId`, `characterId` (null = assistant, set = roleplay).
@@ -63,6 +64,8 @@ flutter run -d <device>    # devices: linux, macos, windows, <android-id>
 - **`PersonaTemplate`** (lib/data/models/persona_template.dart) — Global reusable user persona. `id`, `name`, `personaText`, `createdAt`, `updatedAt`. Stored in SQLite `persona_templates` table (migrated from SharedPreferences in v8).
 - **`AppMode`** (lib/data/models/app_mode.dart) — `assistant` or `roleplay`.
 - **`ApiProtocol`** (lib/data/models/server_config.dart) — `openAi` or `llamaNative`.
+- **`ModelInfo`** (lib/data/models/model_info.dart) — Model metadata from `/v1/models` and `/props` endpoints. `id`, `name`, `ownedBy`, `contextLength`, `format`, `quantization`.
+- **`SystemPromptTemplate`** (lib/data/models/system_prompt_template.dart) — System prompt templates stored in SharedPreferences. `name`, `content`, `createdAt`.
 
 ## Streaming flow (critical for chat changes)
 1. ViewModel creates user message → persists to SQLite → creates streaming placeholder.
@@ -95,10 +98,10 @@ flutter run -d <device>    # devices: linux, macos, windows, <android-id>
 - **ServerConfig sync:** `ServerRepository.syncConfigFromProfile()` and `syncProfileFromConfig()` propagate `baseUrl`, `apiKey`, `protocol` between profile and global config. `SettingsViewModel.updateUrl/ApiKey/Protocol` updates both and calls `_saveConfig()`. Health check only notifies listeners when values actually change.
 - **Settings screen:** Sections use numbered headers (1-7). System Prompt section hidden in roleplay mode; Persona Templates section shown instead. Model dropdown removed — handled via ProfileSection.
 - **Parameter tuning sheet:** Uses `SettingsViewModel.getSelectedModelContextLength()` to set default context size to model max. `_buildSlider` renders parameter description subtitles. Context Window slider caps input to model's max context length.
-- **StreamMutationMixin:** `ChatViewModel` and `RoleplayViewModel` both mix in `StreamMutationMixin` which provides `_streamResponse`, `undoDelete`, `canUndo`, `stopGeneration`, `switchVariant`, and `storeUndoMessage`. The mixin's `doStreamResponse` is called from each VM's `_streamResponse` with an optional `onComplete` hook (used by RoleplayViewModel for RAG embedding).
+- **StreamMutationMixin:** `ChatViewModel` and `RoleplayViewModel` both mix in `StreamMutationMixin` which provides `_streamResponse`, `undoDelete`, `canUndo`, `stopGeneration`, `switchVariant`, and `storeUndoMessage`. The mixin's `doStreamResponse` is called from each VM's `_streamResponse` with an optional `onComplete` hook (used by RoleplayViewModel for RAG embedding). `doStopGeneration()` always clears `isGenerating` flag regardless of cancel token state.
 - **Conversation branching:** Regenerate/edit truncates at parent message, creates new sibling branches. Navigation uses `variantIndex` + `siblingIds`. `ChatViewModel.branchConversation()` creates a new `ChatThread` with copied messages and `branchFromThreadId` link.
 - **System prompt resolution:** Thread-level `ChatThread.systemPrompt` overrides global `ServerConfig.systemPrompt`. In roleplay, RAG context builder overwrites it per-message. Character-level `CharacterProfile.systemPrompt` takes priority — if set, it replaces the entire prompt; `{{original}}` prefix inserts standard prompt before custom text.
-- **Health polling:** 15s timer. Fallback chain: `/props` → `/v1/models`. `ServerRepository.fetchModels()` tries `/props` first (llama.cpp), then `/v1/models` (OpenAI), deduplicates by model id.
+- **Health polling:** 15s timer. Fallback chain: `/health` → `/props` → `/v1/models`. `ServerRepository.fetchModels()` tries `/health` first (llama.cpp), then `/props`, then `/v1/models` (OpenAI), deduplicates by model id.
 - **Android networking:** `127.0.0.1` is device loopback. Use `10.0.2.2` for emulator, LAN IP for physical devices.
 - **SQLite FFI:** `sqfliteFfiInit()` called **once** in `main.dart` via `_initSqliteFfi()`. Guard: `if (_sqfliteFfiInitialized) return;` + platform check (Linux/Windows/macOS only). Both `LocalDatabase._initDB()` and `VectorStoreDatabase._initDB()` rely on this. Calling it again triggers "You are changing sqflite default factory" warning.
 - **SQLite schema v8:** Migrations check column existence before `ALTER TABLE`. Schema evolution: v1→v2 (custom_params), v2→v3 (branch_from_thread_id), v3→v4 (character_id), v4→v5 (is_edited, updated_at), v5→v6 (rag_memory_count), v6→v7 (reasoning_content), v7→v8 (characters + persona_templates tables with SharedPreferences migration). Delete `clan_ai.db` if schema errors occur.
@@ -136,13 +139,13 @@ flutter run -d <device>    # devices: linux, macos, windows, <android-id>
 - **Bubble width:** Capped at 600px via `LayoutBuilder` to prevent overflow on tablets.
 
 ## Testing
-28 test files across 8 layers, ~150+ tests. All tests use fake repositories (no real SQLite or network). ViewModels expose private state via setters for test injection.
+28 test files, ~463 total tests. All tests use fake repositories (no real SQLite or network). ViewModels expose private state via setters for test injection.
 
 ### Test structure
-- **Test helpers** (`test/helpers/`) — `FakeChatRepository`, `FakeCharacterRepository`, `FakeVectorStore`, `FakeServerRepository`, `FakePersonaTemplateRepository`, `test_model_factories.dart`.
+- **Test helpers** (`test/helpers/`) — `FakeChatRepository`, `FakeCharacterRepository`, `FakeVectorStore`, `FakeServerRepository`, `FakePersonaTemplateRepository`, `FakeSystemPromptTemplatesRepository`, `test_model_factories.dart`.
  - **Domain** (`test/domain/`) — `generation_params_test.dart` (OpenAI & native payloads, TextSanitizer segment parsing, reasoning flags, configurable RAG params ragTopK/ragMinScore), `models/model_roundtrips_test.dart` (ChatThread, ChatMessage, CharacterProfile, PersonaTemplate, ServerConfig serialization roundtrips).
  - **Network** (`test/network/`) — `sse_client_test.dart` (OpenAI deltas, llama.cpp native chunks, ping comments, multi-line data, multi-field reasoning extraction, `filterReasoning` inline tag processing), `http_client_test.dart` (ContextLimitExceededException, ServerOOMException, AppException error classification, recovery suggestions).
- - **Utils** (`test/utils/`) — `roleplay_prompt_formatter_test.dart`, `roleplay_context_builder_test.dart`, `hash_embedding_test.dart`, `vector_store_test.dart` (save, search, delete, getAllMemories, deleteEmbedding), `silly_tavern_card_parser_test.dart`, `conversation_export_test.dart`, `file_saver_test.dart` (desktop fallback, ConversationExport toTxt/json).
+ - **Utils** (`test/utils/`) — `roleplay_prompt_formatter_test.dart`, `roleplay_context_builder_test.dart`, `hash_embedding_test.dart`, `vector_store_test.dart` (save, search, delete, getAllMemories, deleteEmbedding), `silly_tavern_card_parser_test.dart`, `conversation_export_test.dart`, `file_saver_test.dart` (desktop fallback, ConversationExport toTxt/json), `text_sanitizer_test.dart` (segment parsing).
 - **Mixin** (`test/mixin/`) — `stream_mutation_mixin_test.dart` (streaming, undo, stop, switchVariant).
 - **Repositories** (`test/repository/`) — `chat_repository_test.dart`, `character_repository_test.dart` (thread CRUD, message operations, favorites, embeddings).
 - **ViewModels** (`test/view_model/`) — `chat_view_model_test.dart`, `roleplay_view_model_test.dart`, `settings_view_model_test.dart`, `persona_template_view_model_test.dart`.
@@ -167,7 +170,7 @@ lib/
 │   ├── constants/                     # AppTheme, API endpoints, shared constants (app_constants.dart)
 │   ├── errors/                        # AppException hierarchy (6 classes)
 │   ├── network/                       # ApiHttpClient, SseClient
-│   └── utils/                         # LatencyMeter, Mutex, RoleplayContextBuilder, RoleplayPromptFormatter, TextSanitizer, HashEmbedding, FileSaver, EmbeddingService, SillyTavernCardParser, StAvatarDownloader
+│   └── utils/                         # LatencyMeter, Mutex, RoleplayContextBuilder, RoleplayPromptFormatter, TextSanitizer, HashEmbedding, FileSaver, EmbeddingService, SillyTavernCardParser, StAvatarDownloader, ConversationExport, AvatarStorageService
 ├── data/
 │   ├── datasources/                   # LlamaApiService, LocalDatabase, VectorStore
 │   ├── models/                        # All domain models (ChatThread, ChatMessage, ServerConfig, ServerProfile, CharacterProfile, PersonaTemplate, etc.)
@@ -189,7 +192,7 @@ lib/
     │   └── settings/
     │       ├── view_models/           # SettingsViewModel
     │       └── views/                 # SettingsScreen, ParameterTuningSheet, sections/ (profile_section, safety_section, app_mode_section)
-    └── shared/                        # AppHeader, ConnectionBadge, mixins/ (stream_mutation_mixin), widgets/ (parameter_sheet_opener, drawer_export_menu, auto_scroll_mixin, delete_message_handler), avatar_utils
+    └── shared/                        # AppHeader, ConnectionBadge, mixins/ (stream_mutation_mixin, auto_scroll_mixin), widgets/ (parameter_sheet_opener, drawer_export_menu, desktop_keyboard_shortcuts), avatar_utils
 ## Tests
 ```
 test/

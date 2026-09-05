@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:clan_ai/core/constants/app_theme.dart';
+import 'package:clan_ai/core/utils/latency_meter.dart';
 import 'package:clan_ai/ui/features/chat/views/message_bubble.dart';
 import 'package:clan_ai/ui/features/chat/views/prompt_input_bar.dart';
 import 'package:clan_ai/ui/features/roleplay/views/roleplay_drawer.dart';
@@ -101,7 +102,7 @@ class _RoleplayScreenState extends State<RoleplayScreen> with AutoScrollMixin {
                 color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
               ),
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 12),
             Text(
               'Start your roleplay...',
               style: TextStyle(
@@ -109,6 +110,42 @@ class _RoleplayScreenState extends State<RoleplayScreen> with AutoScrollMixin {
                 color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
               ),
             ),
+            if (context.watch<SettingsViewModel>().config.healthStatus == ServerHealthStatus.offline)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: (isDark ? Colors.red.shade900 : Colors.red.shade100).withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.red.shade700),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.warning_amber_rounded, color: Colors.red.shade700, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Server unreachable. Verify your endpoint in Settings.',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.red.shade700,
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                          );
+                        },
+                        style: TextButton.styleFrom(foregroundColor: Colors.red.shade700),
+                        child: const Text('Open Settings'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
           ],
         ],
       ),

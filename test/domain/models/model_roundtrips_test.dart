@@ -384,7 +384,6 @@ void main() {
         firstMessage: 'Test',
       );
       expect(char.alternateGreetings, isEmpty);
-      expect(char.alternateGreetings is List<String>, isTrue);
     });
 
     test('fromMap uses fallback id when missing', () {

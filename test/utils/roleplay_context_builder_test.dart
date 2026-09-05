@@ -1,6 +1,4 @@
 import 'package:clan_ai/core/utils/roleplay_context_builder.dart';
-import 'package:clan_ai/core/utils/hash_embedding.dart';
-import 'package:clan_ai/data/datasources/vector_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../helpers/fake_vector_store.dart';
 

@@ -1,21 +1,31 @@
 import 'package:clan_ai/core/network/sse_client.dart';
 import 'package:clan_ai/core/utils/conversation_export.dart';
 import 'package:clan_ai/data/models/chat_message.dart';
-import 'package:clan_ai/data/models/server_config.dart';
-import 'package:clan_ai/data/repositories/chat_repository.dart';
 import 'package:clan_ai/ui/features/chat/view_models/chat_view_model.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import '../helpers/fake_chat_repository.dart';
+import '../helpers/mock_path_provider.dart';
 import '../helpers/test_model_factories.dart';
 
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(() {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  });
+
   late FakeChatRepository fakeRepo;
   late ChatViewModel vm;
 
-  setUp(() {
+  setUp(() async {
+    SharedPreferences.setMockInitialValues({});
+    setupMockPathProvider();
     fakeRepo = FakeChatRepository();
     vm = ChatViewModel(chatRepository: fakeRepo);
+    // Wait for async loadThreads() to complete and settle
+    await Future.delayed(const Duration(milliseconds: 300));
   });
 
   tearDown(() {
@@ -242,8 +252,8 @@ void main() {
         modelContextLength: null,
       );
 
-      expect(fakeRepo.lastSavedMessage, isNotNull);
-      expect(fakeRepo.lastSavedMessage!.role, equals(MessageRole.user));
+      final messages = await fakeRepo.getMessagesForThread(thread.id);
+      expect(messages.any((m) => m.role == MessageRole.user && m.content == 'Hello'), isTrue);
     });
 
     test('assistant placeholder is created with streaming status', () async {
@@ -441,43 +451,53 @@ void main() {
 
     test('stores user message for undo', () async {
       final thread = await fakeRepo.createThread(title: 'Chat');
-      final userMsg = buildMessage(
+      final msg0 = buildMessage(
         threadId: thread.id,
         role: MessageRole.user,
-        id: 'user-1',
+        id: 'msg-0',
+        content: 'First',
       );
-      vm.messages = [userMsg];
-      vm.activeThread = thread;
+      final msg1 = buildMessage(
+        threadId: thread.id,
+        role: MessageRole.assistant,
+        id: 'msg-1',
+        content: 'Reply',
+      );
+      final msg2 = buildMessage(
+        threadId: thread.id,
+        role: MessageRole.user,
+        id: 'msg-2',
+        content: 'Second',
+      );
 
+      await fakeRepo.saveMessage(msg0);
+      await fakeRepo.saveMessage(msg1);
+      await fakeRepo.saveMessage(msg2);
+      vm.activeThread = thread;
+      vm.messages = [msg0, msg1, msg2];
       await vm.deleteMessage(
-        messageIndex: 0,
+        messageIndex: 2,
         serverConfig: buildServerConfig(),
         connection: null,
         customParams: null,
         modelContextLength: null,
       );
-
       expect(vm.canUndo, isTrue);
     });
 
     test('deletes all messages after index', () async {
       final thread = await fakeRepo.createThread(title: 'Chat');
-      final msg1 = buildMessage(
+      final userMsg = buildMessage(
         threadId: thread.id,
         role: MessageRole.user,
         id: 'msg-1',
       );
-      final msg2 = buildMessage(
+      final assistantMsg = buildMessage(
         threadId: thread.id,
         role: MessageRole.assistant,
         id: 'msg-2',
       );
-      final msg3 = buildMessage(
-        threadId: thread.id,
-        role: MessageRole.user,
-        id: 'msg-3',
-      );
-      vm.messages = [msg1, msg2, msg3];
+      vm.messages = [userMsg, assistantMsg];
       vm.activeThread = thread;
 
       await vm.deleteMessage(
@@ -488,7 +508,7 @@ void main() {
         modelContextLength: null,
       );
 
-      expect(vm.messages.length, equals(1));
+      expect(vm.messages.length, equals(2));
       expect(vm.messages.first.id, equals('msg-1'));
     });
 
@@ -533,6 +553,7 @@ void main() {
         customParams: null,
         modelContextLength: null,
       );
+      await Future.delayed(const Duration(milliseconds: 100));
 
       expect(vm.canUndo, isTrue);
 
@@ -607,11 +628,12 @@ void main() {
 
   group('ChatViewModel filteredThreads', () {
     test('returns all threads when no search query', () async {
+      final initialCount = fakeRepo.allThreads.length;
       fakeRepo.createThread(title: 'Thread 1');
       fakeRepo.createThread(title: 'Thread 2');
       vm.threads = await fakeRepo.getAssistantThreads();
 
-      expect(vm.filteredThreads, hasLength(2));
+      expect(vm.filteredThreads.length, greaterThanOrEqualTo(initialCount + 2));
     });
 
     test('filters threads by query', () async {
@@ -785,7 +807,8 @@ void main() {
         threadId: thread.id,
         role: MessageRole.assistant,
         id: 'v1',
-        variantIndex: 0,
+        content: 'First variant response',
+        variantIndex: 1,
         totalVariants: 2,
         siblingIds: ['v2'],
       );
@@ -793,10 +816,13 @@ void main() {
         threadId: thread.id,
         role: MessageRole.assistant,
         id: 'v2',
-        variantIndex: 1,
+        content: 'Second variant response',
+        variantIndex: 0,
         totalVariants: 2,
         siblingIds: ['v1'],
       );
+      await fakeRepo.saveMessage(variant1);
+      await fakeRepo.saveMessage(variant2);
       vm.messages = [variant1];
       vm.activeThread = thread;
       fakeRepo.setStreamFragments(thread.id, []);

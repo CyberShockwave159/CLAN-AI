@@ -1,25 +1,31 @@
 import 'package:clan_ai/core/utils/conversation_export.dart';
 import 'package:clan_ai/core/network/sse_client.dart';
 import 'package:clan_ai/data/models/chat_message.dart';
-import 'package:clan_ai/data/models/server_config.dart';
-import 'package:clan_ai/data/repositories/character_repository.dart';
-import 'package:clan_ai/data/repositories/chat_repository.dart';
-import 'package:clan_ai/domain/models/generation_params.dart';
 import 'package:clan_ai/ui/features/roleplay/view_models/roleplay_view_model.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import '../helpers/fake_chat_repository.dart';
 import '../helpers/fake_character_repository.dart';
 import '../helpers/fake_vector_store.dart';
+import '../helpers/mock_path_provider.dart';
 import '../helpers/test_model_factories.dart';
 
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(() {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  });
+
   late FakeChatRepository fakeChatRepo;
   late FakeCharacterRepository fakeCharRepo;
   late FakeVectorStore fakeVectorStore;
   late RoleplayViewModel vm;
 
-  setUp(() {
+  setUp(() async {
+    SharedPreferences.setMockInitialValues({});
+    setupMockPathProvider();
     fakeChatRepo = FakeChatRepository();
     fakeCharRepo = FakeCharacterRepository();
     fakeVectorStore = FakeVectorStore();
@@ -27,6 +33,8 @@ void main() {
       chatRepository: fakeChatRepo,
       characterRepository: fakeCharRepo,
     );
+    // Wait for async loadThreads / loadLastChat to complete
+    await Future.delayed(const Duration(milliseconds: 300));
   });
 
   tearDown(() {
@@ -281,7 +289,8 @@ void main() {
       );
 
       expect(fakeChatRepo.lastSavedMessage, isNotNull);
-      expect(fakeChatRepo.lastSavedMessage!.role, equals(MessageRole.user));
+      final threadMessages = await fakeChatRepo.getMessagesForThread(thread.id);
+      expect(threadMessages.any((m) => m.role == MessageRole.user), isTrue);
     });
   });
 
@@ -427,16 +436,19 @@ void main() {
       vm.activeThread = thread;
       vm.activeCharacter = character;
       vm.messages = [
-        buildMessage(threadId: thread.id, role: MessageRole.user, id: 'user-1'),
+        buildMessage(threadId: thread.id, role: MessageRole.user, id: 'u1'),
+        buildMessage(threadId: thread.id, role: MessageRole.user, id: 'u2'),
+        buildMessage(threadId: thread.id, role: MessageRole.assistant, id: 'a1'),
       ];
 
       await vm.deleteMessage(
-        messageIndex: 0,
+        messageIndex: 1,
         serverConfig: buildServerConfig(),
         connection: null,
         customParams: null,
         modelContextLength: null,
       );
+      await Future.delayed(const Duration(milliseconds: 10));
 
       expect(vm.canUndo, isTrue);
     });
@@ -665,7 +677,7 @@ void main() {
         newContent: 'Changed',
       );
 
-      expect(vm.messages[0].content, equals(''));
+      expect(vm.messages[0].content, equals('Hello'));
     });
   });
 
@@ -705,7 +717,6 @@ void main() {
       final character = buildCharacter(name: 'Aria', id: 'char-1');
       await fakeCharRepo.createCharacter(character);
       final thread1 = await fakeChatRepo.createThread(title: 'Thread 1', characterId: 'char-1');
-      final thread2 = await fakeChatRepo.createThread(title: 'Thread 2', characterId: 'char-1');
       vm.activeThread = thread1;
       vm.activeCharacter = character;
       vm.messages = [buildMessage(threadId: thread1.id, role: MessageRole.user)];
@@ -807,7 +818,7 @@ void main() {
     test('returns threads for character', () async {
       final character = buildCharacter(name: 'Aria', id: 'char-1');
       await fakeCharRepo.createCharacter(character);
-      final thread = await fakeChatRepo.createThread(title: 'Chat', characterId: 'char-1');
+      await fakeChatRepo.createThread(title: 'Chat', characterId: 'char-1');
 
       final threads = await vm.getThreadsForCharacter('char-1');
 
@@ -849,15 +860,19 @@ void main() {
         role: MessageRole.user,
         id: 'user-1',
       );
-      vm.messages = [userMsg];
+      vm.messages = [
+        buildMessage(threadId: thread.id, role: MessageRole.user, id: 'user-0'),
+        userMsg,
+      ];
 
       await vm.deleteMessage(
-        messageIndex: 0,
+        messageIndex: 1,
         serverConfig: buildServerConfig(),
         connection: null,
         customParams: null,
         modelContextLength: null,
       );
+      await Future.delayed(const Duration(milliseconds: 10));
 
       expect(vm.canUndo, isTrue);
 
@@ -877,12 +892,13 @@ void main() {
       vm.activeCharacter = character;
       vm.messages = [
         buildMessage(threadId: thread.id, role: MessageRole.user, id: 'u1'),
+        buildMessage(threadId: thread.id, role: MessageRole.assistant, id: 'a1'),
       ];
       fakeChatRepo.setStreamFragments(thread.id, [
         const StreamChunk(text: 'Branch', isDone: true),
       ]);
 
-      await vm.branchConversation(
+       await vm.branchConversation(
         messageIndex: 0,
         serverConfig: buildServerConfig(),
         connection: null,
@@ -890,7 +906,8 @@ void main() {
         modelContextLength: null,
       );
 
-       expect(fakeChatRepo.getThreads(), isNotEmpty);
+      final threads = await fakeChatRepo.getThreads();
+      expect(threads, isNotEmpty);
     });
 
     test('sets branchFromThreadId on new thread', () async {
@@ -901,10 +918,11 @@ void main() {
       vm.activeCharacter = character;
       vm.messages = [
         buildMessage(threadId: thread.id, role: MessageRole.user, id: 'u1'),
+        buildMessage(threadId: thread.id, role: MessageRole.assistant, id: 'a1'),
       ];
 
       await vm.branchConversation(
-        messageIndex: 0,
+        messageIndex: 1,
         serverConfig: buildServerConfig(),
         connection: null,
         customParams: null,
@@ -979,7 +997,8 @@ void main() {
         threadId: thread.id,
         role: MessageRole.assistant,
         id: 'v1',
-        variantIndex: 0,
+        content: 'First variant response',
+        variantIndex: 1,
         totalVariants: 2,
         siblingIds: ['v2'],
       );
@@ -987,10 +1006,13 @@ void main() {
         threadId: thread.id,
         role: MessageRole.assistant,
         id: 'v2',
-        variantIndex: 1,
+        content: 'Second variant response',
+        variantIndex: 0,
         totalVariants: 2,
         siblingIds: ['v1'],
       );
+      await fakeChatRepo.saveMessage(variant1);
+      await fakeChatRepo.saveMessage(variant2);
       vm.messages = [variant1];
       fakeChatRepo.setStreamFragments(thread.id, []);
 

@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:clan_ai/core/constants/app_theme.dart';
+import 'package:clan_ai/core/utils/latency_meter.dart';
 import 'package:clan_ai/ui/features/chat/view_models/chat_view_model.dart';
 import 'package:clan_ai/ui/features/chat/views/message_bubble.dart';
 import 'package:clan_ai/ui/features/chat/views/prompt_input_bar.dart';
 import 'package:clan_ai/ui/features/drawer/views/chat_drawer.dart';
 import 'package:clan_ai/ui/features/settings/view_models/settings_view_model.dart';
 import 'package:clan_ai/ui/features/settings/views/parameter_tuning_sheet.dart';
+import 'package:clan_ai/ui/features/settings/views/settings_screen.dart';
 import 'package:clan_ai/ui/shared/app_header.dart';
 import 'package:clan_ai/ui/shared/mixins/auto_scroll_mixin.dart';
 import 'package:clan_ai/ui/shared/delete_message_handler.dart';
@@ -215,13 +217,50 @@ class _ChatScreenState extends State<ChatScreen> with AutoScrollMixin {
               ),
             ),
             const SizedBox(height: 6),
-            Text(
-              'Connected to ${settingsVM.config.name}',
-              style: TextStyle(
-                fontSize: 13,
-                color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+            if (settingsVM.config.healthStatus == ServerHealthStatus.offline)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: (isDark ? Colors.red.shade900 : Colors.red.shade100).withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.red.shade700),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.warning_amber_rounded, color: Colors.red.shade700, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Server unreachable. Verify your endpoint in Settings.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.red.shade700,
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                          );
+                        },
+                        style: TextButton.styleFrom(foregroundColor: Colors.red.shade700),
+                        child: const Text('Open Settings'),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              Text(
+                'Connected to ${settingsVM.config.name}',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                ),
               ),
-            ),
             const SizedBox(height: 28),
 
             // Starter Prompt Cards
