@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:clan_ai/core/constants/app_theme.dart';
+import 'package:clan_ai/core/constants/clan_theme_colors.dart';
 
 /// Displays alternate greetings as selectable chips below the chat input.
 ///
@@ -19,7 +19,6 @@ class AlternateGreetingSelector extends StatelessWidget {
   Widget build(BuildContext context) {
     if (greetings.isEmpty) return const SizedBox.shrink();
 
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final textScaler = MediaQuery.textScalerOf(context);
 
     return Container(
@@ -34,7 +33,7 @@ class AlternateGreetingSelector extends StatelessWidget {
               style: TextStyle(
                 fontSize: 11,
                 fontStyle: FontStyle.italic,
-                color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                color: context.clanTextMuted,
               ),
             ),
           ),
@@ -60,25 +59,25 @@ class AlternateGreetingSelector extends StatelessWidget {
                       avatar: Icon(
                         Icons.auto_awesome_rounded,
                         size: 14,
-                        color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                        color: context.clanTextMuted,
                       ),
                       label: Text(
                         displayText,
                         style: TextStyle(
                           fontSize: 12,
-                          color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                          color: context.clanTextPrimary,
                         ),
                       ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20),
                         side: BorderSide(
-                          color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder,
+                          color: context.clanBorder,
                           width: 1,
                         ),
                       ),
-                      backgroundColor: isDark
-                          ? AppTheme.darkSurfaceVariant.withValues(alpha: 0.5)
-                          : AppTheme.lightSurfaceVariant,
+                      backgroundColor: Theme.of(context).brightness == Brightness.dark
+                          ? context.clanSurfaceVariant.withValues(alpha: 0.5)
+                          : context.clanSurfaceVariant,
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       labelPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
                     ),

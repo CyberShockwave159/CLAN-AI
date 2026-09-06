@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:clan_ai/core/constants/app_constants.dart';
 import 'package:clan_ai/core/constants/app_theme.dart';
+import 'package:clan_ai/core/constants/clan_theme_colors.dart';
 import 'package:clan_ai/data/models/chat_message.dart';
 import 'package:clan_ai/ui/features/chat/widgets/markdown_body_view.dart';
 import 'package:clan_ai/ui/features/chat/widgets/token_speed_badge.dart';
@@ -125,7 +126,6 @@ class MessageBubble extends StatelessWidget {
   }
 
   void _showDeleteDialog(BuildContext context, bool isFirstMessage) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -145,14 +145,14 @@ class MessageBubble extends StatelessWidget {
               isFirstMessage
                   ? 'The first message will be removed and the entire conversation will be deleted. This cannot be undone.'
                   : 'The message and all messages after it will be removed. This cannot be undone.',
-              style: TextStyle(color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted),
+              style: TextStyle(color: context.clanTextMuted),
             ),
             if (message.content.length > messagePreviewLen) ...[
               const SizedBox(height: 12),
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: isDark ? AppTheme.darkSurfaceVariant : AppTheme.lightSurfaceVariant,
+                  color: context.clanSurfaceVariant,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -162,7 +162,7 @@ class MessageBubble extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 12,
                     fontStyle: FontStyle.italic,
-                    color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                    color: context.clanTextMuted,
                   ),
                 ),
               ),
@@ -188,7 +188,6 @@ class MessageBubble extends StatelessWidget {
   }
 
   void _showMemoriesDialog(BuildContext context, List<String> memories) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -203,7 +202,7 @@ class MessageBubble extends StatelessWidget {
                 margin: const EdgeInsets.only(bottom: 8),
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: isDark ? AppTheme.darkSurfaceVariant : AppTheme.lightSurfaceVariant,
+                  color: context.clanSurfaceVariant,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Column(
@@ -214,7 +213,7 @@ class MessageBubble extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                        color: context.clanTextMuted,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -222,7 +221,7 @@ class MessageBubble extends StatelessWidget {
                       memories[index],
                       style: TextStyle(
                         fontSize: 13,
-                        color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                        color: context.clanTextPrimary,
                       ),
                     ),
                   ],
@@ -244,7 +243,6 @@ class MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isUser = message.role == MessageRole.user;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final textScaler = MediaQuery.of(context).textScaler;
 
     return Padding(
@@ -302,7 +300,7 @@ class MessageBubble extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                    color: context.clanTextPrimary,
                   ),
                 ),
               ],
@@ -320,8 +318,8 @@ class MessageBubble extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
                   color: isUser
-                      ? (isDark ? AppTheme.darkUserBubble : AppTheme.lightUserBubble)
-                      : (isDark ? AppTheme.darkAssistantBubble : AppTheme.lightAssistantBubble),
+                      ? context.clanUserBubble
+                      : context.clanAssistantBubble,
                   borderRadius: BorderRadius.only(
                     topLeft: const Radius.circular(18),
                     topRight: const Radius.circular(18),
@@ -329,7 +327,7 @@ class MessageBubble extends StatelessWidget {
                     bottomRight: Radius.circular(isUser ? 4 : 18),
                   ),
                   border: Border.all(
-                    color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder,
+                    color: context.clanBorder,
                     width: 0.8,
                   ),
                 ),
@@ -359,7 +357,7 @@ class MessageBubble extends StatelessWidget {
                                 style: TextStyle(
                                   fontSize: textScaler.scale(14),
                                   fontStyle: FontStyle.italic,
-                                  color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                                  color: context.clanTextMuted,
                                 ),
                               ),
                             if (message.content.isEmpty && message.reasoningContent.isEmpty)
@@ -432,14 +430,14 @@ class MessageBubble extends StatelessWidget {
                         Icon(
                           Icons.memory_rounded,
                           size: 12,
-                          color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                          color: context.clanTextMuted,
                         ),
                         const SizedBox(width: 4),
                         Text(
                           '${message.ragMemoryCount}',
                           style: TextStyle(
                             fontSize: 10,
-                            color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                            color: context.clanTextMuted,
                           ),
                         ),
                       ],
@@ -477,7 +475,7 @@ class MessageBubble extends StatelessWidget {
                     '${message.variantIndex + 1} / ${message.totalVariants}',
                     style: TextStyle(
                       fontSize: 11.5,
-                      color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                      color: context.clanTextMuted,
                     ),
                   ),
                   Semantics(
@@ -500,7 +498,7 @@ class MessageBubble extends StatelessWidget {
                     icon: const Icon(Icons.copy_rounded, size: 15),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                    color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                    color: context.clanTextMuted,
                     onPressed: () => _copyToClipboard(context),
                     tooltip: 'Copy',
                   ),
@@ -514,7 +512,7 @@ class MessageBubble extends StatelessWidget {
                       icon: const Icon(Icons.edit_outlined, size: 15),
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                      color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                      color: context.clanTextMuted,
                       onPressed: () => _showEditDialog(context),
                       tooltip: 'Edit prompt',
                     ),
@@ -528,7 +526,7 @@ class MessageBubble extends StatelessWidget {
                         icon: const Icon(Icons.refresh_rounded, size: 16),
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                        color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                        color: context.clanTextMuted,
                         onPressed: onRegenerate,
                         tooltip: 'Regenerate response',
                       ),
@@ -545,7 +543,7 @@ class MessageBubble extends StatelessWidget {
                       icon: const Icon(Icons.edit_outlined, size: 15),
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                      color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                      color: context.clanTextMuted,
                       onPressed: () => _showEditAssistantDialog(context),
                       tooltip: 'Edit response',
                     ),
@@ -558,7 +556,7 @@ class MessageBubble extends StatelessWidget {
                     icon: const Icon(Icons.call_split_rounded, size: 16),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                    color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                    color: context.clanTextMuted,
                     onPressed: message.status != MessageStatus.streaming ? onBranch : null,
                     tooltip: 'Branch conversation',
                   ),
@@ -571,7 +569,7 @@ class MessageBubble extends StatelessWidget {
                     icon: const Icon(Icons.delete_outline_rounded, size: 16),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                    color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                    color: context.clanTextMuted,
                     onPressed: message.status != MessageStatus.streaming
                         ? () => _showDeleteDialog(context, messageIndex == 0)
                         : null,

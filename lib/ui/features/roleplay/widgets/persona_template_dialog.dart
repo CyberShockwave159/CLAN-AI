@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:clan_ai/core/constants/app_theme.dart';
+import 'package:clan_ai/core/constants/clan_theme_colors.dart';
 import 'package:clan_ai/data/models/persona_template.dart';
 import 'package:clan_ai/ui/features/roleplay/view_models/persona_template_view_model.dart';
 
@@ -45,7 +45,6 @@ class _PersonaTemplateDialogState extends State<PersonaTemplateDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final viewModel = context.read<PersonaTemplateViewModel>();
     final isEditing = widget.existingTemplate != null;
 
@@ -139,7 +138,7 @@ class _PersonaTemplateDialogState extends State<PersonaTemplateDialog> {
                           }
                         },
                         style: FilledButton.styleFrom(
-                          backgroundColor: isDark ? AppTheme.darkSurfaceVariant : AppTheme.lightSurfaceVariant,
+                          backgroundColor: context.clanSurfaceVariant,
                         ),
                         child: const Text('Delete'),
                       ),

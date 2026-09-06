@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:clan_ai/core/constants/app_theme.dart';
+import 'package:clan_ai/core/constants/clan_theme_colors.dart';
 import 'package:clan_ai/ui/features/chat/view_models/chat_view_model.dart';
 import 'package:clan_ai/ui/features/settings/view_models/settings_view_model.dart';
 import 'package:clan_ai/ui/features/settings/views/settings_screen.dart';
@@ -14,7 +14,6 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final chatVM = context.watch<ChatViewModel>();
     final settingsVM = context.watch<SettingsViewModel>();
 
@@ -37,7 +36,7 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
           style: TextStyle(
             fontSize: 15.5,
             fontWeight: FontWeight.w600,
-            color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+            color: context.clanTextPrimary,
           ),
         ),
       ),

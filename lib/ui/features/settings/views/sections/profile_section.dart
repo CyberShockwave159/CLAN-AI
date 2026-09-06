@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:clan_ai/core/constants/app_constants.dart';
 import 'package:clan_ai/core/constants/app_theme.dart';
+import 'package:clan_ai/core/constants/clan_theme_colors.dart';
 import 'package:clan_ai/data/models/server_profile.dart';
 import 'package:clan_ai/data/models/server_config.dart';
 import 'package:clan_ai/ui/features/settings/view_models/settings_view_model.dart';
@@ -209,7 +210,6 @@ class ProfileSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final settingsVM = context.watch<SettingsViewModel>();
 
     return Column(
@@ -255,7 +255,7 @@ class ProfileSection extends StatelessWidget {
               'No profiles yet. Click + to create one.',
               style: TextStyle(
                 fontSize: 12,
-                color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                color: context.clanTextMuted,
               ),
             ),
           )
@@ -277,7 +277,7 @@ class ProfileSection extends StatelessWidget {
                       avatar: Icon(
                         Icons.fingerprint_rounded,
                         size: 16,
-                        color: isActive ? AppTheme.accentPrimary : (isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted),
+                        color: isActive ? AppTheme.accentPrimary : (context.clanTextMuted),
                       ),
                       label: Text(
                         profile.name,
@@ -287,14 +287,14 @@ class ProfileSection extends StatelessWidget {
                         ),
                       ),
                       onDeleted: () => _showDeleteProfileDialog(context, profile.id, profile.name),
-                      deleteIconColor: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                      deleteIconColor: context.clanTextMuted,
                       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                         side: BorderSide(
                           color: isActive
                               ? AppTheme.accentPrimary.withValues(alpha: 0.5)
-                              : (isDark ? AppTheme.darkBorder : AppTheme.lightBorder),
+                              : (context.clanBorder),
                           width: isActive ? 1.5 : 1,
                         ),
                       ),

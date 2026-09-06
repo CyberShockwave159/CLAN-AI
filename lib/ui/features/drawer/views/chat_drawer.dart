@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:clan_ai/core/constants/app_theme.dart';
+import 'package:clan_ai/core/constants/clan_theme_colors.dart';
 import 'package:clan_ai/core/utils/conversation_export.dart';
 import 'package:clan_ai/data/datasources/local_storage.dart';
 import 'package:clan_ai/data/models/chat_thread.dart';
@@ -28,7 +29,7 @@ class _ChatDrawerState extends State<ChatDrawer> {
     });
   }
 
-  Widget _buildLineageChain(BuildContext context, ChatThread thread, bool isDark) {
+  Widget _buildLineageChain(BuildContext context, ChatThread thread) {
     final lineageFuture = LocalDatabase.instance.getThreadLineage(thread.id);
 
     return FutureBuilder<List<ChatThread>>(
@@ -56,7 +57,7 @@ class _ChatDrawerState extends State<ChatDrawer> {
                       Icon(
                         Icons.chevron_right_rounded,
                         size: 14,
-                        color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                        color: context.clanTextMuted,
                       ),
                       const SizedBox(width: 4),
                       Expanded(
@@ -72,7 +73,7 @@ class _ChatDrawerState extends State<ChatDrawer> {
                             style: TextStyle(
                               fontSize: 11.5,
                               fontStyle: FontStyle.italic,
-                              color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                              color: context.clanTextMuted,
                             ),
                           ),
                         ),
@@ -88,7 +89,7 @@ class _ChatDrawerState extends State<ChatDrawer> {
                     '...',
                     style: TextStyle(
                       fontSize: 11,
-                      color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                      color: context.clanTextMuted,
                     ),
                   ),
                 ),
@@ -155,12 +156,11 @@ class _ChatDrawerState extends State<ChatDrawer> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final chatVM = context.watch<ChatViewModel>();
     final settingsVM = context.watch<SettingsViewModel>();
 
     return Drawer(
-      backgroundColor: isDark ? AppTheme.darkSurface : AppTheme.lightSurface,
+      backgroundColor: context.clanSurface,
       child: SafeArea(
         child: Column(
           children: [
@@ -174,13 +174,13 @@ class _ChatDrawerState extends State<ChatDrawer> {
                       icon: const Icon(Icons.add_rounded, size: 20),
                       label: const Text('New Chat', style: TextStyle(fontWeight: FontWeight.w600)),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                        foregroundColor: context.clanTextPrimary,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
                         side: BorderSide(
-                          color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder,
+                          color: context.clanBorder,
                         ),
                       ),
                       onPressed: () async {
@@ -224,7 +224,7 @@ class _ChatDrawerState extends State<ChatDrawer> {
                       child: Text(
                         chatVM.searchQuery.isEmpty ? 'No chats yet' : 'No matching chats',
                         style: TextStyle(
-                          color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                          color: context.clanTextMuted,
                           fontSize: 14,
                         ),
                       ),
@@ -243,7 +243,7 @@ class _ChatDrawerState extends State<ChatDrawer> {
                               margin: const EdgeInsets.symmetric(vertical: 2),
                               decoration: BoxDecoration(
                                 color: isActive
-                                    ? (isDark ? AppTheme.darkSurfaceVariant : AppTheme.lightSurfaceVariant)
+                                    ? (context.clanSurfaceVariant)
                                     : Colors.transparent,
                                 borderRadius: BorderRadius.circular(10),
                                 border: isActive
@@ -265,7 +265,7 @@ class _ChatDrawerState extends State<ChatDrawer> {
                                                      ? Icons.keyboard_arrow_down_rounded
                                                      : Icons.chevron_right_rounded,
                                                 size: 16,
-                                                color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                                                color: context.clanTextMuted,
                                               ),
                                             )
                                           : Icon(
@@ -273,7 +273,7 @@ class _ChatDrawerState extends State<ChatDrawer> {
                                               size: 18,
                                               color: isActive
                                                   ? AppTheme.accentPrimary
-                                                  : (isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted),
+                                                  : (context.clanTextMuted),
                                             ),
                                       title: Row(
                                         children: [
@@ -285,7 +285,7 @@ class _ChatDrawerState extends State<ChatDrawer> {
                                               style: TextStyle(
                                                 fontSize: 13.5,
                                                 fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
-                                                color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                                                color: context.clanTextPrimary,
                                               ),
                                             ),
                                           ),
@@ -294,7 +294,7 @@ class _ChatDrawerState extends State<ChatDrawer> {
                                             Icon(
                                               Icons.call_split_rounded,
                                               size: 14,
-                                              color: isDark ? AppTheme.accentPrimary : AppTheme.darkBorder,
+                                              color: Theme.of(context).brightness == Brightness.dark ? AppTheme.accentPrimary : context.clanBorder,
                                             ),
                                           ],
                                         ],
@@ -308,7 +308,7 @@ class _ChatDrawerState extends State<ChatDrawer> {
                                               icon: Icon(
                                                 Icons.more_vert_rounded,
                                                 size: 18,
-                                                color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                                                color: context.clanTextMuted,
                                               ),
                                               onSelected: (action) {
                                                 if (action == 'rename') {
@@ -378,7 +378,7 @@ class _ChatDrawerState extends State<ChatDrawer> {
                                           : null,
                                     ),
                                     if (_expandedLineage.contains(thread.id) && thread.branchFromThreadId != null)
-                                      _buildLineageChain(context, thread, isDark),
+                                      _buildLineageChain(context, thread),
                                   ],
                                 ),
                               ),
@@ -400,7 +400,7 @@ class _ChatDrawerState extends State<ChatDrawer> {
                 settingsVM.config.name,
                 style: TextStyle(
                   fontSize: 11.5,
-                  color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                  color: context.clanTextMuted,
                 ),
               ),
               onTap: () {

@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:clan_ai/core/constants/app_theme.dart';
+import 'package:clan_ai/core/constants/clan_theme_colors.dart';
 import 'package:clan_ai/core/utils/st_avatar_downloader.dart';
 import 'package:clan_ai/core/utils/silly_tavern_card_parser.dart';
 import 'package:clan_ai/data/models/character_profile.dart';
@@ -139,7 +140,6 @@ class _SillyTavernImportDialogState extends State<SillyTavernImportDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final personaVM = context.watch<PersonaTemplateViewModel>();
 
     return Dialog(
@@ -162,7 +162,7 @@ class _SillyTavernImportDialogState extends State<SillyTavernImportDialog> {
                     widget.sourceFilename,
                     style: TextStyle(
                       fontSize: 11,
-                      color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                      color: context.clanTextMuted,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -189,13 +189,13 @@ class _SillyTavernImportDialogState extends State<SillyTavernImportDialog> {
                             height: 64,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: _avatarBytes != null ? Colors.transparent : (isDark ? AppTheme.darkSurfaceVariant : AppTheme.lightSurfaceVariant),
+                              color: _avatarBytes != null ? Colors.transparent : (context.clanSurfaceVariant),
                               border: Border.all(
                                 color: AppTheme.accentPrimary.withValues(alpha: 0.4),
                                 width: 2,
                               ),
                             ),
-                            child: _buildAvatarContent(isDark),
+                            child: _buildAvatarContent(),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -204,7 +204,7 @@ class _SillyTavernImportDialogState extends State<SillyTavernImportDialog> {
                             'Tap to fetch avatar from source',
                             style: TextStyle(
                               fontSize: 12,
-                              color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                              color: context.clanTextMuted,
                             ),
                           ),
                         ),
@@ -344,7 +344,7 @@ class _SillyTavernImportDialogState extends State<SillyTavernImportDialog> {
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                        color: context.clanTextPrimary,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -405,7 +405,7 @@ class _SillyTavernImportDialogState extends State<SillyTavernImportDialog> {
     );
   }
 
-  Widget _buildAvatarContent(bool isDark) {
+  Widget _buildAvatarContent() {
     if (_avatarLoading) {
       return const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)));
     }
@@ -417,6 +417,6 @@ class _SillyTavernImportDialogState extends State<SillyTavernImportDialog> {
         child: Image.memory(_avatarBytes!, width: 64, height: 64, fit: BoxFit.cover),
       );
     }
-    return Icon(Icons.image_rounded, size: 24, color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted);
+    return Icon(Icons.image_rounded, size: 24, color: context.clanTextMuted);
   }
 }

@@ -3,11 +3,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:clan_ai/core/constants/app_theme.dart';
+import 'package:clan_ai/core/constants/clan_theme_colors.dart';
 import 'package:clan_ai/core/network/http_client.dart';
 import 'package:clan_ai/core/utils/latency_meter.dart';
 import 'package:clan_ai/data/datasources/llama_api_service.dart';
 import 'package:clan_ai/data/datasources/local_storage.dart';
 import 'package:clan_ai/data/models/app_mode.dart';
+import 'package:clan_ai/data/models/app_theme_mode.dart';
+import 'package:clan_ai/data/models/custom_theme_colors.dart';
 import 'package:clan_ai/data/repositories/character_repository.dart';
 import 'package:clan_ai/data/repositories/chat_repository.dart';
 import 'package:clan_ai/data/repositories/server_repository.dart';
@@ -89,16 +92,52 @@ class ClanAiApp extends StatefulWidget {
 }
 
 class _ClanAiAppState extends State<ClanAiApp> with WidgetsBindingObserver {
+  AppThemeMode _appThemeMode = AppThemeMode.dark;
+  ThemeData _currentTheme = AppTheme.darkTheme;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _loadAppThemeMode();
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.detached) {
-      widget.httpClient.close();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+  }
+
+  Future<void> _loadAppThemeMode() async {
+    try {
+      final mode = await LocalDatabase.instance.loadAppThemeMode();
+      final colors = await LocalDatabase.instance.loadCustomThemeColors();
+      if (mounted) {
+        setState(() {
+          _appThemeMode = mode;
+          _currentTheme = _buildTheme(mode, colors);
+        });
+      }
+    } catch (_) {
+      // Keep default dark theme
+    }
+  }
+
+  ThemeData _buildTheme(AppThemeMode mode, CustomThemeColors? colors) {
+    switch (mode) {
+      case AppThemeMode.dark:
+        return AppTheme.darkTheme;
+      case AppThemeMode.light:
+        return AppTheme.lightTheme;
+      case AppThemeMode.custom:
+        return colors != null
+            ? AppTheme.customTheme(colors)
+            : AppTheme.darkTheme;
+    }
+  }
+
+  void _refreshTheme() {
+    if (mounted) {
+      _loadAppThemeMode();
     }
   }
 
@@ -113,49 +152,30 @@ class _ClanAiAppState extends State<ClanAiApp> with WidgetsBindingObserver {
     return MaterialApp(
       title: 'CLAN AI',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
-      themeMode: _themeMode,
-      home: const _HomeScreen(),
+      theme: _currentTheme,
+      home: _HomeScreen(themeRefresh: _refreshTheme),
     );
-  }
-
-  ThemeMode _themeMode = ThemeMode.dark;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _loadThemeMode();
-  }
-
-  Future<void> _loadThemeMode() async {
-    try {
-      final mode = await LocalDatabase.instance.loadThemeMode();
-      if (mounted) {
-        setState(() {
-          _themeMode = ThemeMode.values.firstWhere(
-            (m) => m.name == mode,
-            orElse: () => ThemeMode.dark,
-          );
-        });
-      }
-    } catch (_) {
-      // Keep default dark theme
-    }
   }
 }
 
 class _HomeScreen extends StatelessWidget {
-  const _HomeScreen();
+  final VoidCallback themeRefresh;
+
+  const _HomeScreen({required this.themeRefresh});
 
   @override
   Widget build(BuildContext context) {
     final appMode = context.watch<SettingsViewModel>().appMode;
 
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final settingsVM = context.read<SettingsViewModel>();
+      settingsVM.setOnThemeChanged(themeRefresh);
+    });
+
     if (appMode == AppMode.roleplay) {
-      return const RoleplayScreen();
+      return RoleplayScreen(themeRefresh: themeRefresh);
     }
 
-    return const ChatScreen();
+    return ChatScreen(themeRefresh: themeRefresh);
   }
 }

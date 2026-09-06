@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:clan_ai/core/constants/app_theme.dart';
+import 'package:clan_ai/core/constants/clan_theme_colors.dart';
 import 'package:clan_ai/domain/models/generation_params.dart';
 import 'package:clan_ai/ui/features/settings/view_models/settings_view_model.dart';
 
@@ -113,12 +114,10 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Container(
       padding: const EdgeInsets.only(top: 16, left: 20, right: 20, bottom: 24),
       decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkSurface : AppTheme.lightSurface,
+        color: context.clanSurface,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: SafeArea(
@@ -134,7 +133,7 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
                   height: 4,
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
-                    color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder,
+                    color: context.clanBorder,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -149,7 +148,7 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
-                      color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                      color: context.clanTextPrimary,
                     ),
                   ),
                   TextButton(
@@ -292,10 +291,8 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
     required double min,
     required double max,
     required String displayValue,
-    required ValueChanged<double> onChanged,
+    required     ValueChanged<double> onChanged,
   }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Column(
@@ -309,13 +306,13 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
                 style: TextStyle(
                   fontSize: 13.5,
                   fontWeight: FontWeight.w600,
-                  color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                  color: context.clanTextPrimary,
                 ),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: isDark ? AppTheme.darkSurfaceVariant : AppTheme.lightSurfaceVariant,
+                  color: context.clanSurfaceVariant,
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
@@ -333,7 +330,7 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
             data: SliderTheme.of(context).copyWith(
               activeTrackColor: AppTheme.accentPrimary,
               thumbColor: AppTheme.accentPrimary,
-              inactiveTrackColor: isDark ? AppTheme.darkBorder : AppTheme.lightBorder,
+              inactiveTrackColor: context.clanBorder,
               trackHeight: 3,
             ),
             child: Slider(
@@ -349,7 +346,7 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
               subtitle,
               style: TextStyle(
                 fontSize: 11,
-                color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                color: context.clanTextMuted,
               ),
             ),
           ),
@@ -365,10 +362,8 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
     required int value,
     required int min,
     required int max,
-    required ValueChanged<int> onChanged,
+    required     ValueChanged<int> onChanged,
   }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Column(
@@ -382,7 +377,7 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
                 style: TextStyle(
                   fontSize: 13.5,
                   fontWeight: FontWeight.w600,
-                  color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                  color: context.clanTextPrimary,
                 ),
               ),
               SizedBox(
@@ -400,11 +395,11 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
                     contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(6),
-                      borderSide: BorderSide(color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder),
+                      borderSide: BorderSide(color: context.clanBorder),
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(6),
-                      borderSide: BorderSide(color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder),
+                      borderSide: BorderSide(color: context.clanBorder),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(6),
@@ -426,7 +421,7 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
             subtitle,
             style: TextStyle(
               fontSize: 11,
-              color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+              color: context.clanTextMuted,
             ),
           ),
         ],
@@ -442,7 +437,6 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
     required ValueChanged<int> onChanged,
     int? maxContext,
   }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final effectiveMax = maxContext != null && maxContext > 0 ? maxContext : 1000000;
 
     return Padding(
@@ -458,7 +452,7 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
                 style: TextStyle(
                   fontSize: 13.5,
                   fontWeight: FontWeight.w600,
-                  color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                  color: context.clanTextPrimary,
                 ),
               ),
               SizedBox(
@@ -477,11 +471,11 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
                     contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(6),
-                      borderSide: BorderSide(color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder),
+                      borderSide: BorderSide(color: context.clanBorder),
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(6),
-                      borderSide: BorderSide(color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder),
+                      borderSide: BorderSide(color: context.clanBorder),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(6),
@@ -491,7 +485,7 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
                     suffixText: 'tokens',
                     suffixStyle: TextStyle(
                       fontSize: 10,
-                      color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                      color: context.clanTextMuted,
                     ),
                   ),
                   onChanged: (val) {
@@ -508,7 +502,7 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
             subtitle,
             style: TextStyle(
               fontSize: 11,
-              color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+              color: context.clanTextMuted,
             ),
           ),
         ],

@@ -15,6 +15,8 @@ import 'package:clan_ai/data/models/server_profile.dart';
 import 'package:clan_ai/data/models/system_prompt_template.dart';
 import 'package:clan_ai/data/models/persona_template.dart';
 import 'package:clan_ai/data/models/app_mode.dart';
+import 'package:clan_ai/data/models/app_theme_mode.dart';
+import 'package:clan_ai/data/models/custom_theme_colors.dart';
 
 class LocalDatabase {
   static final LocalDatabase instance = LocalDatabase._init();
@@ -417,7 +419,8 @@ class LocalDatabase {
   // --- Server Profile & Settings Persistence ---
 
   static const String _keyActiveServer = 'clan_active_server_config';
-  static const String _keyThemeMode = 'clan_theme_mode';
+  static const String _keyAppThemeMode = 'clan_theme_mode';
+  static const String _keyCustomThemeColors = 'clan_custom_theme_colors';
   static const String _keyAppMode = 'clan_app_mode';
   static const String _keyCharacters = 'clan_characters';
   static const String _keyLastRoleplayThread = 'clan_last_roleplay_thread_id';
@@ -438,14 +441,36 @@ class LocalDatabase {
     return const ServerConfig();
   }
 
-  Future<void> saveThemeMode(String mode) async {
+  Future<void> saveAppThemeMode(AppThemeMode mode) async {
     final p = await prefs;
-    await p.setString(_keyThemeMode, mode);
+    await p.setString(_keyAppThemeMode, mode.name);
   }
 
-  Future<String> loadThemeMode() async {
+  Future<AppThemeMode> loadAppThemeMode() async {
     final p = await prefs;
-    return p.getString(_keyThemeMode) ?? 'dark';
+    final modeStr = p.getString(_keyAppThemeMode);
+    if (modeStr != null && modeStr.isNotEmpty) {
+      try {
+        return AppThemeMode.values.firstWhere((m) => m.name == modeStr);
+      } catch (_) {}
+    }
+    return AppThemeMode.dark;
+  }
+
+  Future<void> saveCustomThemeColors(CustomThemeColors colors) async {
+    final p = await prefs;
+    await p.setString(_keyCustomThemeColors, colors.toJson());
+  }
+
+  Future<CustomThemeColors?> loadCustomThemeColors() async {
+    final p = await prefs;
+    final jsonStr = p.getString(_keyCustomThemeColors);
+    if (jsonStr != null && jsonStr.isNotEmpty) {
+      try {
+        return CustomThemeColors.fromJson(jsonStr);
+      } catch (_) {}
+    }
+    return null;
   }
 
   // --- App Mode Persistence ---

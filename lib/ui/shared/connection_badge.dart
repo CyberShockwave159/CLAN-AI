@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:clan_ai/core/constants/app_theme.dart';
 import 'package:clan_ai/core/utils/latency_meter.dart';
+// No isDark ternaries — all colors are status/accent colors (no clan equivalent needed)
 
 class ConnectionBadge extends StatelessWidget {
   final ServerHealthStatus status;

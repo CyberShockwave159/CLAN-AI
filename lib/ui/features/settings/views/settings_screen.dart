@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:clan_ai/core/constants/app_constants.dart';
 import 'package:clan_ai/core/constants/app_theme.dart';
+import 'package:clan_ai/core/constants/clan_theme_colors.dart';
 import 'package:clan_ai/ui/features/settings/views/sections/app_mode_section.dart';
 import 'package:clan_ai/ui/features/settings/views/sections/profile_section.dart';
 import 'package:clan_ai/ui/features/settings/views/sections/safety_section.dart';
+import 'package:clan_ai/ui/features/settings/views/sections/theme_section.dart';
 import 'package:clan_ai/data/datasources/vector_store.dart';
 import 'package:clan_ai/data/models/app_mode.dart';
 import 'package:clan_ai/data/models/character_profile.dart';
@@ -198,7 +200,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final settingsVM = context.watch<SettingsViewModel>();
     final chatVM = context.watch<ChatViewModel>();
     final isRoleplay = settingsVM.appMode == AppMode.roleplay;
@@ -349,9 +350,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 margin: const EdgeInsets.only(bottom: 12),
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: isDark ? AppTheme.darkSurfaceVariant : AppTheme.lightSurfaceVariant,
+                  color: context.clanSurfaceVariant,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder),
+                  border: Border.all(color: context.clanBorder),
                 ),
                 child: Row(
                   children: [
@@ -395,7 +396,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                    color: context.clanTextPrimary,
                   ),
                 ),
                 const Spacer(),
@@ -419,7 +420,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   'No saved templates yet. Click "New" to create one.',
                   style: TextStyle(
                     fontSize: 12,
-                    color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                    color: context.clanTextMuted,
                   ),
                 ),
               )
@@ -439,7 +440,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           avatar: Icon(Icons.psychology_rounded, size: 16, color: AppTheme.accentPrimary),
                           label: Text(template.name, style: const TextStyle(fontSize: 12)),
                           onDeleted: () => _deleteTemplate(templateIndex),
-                          deleteIconColor: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                          deleteIconColor: context.clanTextMuted,
                           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
@@ -473,7 +474,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     'No persona templates yet. Click "New" to create one.',
                     style: TextStyle(
                       fontSize: 12,
-                      color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                      color: context.clanTextMuted,
                     ),
                   );
                 }
@@ -496,7 +497,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 avatar: Icon(Icons.person_outline_rounded, size: 16, color: AppTheme.accentPrimary),
                                 label: Text(template.name, style: const TextStyle(fontSize: 12)),
                                 onDeleted: () => _deletePersonaTemplate(template.id),
-                                deleteIconColor: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                                deleteIconColor: context.clanTextMuted,
                                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(8),
@@ -581,7 +582,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     'No characters with memories yet.',
                     style: TextStyle(
                       fontSize: 12,
-                      color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                      color: context.clanTextMuted,
                     ),
                   );
                 }
@@ -661,10 +662,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               label: const Text('Clear All Memories'),
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 10),
-                side: BorderSide(color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder),
+                side: BorderSide(color: context.clanBorder),
               ),
             ),
           ],
+
+          // 8. Theme (always shown)
+          const SizedBox(height: 24),
+
+          const ThemeSection(),
 
           const SizedBox(height: 40),
         ],
@@ -673,7 +679,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildSectionHeader(String title, IconData icon) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Row(
       children: [
         Icon(icon, size: 18, color: AppTheme.accentPrimary),
@@ -683,7 +688,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           style: TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w700,
-            color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+            color: context.clanTextPrimary,
             letterSpacing: -0.2,
           ),
         ),

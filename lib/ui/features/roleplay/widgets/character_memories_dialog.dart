@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:clan_ai/core/constants/app_theme.dart';
+import 'package:clan_ai/core/constants/clan_theme_colors.dart';
 import 'package:clan_ai/data/datasources/vector_store.dart';
 
 /// Dialog that lists all vector memories stored for a character.
@@ -89,8 +90,6 @@ class _CharacterMemoriesDialogState extends State<CharacterMemoriesDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return AlertDialog(
       title: Text('Memories — ${widget.characterName}'),
       content: SizedBox(
@@ -104,18 +103,18 @@ class _CharacterMemoriesDialogState extends State<CharacterMemoriesDialog> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.memory_rounded, size: 48, color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted),
+                            Icon(Icons.memory_rounded, size: 48, color: context.clanTextMuted),
                             const SizedBox(height: 12),
                             Text(
                               'No memories stored yet',
-                              style: TextStyle(color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted),
+                              style: TextStyle(color: context.clanTextMuted),
                             ),
                             const SizedBox(height: 4),
                             Text(
                               'Memories are created as conversations progress.',
                               style: TextStyle(
                                 fontSize: 12,
-                                color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                                color: context.clanTextMuted,
                               ),
                             ),
                           ],
@@ -129,7 +128,7 @@ class _CharacterMemoriesDialogState extends State<CharacterMemoriesDialog> {
                             margin: const EdgeInsets.symmetric(vertical: 4),
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: isDark ? AppTheme.darkSurfaceVariant : AppTheme.lightSurfaceVariant,
+                              color: context.clanSurfaceVariant,
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Column(
@@ -143,7 +142,7 @@ class _CharacterMemoriesDialogState extends State<CharacterMemoriesDialog> {
                                       style: TextStyle(
                                         fontSize: 12,
                                         fontWeight: FontWeight.w600,
-                                        color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                                        color: context.clanTextMuted,
                                       ),
                                     ),
                                     IconButton(
@@ -161,7 +160,7 @@ class _CharacterMemoriesDialogState extends State<CharacterMemoriesDialog> {
                                   memory['content'] as String,
                                   style: TextStyle(
                                     fontSize: 13,
-                                    color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                                    color: context.clanTextPrimary,
                                   ),
                                 ),
                               ],

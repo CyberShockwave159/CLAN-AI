@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:clan_ai/core/constants/app_theme.dart';
+import 'package:clan_ai/core/constants/clan_theme_colors.dart';
 import 'package:clan_ai/data/models/character_profile.dart';
 import 'package:clan_ai/data/models/persona_template.dart';
 import 'package:clan_ai/data/repositories/character_repository.dart';
@@ -73,9 +74,9 @@ class _CharacterEditDialogState extends State<CharacterEditDialog> {
     });
   }
 
-  Color _avatarColor(Uint8List? avatar, bool isDark) {
+  Color _avatarColor(Uint8List? avatar) {
     if (avatar != null) return Colors.transparent;
-    return isDark ? AppTheme.darkSurfaceVariant : AppTheme.lightSurfaceVariant;
+    return context.clanSurfaceVariant;
   }
 
   Future<void> _save() async {
@@ -113,7 +114,6 @@ class _CharacterEditDialogState extends State<CharacterEditDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final personaVM = context.watch<PersonaTemplateViewModel>();
     final displayAvatar = _avatarPreview;
 
@@ -141,7 +141,7 @@ class _CharacterEditDialogState extends State<CharacterEditDialog> {
                     height: 48,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: _avatarColor(displayAvatar, isDark),
+                      color: _avatarColor(displayAvatar),
                       border: Border.all(
                         color: AppTheme.accentPrimary.withValues(alpha: 0.4),
                         width: 2,
@@ -181,8 +181,8 @@ class _CharacterEditDialogState extends State<CharacterEditDialog> {
                         icon: const Icon(Icons.image_rounded, size: 14),
                         label: const Text('Change'),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: isDark ? AppTheme.darkSurfaceVariant : AppTheme.lightSurfaceVariant,
-                          foregroundColor: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                          backgroundColor: context.clanSurfaceVariant,
+                          foregroundColor: context.clanTextPrimary,
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         ),
                       ),

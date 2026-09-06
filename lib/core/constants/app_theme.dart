@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:clan_ai/data/models/custom_theme_colors.dart';
+import 'package:clan_ai/core/constants/clan_theme_colors.dart';
 
 /// Frontier-class styling tokens, dark/light theme definitions, and color palettes.
 class AppTheme {
@@ -143,6 +145,9 @@ class AppTheme {
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
       ),
+      extensions: const [
+        ClanThemeColors.dark(),
+      ],
     );
   }
 
@@ -217,6 +222,129 @@ class AppTheme {
           borderSide: const BorderSide(color: accentPrimary, width: 1.5),
         ),
       ),
+      extensions: const [
+        ClanThemeColors.light(),
+      ],
     );
+  }
+
+  /// Custom Theme generated from a CustomThemeColors preset.
+  static ThemeData customTheme(CustomThemeColors colors) {
+    final brightness = _determineBrightness(colors.bg);
+    final baseTextTheme = GoogleFonts.interTextTheme(
+      brightness == Brightness.dark ? ThemeData.dark().textTheme : ThemeData.light().textTheme,
+    );
+
+    return ThemeData(
+      useMaterial3: true,
+      brightness: brightness,
+      scaffoldBackgroundColor: colors.bg,
+      primaryColor: accentPrimary,
+      cardColor: colors.surface,
+      dividerColor: colors.border,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: accentPrimary,
+        brightness: brightness,
+        surface: colors.surface,
+        onError: Colors.white,
+        outline: colors.border,
+      ).copyWith(
+        primary: accentPrimary,
+        secondary: accentSecondary,
+        onPrimary: Colors.white,
+        onSecondary: Colors.white,
+        onSurface: colors.textPrimary,
+      ),
+      textTheme: baseTextTheme.copyWith(
+        displayLarge: baseTextTheme.displayLarge?.copyWith(
+          color: colors.textPrimary,
+          fontWeight: FontWeight.w700,
+          letterSpacing: -0.5,
+        ),
+        headlineMedium: baseTextTheme.headlineMedium?.copyWith(
+          color: colors.textPrimary,
+          fontWeight: FontWeight.w600,
+          letterSpacing: -0.3,
+        ),
+        titleLarge: baseTextTheme.titleLarge?.copyWith(
+          color: colors.textPrimary,
+          fontWeight: FontWeight.w600,
+        ),
+        titleMedium: baseTextTheme.titleMedium?.copyWith(
+          color: colors.textPrimary,
+          fontWeight: FontWeight.w500,
+        ),
+        bodyLarge: baseTextTheme.bodyLarge?.copyWith(
+          color: colors.textPrimary,
+          fontSize: 15,
+          height: 1.5,
+        ),
+        bodyMedium: baseTextTheme.bodyMedium?.copyWith(
+          color: colors.textSecondary,
+          fontSize: 13.5,
+          height: 1.4,
+        ),
+        labelLarge: baseTextTheme.labelLarge?.copyWith(
+          color: colors.textPrimary,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      appBarTheme: AppBarTheme(
+        backgroundColor: colors.surface,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        centerTitle: false,
+        iconTheme: IconThemeData(color: colors.textPrimary),
+      ),
+      drawerTheme: DrawerThemeData(
+        backgroundColor: colors.surface,
+        elevation: 0,
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: colors.surfaceVariant,
+        hintStyle: TextStyle(color: colors.textMuted, fontSize: 14),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: colors.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: colors.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: accentPrimary, width: 1.5),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: statusError),
+        ),
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: colors.surface,
+        elevation: 8,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(color: colors.border),
+        ),
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: Colors.transparent,
+        elevation: 16,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+      ),
+      extensions: [
+        ClanThemeColors.fromCustom(colors),
+      ],
+    );
+  }
+
+  static Brightness _determineBrightness(Color color) {
+    final relativeLuminance = color.computeLuminance();
+    return relativeLuminance > 0.5 ? Brightness.light : Brightness.dark;
   }
 }

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:clan_ai/core/constants/app_theme.dart';
+import 'package:clan_ai/core/constants/clan_theme_colors.dart';
 import 'package:clan_ai/core/utils/latency_meter.dart';
 import 'package:clan_ai/ui/features/chat/views/message_bubble.dart';
 import 'package:clan_ai/ui/features/chat/views/prompt_input_bar.dart';
@@ -16,7 +16,9 @@ import 'package:clan_ai/ui/shared/avatar_utils.dart';
 import 'package:clan_ai/ui/shared/delete_message_handler.dart';
 
 class RoleplayScreen extends StatefulWidget {
-  const RoleplayScreen({super.key});
+  final VoidCallback? themeRefresh;
+
+  const RoleplayScreen({super.key, this.themeRefresh});
 
   @override
   State<RoleplayScreen> createState() => _RoleplayScreenState();
@@ -62,7 +64,7 @@ class _RoleplayScreenState extends State<RoleplayScreen> with AutoScrollMixin {
     );
   }
 
-  Widget _buildEmptyState(BuildContext context, bool isDark) {
+  Widget _buildEmptyState(BuildContext context, Color titleColor) {
     final activeChar = context.read<RoleplayViewModel>().activeCharacter;
     return Center(
       child: Column(
@@ -100,7 +102,7 @@ class _RoleplayScreenState extends State<RoleplayScreen> with AutoScrollMixin {
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
-                color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                color: context.clanTextPrimary,
               ),
             ),
             const SizedBox(height: 12),
@@ -108,7 +110,7 @@ class _RoleplayScreenState extends State<RoleplayScreen> with AutoScrollMixin {
               'Start your roleplay...',
               style: TextStyle(
                 fontSize: 13,
-                color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                color: context.clanTextMuted,
               ),
             ),
             if (context.watch<SettingsViewModel>().config.healthStatus == ServerHealthStatus.offline)
@@ -117,7 +119,7 @@ class _RoleplayScreenState extends State<RoleplayScreen> with AutoScrollMixin {
                 child: Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: (isDark ? Colors.red.shade900 : Colors.red.shade100).withValues(alpha: 0.5),
+                    color: (Theme.of(context).brightness == Brightness.dark ? Colors.red.shade900 : Colors.red.shade100).withValues(alpha: 0.5),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: Colors.red.shade700),
                   ),
@@ -155,7 +157,6 @@ class _RoleplayScreenState extends State<RoleplayScreen> with AutoScrollMixin {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final roleplayVM = context.watch<RoleplayViewModel>();
     final settingsVM = context.watch<SettingsViewModel>();
 
@@ -184,7 +185,7 @@ class _RoleplayScreenState extends State<RoleplayScreen> with AutoScrollMixin {
             style: TextStyle(
               fontSize: 15.5,
               fontWeight: FontWeight.w600,
-              color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+              color: context.clanTextPrimary,
             ),
           ),
         ),
@@ -214,7 +215,7 @@ class _RoleplayScreenState extends State<RoleplayScreen> with AutoScrollMixin {
             child: Stack(
               children: [
                 roleplayVM.messages.isEmpty
-                    ? _buildEmptyState(context, isDark)
+                    ? _buildEmptyState(context, context.clanTextPrimary)
                     : ListView.builder(
                         controller: scrollController,
                         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -288,8 +289,8 @@ class _RoleplayScreenState extends State<RoleplayScreen> with AutoScrollMixin {
                     right: 16,
                     bottom: 16,
                     child: FloatingActionButton.small(
-                      backgroundColor: isDark ? AppTheme.darkSurfaceVariant : AppTheme.lightSurfaceVariant,
-                      foregroundColor: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                      backgroundColor: context.clanSurfaceVariant,
+                      foregroundColor: context.clanTextPrimary,
                       elevation: 4,
                       onPressed: () {
                         scrollToBottom(true);

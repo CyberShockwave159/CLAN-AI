@@ -5,7 +5,7 @@ Recommended order: `pub get` → `analyze` → `test` → `run`.
 ```
 flutter pub get            # fetch dependencies (required after git pull)
 flutter analyze            # lint + typecheck (uses flutter_lints)
-flutter test               # runs all 28 test files (~463 total tests, includes reasoning)
+flutter test               # runs all 28 test files (~465 total tests, includes reasoning)
 flutter run -d <device>    # devices: linux, macos, windows, <android-id>
 ```
 
@@ -16,9 +16,10 @@ flutter run -d <device>    # devices: linux, macos, windows, <android-id>
 - **Shared constants** in `lib/core/constants/app_constants.dart` — all magic numbers and default strings centralized.
 - **Shared mixin** `StreamMutationMixin` in `lib/ui/shared/mixins/stream_mutation_mixin.dart` — provides shared streaming, undo, switchVariant, stopGeneration logic for both ChatViewModel and RoleplayViewModel. `doStopGeneration()` always clears `isGenerating` flag.
 - **Shared widgets** in `lib/ui/shared/widgets/` — `parameter_sheet_opener.dart` (accepts `isRoleplay` param), `drawer_export_menu.dart`, `desktop_keyboard_shortcuts.dart`. **Shared mixins** in `lib/ui/shared/mixins/` — `auto_scroll_mixin.dart`, `stream_mutation_mixin.dart`. **Shared utilities** in `lib/ui/shared/` — `avatar_utils.dart`, `delete_message_handler.dart`.
-- **Shared settings sections** in `lib/ui/features/settings/views/sections/` — `profile_section.dart`, `safety_section.dart`, `app_mode_section.dart`.
+- **Shared settings sections** in `lib/ui/features/settings/views/sections/` — `profile_section.dart`, `safety_section.dart`, `app_mode_section.dart`, `theme_section.dart`.
 - **Dependency wiring** in `lib/main.dart` via constructor injection.
 - **Four root providers:** `SettingsViewModel`, `ChatViewModel`, `RoleplayViewModel`, `PersonaTemplateViewModel`. `CharacterRepository` also exposed via `Provider`.
+- **Theme system:** `AppThemeMode` enum (dark/light/custom) in `lib/data/models/app_theme_mode.dart`. `CustomThemeColors` model with presets (warm/cool/pastel) in `lib/data/models/custom_theme_colors.dart`. `ClanThemeColors` ThemeExtension in `lib/core/constants/clan_theme_colors.dart` enables theme-aware color lookups via `context.clanX` extension. `AppTheme.customTheme()` generates `ThemeData` from presets. `main.dart` loads theme mode and custom colors at startup, dynamically builds `ThemeData`. Theme settings in `SettingsViewModel` with `setAppThemeMode()`, `setCustomThemeColors()`, `clearCustomThemeColors()` — persisted via `LocalDatabase`. Settings UI in `lib/ui/features/settings/views/sections/theme_section.dart`.
 - **ServerProfile consolidation:** `ServerConnectionDetails` removed; `ServerProfile` serves as connection details throughout. All method signatures using `ServerConnectionDetails?` now use `ServerProfile?`. `ServerConfig` now stores `baseUrl`, `apiKey`, `protocol` as direct constructor fields (no legacy getters). `SettingsViewModel.updateUrl/ApiKey/Protocol` writes to both profile and global config, persisted via `_saveConfig()`.
 - **App mode toggle:** `AppMode.assistant` vs `AppMode.roleplay` stored in SharedPreferences. `_HomeScreen` routes to `ChatScreen` or `RoleplayScreen` based on mode.
 
@@ -63,6 +64,8 @@ flutter run -d <device>    # devices: linux, macos, windows, <android-id>
 - **`CharacterProfile`** (lib/data/models/character_profile.dart) — `name`, `personality`, `firstMessage`, `setting`, `userPersona`, `avatarData` (PNG/JPG bytes, handles both raw `Uint8List` from BLOB columns and base64-encoded strings in `fromMap`), `isFavorite`, `systemPrompt` (per-character system prompt override with `{{original}}` prefix support), `postHistoryInstructions` (appended after AI responses), `alternateGreetings` (list of alternative opening messages). Stored in SQLite `characters` table (migrated from SharedPreferences in v8).
 - **`PersonaTemplate`** (lib/data/models/persona_template.dart) — Global reusable user persona. `id`, `name`, `personaText`, `createdAt`, `updatedAt`. Stored in SQLite `persona_templates` table (migrated from SharedPreferences in v8).
 - **`AppMode`** (lib/data/models/app_mode.dart) — `assistant` or `roleplay`.
+- **`AppThemeMode`** (lib/data/models/app_theme_mode.dart) — `dark`, `light`, or `custom`.
+- **`CustomThemeColors`** (lib/data/models/custom_theme_colors.dart) — Persisted theme colors with presets (warm/cool/pastel). `toMap()`/`fromMap()`, `toJson()`/`fromJson()`, `copyWith()`.
 - **`ApiProtocol`** (lib/data/models/server_config.dart) — `openAi` or `llamaNative`.
 - **`ModelInfo`** (lib/data/models/model_info.dart) — Model metadata from `/v1/models` and `/props` endpoints. `id`, `name`, `ownedBy`, `contextLength`, `format`, `quantization`.
 - **`SystemPromptTemplate`** (lib/data/models/system_prompt_template.dart) — System prompt templates stored in SharedPreferences. `name`, `content`, `createdAt`.
@@ -96,7 +99,7 @@ flutter run -d <device>    # devices: linux, macos, windows, <android-id>
 
 ## Gotchas
 - **ServerConfig sync:** `ServerRepository.syncConfigFromProfile()` and `syncProfileFromConfig()` propagate `baseUrl`, `apiKey`, `protocol` between profile and global config. `SettingsViewModel.updateUrl/ApiKey/Protocol` updates both and calls `_saveConfig()`. Health check only notifies listeners when values actually change.
-- **Settings screen:** Sections use numbered headers (1-7). System Prompt section hidden in roleplay mode; Persona Templates section shown instead. Model dropdown removed — handled via ProfileSection.
+- **Settings screen:** Sections use numbered headers (1-8). System Prompt section hidden in roleplay mode; Persona Templates section shown instead. Model dropdown removed — handled via ProfileSection. Theme section always shown at bottom.
 - **Parameter tuning sheet:** Uses `SettingsViewModel.getSelectedModelContextLength()` to set default context size to model max. `_buildSlider` renders parameter description subtitles. Context Window slider caps input to model's max context length. Accepts `isRoleplay` param — RAG Memory Count and RAG Minimum Relevance sliders are only shown when `isRoleplay: true`.
 - **StreamMutationMixin:** `ChatViewModel` and `RoleplayViewModel` both mix in `StreamMutationMixin` which provides `_streamResponse`, `undoDelete`, `canUndo`, `stopGeneration`, `switchVariant`, and `storeUndoMessage`. The mixin's `doStreamResponse` is called from each VM's `_streamResponse` with an optional `onComplete` hook (used by RoleplayViewModel for RAG embedding). `doStopGeneration()` always clears `isGenerating` flag regardless of cancel token state.
 - **Conversation branching:** Regenerate/edit truncates at parent message, creates new sibling branches. Navigation uses `variantIndex` + `siblingIds`. `ChatViewModel.branchConversation()` creates a new `ChatThread` with copied messages and `branchFromThreadId` link.
@@ -114,7 +117,7 @@ flutter run -d <device>    # devices: linux, macos, windows, <android-id>
 - **Default params:** `reservedOutputTokensDefault` (512), `minContextSize` (128), `maxContextSize` (1000000), `defaultRagTopK` (3), `defaultRagLimit` (100) — all in `app_constants.dart`.
 - **CRUD race conditions:** `insertCharacter`/`updateCharacter`/`deleteCharacter` in `LocalDatabase` (SQLite), `createProfile`/`updateProfile`/`deleteProfile` in `ServerRepository`, `addTemplate`/`updateTemplate`/`deleteTemplate` in `SystemPromptTemplatesRepository`, and `addTemplate`/`updateTemplate`/`deleteTemplate` in `PersonaTemplateRepository` (SQLite) all use a `Mutex` to serialize read-modify-write. Server profiles and system prompt templates still use SharedPreferences.
 - **Undo support:** `ChatViewModel` and `RoleplayViewModel` support 5-second undo for user message deletions via `undoDelete()` and `canUndo` flag (provided by `StreamMutationMixin`).
-- **Theme toggle:** `main.dart` loads theme mode from SharedPreferences via `LocalDatabase.instance.loadThemeMode()`. Defaults to dark.
+- **Theme toggle:** `main.dart` loads theme mode from SharedPreferences via `LocalDatabase.instance.loadThemeMode()`. Defaults to dark. `SettingsViewModel` manages `themeMode` and `customThemeColors` with persistence. `ClanThemeColors` ThemeExtension on all `ThemeData` instances enables theme-aware color lookups (`context.clanTextPrimary`, `context.clanSurfaceVariant`, etc.). Preset color themes (Warm, Cool, Pastel) persisted as `CustomThemeColors` in SharedPreferences.
 - **Prompt length limits:** `RoleplayPromptFormatter` caps personality (2000), setting (1000), userPersona (1000), memory (1000 per memory, max 3 memories) to prevent context overflow.
 - **Export behavior:** Export is only available via context menus in the chat drawer and character drawer. The header bar export popup has been removed. `FileSaver.saveFile()` opens native save dialogs on mobile (SAF on Android, UIDocumentPicker on iOS); on desktop writes to the app documents directory. Character export with RAG memories via `RoleplayViewModel.exportCharacterWithRAG()`.
 - **Roleplay system prompt:** In roleplay mode the system prompt is fully managed by `RoleplayContextBuilder` which injects RAG context per-message. The System Prompt Customization section in Settings is hidden when `settingsVM.appMode == AppMode.roleplay`.
@@ -131,7 +134,7 @@ flutter run -d <device>    # devices: linux, macos, windows, <android-id>
 ## Platform-specific
 - Desktop SQLite uses `sqflite_common_ffi`. Mobile uses native sqflite.
 - Desktop keyboard shortcuts via `DesktopKeyboardShortcuts` widget (Ctrl+N/Cmd+N, Ctrl+K/Cmd+K, Ctrl+,, Escape).
-- Default theme: **dark mode** (loadable from prefs, default `ThemeMode.dark` in `main.dart`).
+- Default theme: **dark mode** (loadable from prefs, default `AppThemeMode.dark` in `main.dart`).
 - **Dart SDK:** `^3.13.0` — do not downgrade.
 - HTTP timeouts: connect 10s, receive 60s.
 - `analysis_options.yaml` excludes: build, android, ios, web, windows, macos, linux.
@@ -167,13 +170,13 @@ flutter test test/domain/generation_params_test.dart   # single file
 lib/
 ├── main.dart                          # Bootstrap, Provider wiring, FFI init, HTTP client, theme loading
 ├── core/
-│   ├── constants/                     # AppTheme, API endpoints, shared constants (app_constants.dart)
+│   ├── constants/                     # AppTheme, ClanThemeColors, API endpoints, shared constants (app_constants.dart)
 │   ├── errors/                        # AppException hierarchy (6 classes)
 │   ├── network/                       # ApiHttpClient, SseClient
 │   └── utils/                         # LatencyMeter, Mutex, RoleplayContextBuilder, RoleplayPromptFormatter, TextSanitizer, HashEmbedding, FileSaver, EmbeddingService, SillyTavernCardParser, StAvatarDownloader, ConversationExport, AvatarStorageService
 ├── data/
 │   ├── datasources/                   # LlamaApiService, LocalDatabase, VectorStore
-│   ├── models/                        # All domain models (ChatThread, ChatMessage, ServerConfig, ServerProfile, CharacterProfile, PersonaTemplate, etc.)
+│   ├── models/                        # All domain models (ChatThread, ChatMessage, ServerConfig, ServerProfile, CharacterProfile, PersonaTemplate, AppThemeMode, CustomThemeColors, etc.)
 │   └── repositories/                  # ChatRepository, ServerRepository, CharacterRepository, SystemPromptTemplatesRepository, PersonaTemplateRepository
 ├── domain/
 │   └── models/                        # GenerationParams (only domain-layer model)
@@ -191,7 +194,7 @@ lib/
     │   │   └── widgets/               # CharacterCreationWizard, CharacterEditDialog, SillyTavernImportDialog, PersonaTemplateDialog, AlternateGreetingSelector
     │   └── settings/
     │       ├── view_models/           # SettingsViewModel
-    │       └── views/                 # SettingsScreen, ParameterTuningSheet, sections/ (profile_section, safety_section, app_mode_section)
+    │       └── views/                 # SettingsScreen, ParameterTuningSheet, sections/ (profile_section, safety_section, app_mode_section, theme_section)
     └── shared/                        # AppHeader, ConnectionBadge, mixins/ (stream_mutation_mixin, auto_scroll_mixin), widgets/ (parameter_sheet_opener, drawer_export_menu, desktop_keyboard_shortcuts), avatar_utils
 ## Tests
 ```

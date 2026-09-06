@@ -29,7 +29,8 @@ Frontier-class cross-platform llama.cpp client. A Flutter app that connects to a
 - **Conversation branching** — Regenerate and edit responses to create sibling variants
 - SQLite local persistence with full thread/message history
 - Automatic server health polling with fallback endpoints (`/health` → `/props` → `/v1/models`)
-- Dark mode by default (OLED-optimized), configurable system prompt
+- Dark mode by default (OLED-optimized), configurable light and custom themes
+- Custom theme presets (Warm, Cool, Pastel) with persisted user color selections
 - Markdown, code block, and LaTeX math rendering in responses
 - Token speed and performance metrics per generation
 - Export conversations to TXT or JSON via drawer context menus (native save dialogs on mobile)
@@ -109,6 +110,7 @@ Characters can have multiple opening messages:
 - **Secure API keys** stored in OS Keychain/KeyStore via `SecureStorageService` (`flutter_secure_storage`)
 - **Single `CharacterRepository`** instance injected via constructor throughout the app
 - **Streaming** via Server-Sent Events with 20ms UI throttling to prevent frame drops
+- **Theme system**: `AppThemeMode` enum (dark/light/custom) with `CustomThemeColors` presets (Warm, Cool, Pastel). `ClanThemeColors` ThemeExtension on all `ThemeData` instances enables theme-aware color lookups (`context.clanTextPrimary`, `context.clanSurfaceVariant`, etc.). Custom theme colors persist to SharedPreferences. Settings → Theme section at bottom of settings screen.
 - **Reasoning pipeline**: `SseClient.parseStream()` extracts reasoning from multiple field names (`reasoning`, `reasoning_content`, `thought`) across OpenAI and native formats. `SseClient.filterReasoning()` processes inline thinking tags and forwards dedicated reasoning fields through a stream pipeline. Both OpenAI and llama.cpp native protocols support the `reasoning` parameter.
 - **Thread isolation**: `ChatThread.characterId` distinguishes assistant vs roleplay threads
 - **FileSaver**: Native mobile save dialogs via platform channels (Android SAF, iOS UIDocumentPicker); desktop falls back to app documents directory

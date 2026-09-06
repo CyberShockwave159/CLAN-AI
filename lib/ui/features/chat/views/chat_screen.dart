@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:clan_ai/core/constants/app_theme.dart';
+import 'package:clan_ai/core/constants/clan_theme_colors.dart';
 import 'package:clan_ai/core/utils/latency_meter.dart';
 import 'package:clan_ai/ui/features/chat/view_models/chat_view_model.dart';
 import 'package:clan_ai/ui/features/chat/views/message_bubble.dart';
@@ -14,7 +15,9 @@ import 'package:clan_ai/ui/shared/mixins/auto_scroll_mixin.dart';
 import 'package:clan_ai/ui/shared/delete_message_handler.dart';
 
 class ChatScreen extends StatefulWidget {
-  const ChatScreen({super.key});
+  final VoidCallback? themeRefresh;
+
+  const ChatScreen({super.key, this.themeRefresh});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -62,7 +65,6 @@ class _ChatScreenState extends State<ChatScreen> with AutoScrollMixin {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final chatVM = context.watch<ChatViewModel>();
     final settingsVM = context.watch<SettingsViewModel>();
 
@@ -83,7 +85,7 @@ class _ChatScreenState extends State<ChatScreen> with AutoScrollMixin {
             child: Stack(
               children: [
                 chatVM.messages.isEmpty
-                    ? _buildEmptyState(context, isDark, chatVM, settingsVM)
+                    ? _buildEmptyState(context, context.clanTextPrimary, chatVM, settingsVM)
                     : ListView.builder(
                         controller: scrollController,
                         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -146,8 +148,8 @@ class _ChatScreenState extends State<ChatScreen> with AutoScrollMixin {
                     right: 16,
                     bottom: 16,
                     child: FloatingActionButton.small(
-                      backgroundColor: isDark ? AppTheme.darkSurfaceVariant : AppTheme.lightSurfaceVariant,
-                      foregroundColor: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                      backgroundColor: context.clanSurfaceVariant,
+                      foregroundColor: context.clanTextPrimary,
                       elevation: 4,
                       onPressed: () {
                         scrollToBottom(true);
@@ -184,7 +186,7 @@ class _ChatScreenState extends State<ChatScreen> with AutoScrollMixin {
 
   Widget _buildEmptyState(
     BuildContext context,
-    bool isDark,
+    Color titleColor,
     ChatViewModel chatVM,
     SettingsViewModel settingsVM,
   ) {
@@ -214,7 +216,7 @@ class _ChatScreenState extends State<ChatScreen> with AutoScrollMixin {
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
-                color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                color: titleColor,
               ),
             ),
             const SizedBox(height: 6),
@@ -224,7 +226,7 @@ class _ChatScreenState extends State<ChatScreen> with AutoScrollMixin {
                 child: Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: (isDark ? Colors.red.shade900 : Colors.red.shade100).withValues(alpha: 0.5),
+                    color: (Theme.of(context).brightness == Brightness.dark ? Colors.red.shade900 : Colors.red.shade100).withValues(alpha: 0.5),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: Colors.red.shade700),
                   ),
@@ -259,7 +261,7 @@ class _ChatScreenState extends State<ChatScreen> with AutoScrollMixin {
                 'Connected to ${settingsVM.config.name}',
                 style: TextStyle(
                   fontSize: 13,
-                  color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                  color: context.clanTextMuted,
                 ),
               ),
             const SizedBox(height: 28),
@@ -275,28 +277,28 @@ class _ChatScreenState extends State<ChatScreen> with AutoScrollMixin {
                   Icons.science_outlined,
                   chatVM,
                   settingsVM,
-                  isDark,
+                  context.clanTextPrimary,
                 ),
                 _buildPromptSuggestion(
                   'Write a Python script for Server-Sent Events',
                   Icons.code_rounded,
                   chatVM,
                   settingsVM,
-                  isDark,
+                  context.clanTextPrimary,
                 ),
                 _buildPromptSuggestion(
                   r'Calculate the integral $\int x^2 e^x dx$',
                   Icons.functions_rounded,
                   chatVM,
                   settingsVM,
-                  isDark,
+                  context.clanTextPrimary,
                 ),
                 _buildPromptSuggestion(
                   'Analyze time complexity of Dijkstra algorithm',
                   Icons.analytics_outlined,
                   chatVM,
                   settingsVM,
-                  isDark,
+                  context.clanTextPrimary,
                 ),
               ],
             ),
@@ -311,7 +313,7 @@ class _ChatScreenState extends State<ChatScreen> with AutoScrollMixin {
     IconData icon,
     ChatViewModel chatVM,
     SettingsViewModel settingsVM,
-    bool isDark,
+    Color titleColor,
   ) {
     return InkWell(
       onTap: () {
@@ -326,10 +328,10 @@ class _ChatScreenState extends State<ChatScreen> with AutoScrollMixin {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: isDark ? AppTheme.darkSurfaceVariant.withValues(alpha: 0.7) : AppTheme.lightSurfaceVariant,
+          color: context.clanSurfaceVariant.withValues(alpha: 0.7),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder,
+            color: context.clanBorder,
             width: 0.8,
           ),
         ),
@@ -343,7 +345,7 @@ class _ChatScreenState extends State<ChatScreen> with AutoScrollMixin {
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
-                color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                color: titleColor,
               ),
             ),
           ],

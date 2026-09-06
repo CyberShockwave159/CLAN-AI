@@ -10,11 +10,15 @@ import 'package:clan_ai/data/models/system_prompt_template.dart';
 import 'package:clan_ai/data/repositories/server_repository.dart';
 import 'package:clan_ai/data/repositories/system_prompt_templates_repository.dart';
 import 'package:clan_ai/core/constants/app_constants.dart';
+import 'package:clan_ai/core/constants/app_theme.dart';
+import 'package:clan_ai/data/models/custom_theme_colors.dart';
+import 'package:clan_ai/data/models/app_theme_mode.dart';
 import 'package:clan_ai/domain/models/generation_params.dart';
 
 class SettingsViewModel extends ChangeNotifier {
   final ServerRepository _serverRepository;
   final SystemPromptTemplatesRepository _templateRepository;
+  VoidCallback? _onThemeChanged;
 
   ServerConfig _config = const ServerConfig();
   ServerConfig get config => _config;
@@ -22,6 +26,18 @@ class SettingsViewModel extends ChangeNotifier {
 
   AppMode _appMode = AppMode.assistant;
   AppMode get appMode => _appMode;
+
+  AppThemeMode _themeMode = AppThemeMode.dark;
+  AppThemeMode get themeMode => _themeMode;
+
+  CustomThemeColors? _customThemeColors;
+  CustomThemeColors? get customThemeColors => _customThemeColors;
+
+  VoidCallback? get onThemeChanged => _onThemeChanged;
+
+  void setOnThemeChanged(VoidCallback callback) {
+    _onThemeChanged = callback;
+  }
 
   List<ModelInfo> _availableModels = [];
   List<ModelInfo> get availableModels => _availableModels;
@@ -62,8 +78,10 @@ class SettingsViewModel extends ChangeNotifier {
   SettingsViewModel({
     ServerRepository? serverRepository,
     SystemPromptTemplatesRepository? templateRepository,
+    VoidCallback? onThemeChanged,
   })  : _serverRepository = serverRepository ?? ServerRepository(),
         _templateRepository = templateRepository ?? SystemPromptTemplatesRepository() {
+    _onThemeChanged = onThemeChanged;
     _init();
   }
 
@@ -91,6 +109,8 @@ class SettingsViewModel extends ChangeNotifier {
 
     _templates = await _templateRepository.loadTemplates();
     _appMode = await LocalDatabase.instance.loadAppMode();
+    _themeMode = await LocalDatabase.instance.loadAppThemeMode();
+    _customThemeColors = await LocalDatabase.instance.loadCustomThemeColors();
     notifyListeners();
     // Test initial connection & fetch models
     await testConnection();
@@ -107,6 +127,37 @@ class SettingsViewModel extends ChangeNotifier {
   Future<void> updateAppMode(AppMode mode) async {
     _appMode = mode;
     await LocalDatabase.instance.saveAppMode(mode);
+    notifyListeners();
+  }
+
+  Future<void> setAppThemeMode(AppThemeMode mode) async {
+    _themeMode = mode;
+    await LocalDatabase.instance.saveAppThemeMode(mode);
+    _onThemeChanged?.call();
+    notifyListeners();
+  }
+
+  Future<void> setCustomThemeColors(CustomThemeColors colors) async {
+    _customThemeColors = colors;
+    await LocalDatabase.instance.saveCustomThemeColors(colors);
+    _onThemeChanged?.call();
+    notifyListeners();
+  }
+
+  Future<void> clearCustomThemeColors() async {
+    _customThemeColors = null;
+    await LocalDatabase.instance.saveCustomThemeColors(const CustomThemeColors(
+      bg: AppTheme.darkBg,
+      surface: AppTheme.darkSurface,
+      surfaceVariant: AppTheme.darkSurfaceVariant,
+      border: AppTheme.darkBorder,
+      textPrimary: AppTheme.darkTextPrimary,
+      textSecondary: AppTheme.darkTextSecondary,
+      textMuted: AppTheme.darkTextMuted,
+      userBubble: AppTheme.darkUserBubble,
+      assistantBubble: AppTheme.darkAssistantBubble,
+    ));
+    _onThemeChanged?.call();
     notifyListeners();
   }
 
