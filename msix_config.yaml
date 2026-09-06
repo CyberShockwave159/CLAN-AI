@@ -1,0 +1,33 @@
+# MSIX Package Configuration for CLAN-AI
+# https://pub.dev/packages/msix
+
+name: CLAN-AI
+description: "Frontier-class cross-platform llama.cpp client"
+identity_name: clan_ai
+publisher_name: CLANAIOrg
+publisher_display_name: CLAN-AI Organization
+package_display_name: CLAN-AI
+
+# Generate msix_version from pubspec version
+msix_version: 1.0.0.0
+
+# Certificate configuration
+# Generated via: New-SelfSignedCertificate -Type Custom -Subject "CN=CLANAIOrg" -KeyUsage DigitalSignature -FriendlyName "CLAN-AI" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3","2.5.29.19={text}{}")
+# Export via: certutil -exportpfx -p "" "CLAN-AI" "release/clan_ai_certificate.pfx"
+# On CI: use environment variable CLAN_AI_CERT_PATH pointing to the .pfx
+certificate_path: release/clan_ai_certificate.pfx
+install_certificate: true
+
+# Logo requirements: transparent PNG, square
+logo_path: msix/assets/icon100x100.png
+
+# Application settings
+entry_point: windows/runner/x64/Release/clan_ai.exe
+protocol_activation: clanai
+capabilities: 
+  - internetClient
+  - privateNetworkServerClient
+  - removableStorage
+
+# Windows-specific settings
+windows_sign: true

@@ -1,0 +1,168 @@
+name: Build Windows Installer
+
+on:
+  push:
+    branches: [main, master]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+env:
+  FLUTTER_VERSION: '3.27.0'
+  NSIS_VERSION: '3.09'
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-windows:
+    name: Build Windows (${{ matrix.target }})
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        target: [x64]
+        include:
+          - target: x64
+            flutter_target: windows-x64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+
+      - name: Setup NSIS
+        run: |
+          $nsisUrl = "https://github.com/nsis-apps/NsisApp/releases/download/${{ env.NSIS_VERSION }}/nsis-${{ env.NSIS_VERSION }}.zip"
+          Invoke-WebRequest -Uri $nsisUrl -OutFile nsis.zip
+          Expand-Archive -Path nsis.zip -DestinationPath $env:TEMP\nsis
+          Copy-Item "$env:TEMP\nsis\makensis.exe" -Destination "$env:ProgramFiles\NSIS\" -Force
+          echo "$env:ProgramFiles\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          makensis /VERSION
+        shell: pwsh
+
+      - name: Install Windows dependencies
+        run: |
+          flutter pub get
+        shell: pwsh
+
+      - name: Cache Flutter dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.tool_cache }}/flutter
+          key: ${{ runner.os }}-flutter-${{ hashFiles('**/pubspec.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-flutter-
+
+      - name: Build Windows release
+        run: |
+          flutter build windows --release
+        shell: pwsh
+
+      - name: Copy certificate to project
+        run: |
+          $certPath = "${{ secrets.CERT_PATH }}"
+          if ($certPath) {
+            Copy-Item $certPath -Destination "release\clan_ai_certificate.pfx" -Force
+            echo "Certificate copied from $certPath"
+          } else {
+            echo "No certificate path specified, using existing cert"
+          }
+        shell: pwsh
+
+      - name: Build MSIX package
+        run: |
+          dart run msix:create
+        shell: pwsh
+
+      - name: Verify MSIX output
+        run: |
+          $msixFiles = Get-ChildItem -Path build\msix -Recurse -Filter "*.msix"
+          if ($msixFiles.Count -eq 0) {
+            Write-Error "No MSIX files found after build"
+            exit 1
+          }
+          foreach ($f in $msixFiles) {
+            Write-Host "Found MSIX: $($f.FullName) ($([math]::Round($f.Length/1MB, 2)) MB)"
+          }
+          $msixFiles[0].FullName | Out-File -FilePath $env:MSIX_PATH -Encoding utf8
+        shell: pwsh
+
+      - name: Build NSIS installer
+        run: |
+          $msixPath = Get-Content $env:MSIX_PATH
+          $version = (Get-Content pubspec.yaml | Select-String "version:").ToString().Split('+')[0].Trim()
+          $installerName = "CLAN-AI_${version}_Setup.exe"
+          New-Item -ItemType Directory -Path "dist" -Force | Out-Null
+          Copy-Item $msixPath -Destination "dist\" -Force
+          makensis /DMSIX_SOURCE="dist\$(Split-Path $msixPath -Leaf)" /DDIST_DIR="dist" installer\nsis_installer.nsi
+        shell: pwsh
+
+      - name: Generate checksums
+        run: |
+          $distDir = "dist"
+          $files = Get-ChildItem -Path $distDir -File
+          foreach ($f in $files) {
+            $hash = Get-FileHash -Path $f.FullName -Algorithm SHA256
+            "$($hash.Hash)  $($f.Name)" | Out-File -FilePath "$distDir\checksums.sha256" -Append -Encoding utf8
+          }
+          if (Test-Path "$distDir\README.txt") {
+            Remove-Item "$distDir\README.txt" -Force
+          }
+          $version = (Get-Content pubspec.yaml | Select-String "version:").ToString().Split('+')[0].Trim()
+          $date = Get-Date -Format "yyyy-MM-dd"
+          @"
+CLAN-AI Windows Installer
+=========================
+
+Files in this directory:
+
+  clan_ai_*.msix       - MSIX package (direct install)
+  CLAN-AI_*_Setup.exe  - NSIS installer (recommended)
+  checksums.sha256     - SHA-256 checksums for verification
+  README.txt           - This file
+
+Installation:
+  Method 1 (Recommended):
+    Double-click the CLAN-AI_*_Setup.exe installer
+
+  Method 2 (Direct):
+    Double-click the .msix file
+    If prompted about sideloading, enable it in:
+    Settings > Apps > Developer Options
+
+  Method 3 (PowerShell):
+    Add-AppxPackage -Path clan_ai_*.msix
+
+Requirements:
+  - Windows 10 (version 1809) or later
+  - Microsoft Account (for sideloading with self-signed cert)
+
+For more information: https://github.com/clan-ai/clan_ai
+"@ | Out-File -FilePath "$distDir\README.txt" -Encoding utf8
+        shell: pwsh
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: clan-ai-windows-${{ github.sha }}
+          path: dist/
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Create GitHub Release (on tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          draft: false
+          prerelease: contains(github.ref, '-rc') || contains(github.ref, '-beta')
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

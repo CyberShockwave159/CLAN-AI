@@ -76,3 +76,8 @@ macos/Runner/GeneratedPluginRegistrant.swift
 
 # VS Code (optional - uncomment to enable)
 # .vscode/
+
+# Build artifacts
+/dist/
+/release/*.pfx
+/release/*.pem
