@@ -13,6 +13,90 @@ Frontier-class cross-platform llama.cpp client. A Flutter app that connects to a
 | iOS | Supported (requires macOS to build) |
 | Web | Not supported |
 
+## Installation
+
+### Windows
+
+The recommended way to install CLAN-AI on Windows is via the `.exe` installer:
+
+1. Download the latest `CLAN-AI_Setup.exe` from the [GitHub Releases](https://github.com/CyberShockwave159/CLAN-AI/releases) page
+2. Double-click the installer — it will install to your user profile (no admin rights needed)
+3. A Start Menu shortcut is created automatically
+4. The installer enables sideloading on first run (required for self-signed certificate)
+
+**Alternative: MSIX package** — `clan_ai_*.msix` files can be installed by double-clicking them. If prompted about sideloading, enable it in **Settings → Apps → Developer Options → App Development Licenses**.
+
+**Requirements:** Windows 10 (version 1809) or later.
+
+### Linux (Desktop)
+
+**Option A: Flatpak (recommended)**
+
+```bash
+flatpak install io.github.cybershockwave159.clan_ai
+```
+
+**Option B: From source**
+
+```bash
+# Install Flutter SDK first: https://docs.flutter.dev/get-started/install/linux
+git clone https://github.com/CyberShockwave159/CLAN-AI.git
+cd clan_ai
+flutter pub get
+flutter run -d linux
+```
+
+### macOS (Desktop)
+
+```bash
+# Install Flutter SDK first: https://docs.flutter.dev/get-started/install/macos
+git clone https://github.com/CyberShockwave159/CLAN-AI.git
+cd clan_ai
+flutter pub get
+flutter run -d macos
+```
+
+You may need to ungate the app on first launch:
+```bash
+xattr -d com.apple.quarantine build/macos/Build/Products/Release/clan_ai.app
+```
+
+### Android
+
+```bash
+# Connect device via USB with USB debugging enabled
+flutter pub get
+flutter run -d <android-device-id>
+```
+
+Or build an APK:
+```bash
+flutter build apk --release
+```
+
+### iOS
+
+```bash
+# Requires macOS
+flutter pub get
+flutter run -d <ios-device-id>
+```
+
+Or build an IPA:
+```bash
+flutter build ios --release
+```
+
+### Development Builds
+
+To build any platform from source:
+```bash
+flutter pub get
+flutter build <platform> --release
+```
+
+Supported build targets: `linux`, `macos`, `windows`, `apk` (Android), `ios`.
+
 ## Features
 
 - Real-time streaming chat with both OpenAI-compatible and native llama.cpp endpoints
@@ -126,9 +210,33 @@ Characters can have multiple opening messages:
 
 ## Development
 
+### Building the Windows Installer (.exe)
+
+To create a distributable Windows installer:
+
+1. Install [NSIS](https://nsis.sourceforge.io/Download) (adds `makensis` to PATH)
+2. Run the build script from the project root:
+
+```powershell
+# Windows
+.\scripts\build-windows-installer.bat
+
+# Linux / macOS
+./scripts/build-windows-installer.sh
+```
+
+This produces `CLAN-AI_Setup.exe` in the `dist/` directory. The installer:
+- Bundles the MSIX package and installs it via PowerShell
+- Creates a Start Menu shortcut
+- Enables sideloading automatically
+- Registers the uninstaller
+- Generates SHA-256 checksums
+
+**CI/CD:** Pushing to `main`/`master` triggers an automated Windows build in GitHub Actions. Build artifacts are uploaded as downloadable files.
+
 ```bash
 flutter analyze        # lint + typecheck
-flutter test           # runs all 28 test files (~463 total tests, includes reasoning)
+flutter test           # runs all 28 test files (~465 total tests, includes reasoning)
 flutter run            # launch app
 ```
 

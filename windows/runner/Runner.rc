@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.clanai" "\0"
-            VALUE "FileDescription", "clan_ai" "\0"
+            VALUE "CompanyName", "CLAN-AI Organization" "\0"
+            VALUE "FileDescription", "CLAN-AI" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "clan_ai" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.clanai. All rights reserved." "\0"
-            VALUE "OriginalFilename", "clan_ai.exe" "\0"
-            VALUE "ProductName", "clan_ai" "\0"
+            VALUE "InternalName", "CLAN-AI" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 CLAN-AI Organization. All rights reserved." "\0"
+            VALUE "OriginalFilename", "CLAN-AI.exe" "\0"
+            VALUE "ProductName", "CLAN-AI" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
