@@ -1,20 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- Base configuration: permits cleartext HTTP for local LAN and localhost llama.cpp servers -->
-    <base-config cleartextTrafficPermitted="true">
+    <!-- Base config: force HTTPS for public web & remote APIs -->
+    <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
             <certificates src="system" />
             <certificates src="user" />
         </trust-anchors>
     </base-config>
 
+    <!-- Cleartext permitted only for local / LAN servers -->
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="true">localhost</domain>
         <domain includeSubdomains="true">127.0.0.1</domain>
         <domain includeSubdomains="true">10.0.2.2</domain>
     </domain-config>
 
-    <!-- Debug mode: trust user-installed CA certificates -->
     <debug-overrides>
         <trust-anchors>
             <certificates src="user" />

@@ -173,6 +173,7 @@ RAG behavior is configurable via `GenerationParams`:
 |-----------|---------|-------|-------------|
 | `ragTopK` | 3 | 1-10 | Number of memories to retrieve |
 | `ragMinScore` | 0.0 | 0.0-1.0 | Minimum cosine similarity threshold |
+| `ragLimit` | 100 | — | Maximum number of memories returned by the vector store query |
 
 Configuration is exposed in Settings → Generation Parameters with sliders. Values are passed through `RoleplayViewModel` to `RoleplayContextBuilder.build()`.
 
@@ -200,7 +201,7 @@ Assistant messages include a memory chip when `ragMemoryCount > 0`:
 
 ## SQLite Schema
 
-### Version 8 (Latest)
+### Version 9 (Latest)
 
 ```sql
 -- Thread table: conversation containers
@@ -279,6 +280,7 @@ CREATE TABLE persona_templates (
 | v5 → v6 | Added `rag_memory_count` column to messages |
 | v6 → v7 | Added `reasoning_content` column to messages (thinking blocks) |
 | v7 → v8 | Created `characters` and `persona_templates` tables; migrated data from SharedPreferences |
+| v8 → v9 | Added `rag_memory_contents` column to messages (JSON-encoded memory content strings) |
 
 ---
 
@@ -385,6 +387,6 @@ All optional — defaults to production instances.
 6. **RAG config**: `ragTopK` (1-10) and `ragMinScore` (0.0-1.0) control memory retrieval. Default: topK=3, minScore=0.0. Passed through `GenerationParams` → `RoleplayViewModel` → `RoleplayContextBuilder.build()`. Filtered by minimum cosine similarity in `RoleplayContextBuilder`.
 7. **Memory chip**: `ChatMessage.ragMemoryCount` shows count of injected memories. `ChatMessage.ragMemoryContents` stores JSON-encoded memory content strings. Displayed in MessageBubble as clickable chip.
 8. **Memory management**: `VectorStore.getAllMemories()` returns all embeddings for a character. `VectorStore.deleteEmbedding(id)` removes a single embedding. Accessed via `CharacterMemoriesDialog` from RoleplayDrawer character menu.
-6. **SharedPreferences** still used for: server profiles, system prompt templates, theme mode, app mode, last roleplay thread ID
-7. **SQLite** used for: threads, messages, characters, persona templates, embeddings
-8. **Secure storage** used for: API keys (per profile)
+6. **SharedPreferences** still used for: server profiles (`clan_server_profiles`), active profile ID (`clan_active_profile_id`), active server config (`clan_active_server_config`), theme mode (`clan_theme_mode`), custom theme colors (`clan_custom_theme_colors`), app mode (`clan_app_mode`), last roleplay thread ID (`clan_last_roleplay_thread_id`), system prompt templates (`clan_system_prompt_templates`). Characters and persona templates were migrated from SharedPreferences to SQLite in v7→v8 and are no longer stored there.
+7. **SQLite** used for: threads, messages, characters, persona templates, embeddings (separate database file)
+8. **Secure storage** used for: API keys (per profile, via `flutter_secure_storage`)

@@ -12,7 +12,7 @@ void main() {
           home: Scaffold(
             body: AlternateGreetingSelector(
               greetings: greetings,
-              onSelectGreeting: () {},
+              onSelectGreeting: (greeting) {},
             ),
           ),
         ),
@@ -33,7 +33,7 @@ void main() {
           home: Scaffold(
             body: AlternateGreetingSelector(
               greetings: ['Hello!', 'Hi!'],
-              onSelectGreeting: () {
+              onSelectGreeting: (greeting) {
                 selectedGreeting = 'Hello!';
               },
             ),
@@ -55,7 +55,7 @@ void main() {
           home: Scaffold(
             body: AlternateGreetingSelector(
               greetings: [],
-              onSelectGreeting: () {},
+              onSelectGreeting: (greeting) {},
             ),
           ),
         ),
@@ -74,7 +74,7 @@ void main() {
           home: Scaffold(
             body: AlternateGreetingSelector(
               greetings: ['Hello!'],
-              onSelectGreeting: () {
+              onSelectGreeting: (greeting) {
                 selectedGreeting = 'Hello!';
               },
             ),
@@ -96,7 +96,7 @@ void main() {
           home: Scaffold(
             body: AlternateGreetingSelector(
               greetings: ['Custom Greeting'],
-              onSelectGreeting: () {},
+              onSelectGreeting: (greeting) {},
             ),
           ),
         ),
@@ -115,7 +115,7 @@ void main() {
           home: Scaffold(
             body: AlternateGreetingSelector(
               greetings: ['First', 'Second', 'Third'],
-              onSelectGreeting: () {
+              onSelectGreeting: (greeting) {
                 selectedGreeting = 'Second';
               },
             ),
@@ -139,7 +139,7 @@ void main() {
           home: Scaffold(
             body: AlternateGreetingSelector(
               greetings: ['Tap me'],
-              onSelectGreeting: () {
+              onSelectGreeting: (greeting) {
                 tapped = true;
               },
             ),
@@ -164,7 +164,7 @@ void main() {
           home: Scaffold(
             body: AlternateGreetingSelector(
               greetings: ['Alt greeting'],
-              onSelectGreeting: () {},
+              onSelectGreeting: (greeting) {},
             ),
           ),
         ),

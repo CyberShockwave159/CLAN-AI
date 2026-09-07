@@ -111,7 +111,7 @@ Supported build targets: `linux`, `macos`, `windows`, `apk` (Android), `ios`.
 - **Post History Instructions** — Additional text appended after each AI response for style reminders or state tracking
 - Client-Side RAG — Pure Dart feature hashing embeddings (256-dim, char trigrams) with SQLite cosine similarity; zero ML dependencies. Configurable Top-K (1-10) and minimum relevance threshold (0.0-1.0) in Generation Parameters sheet
 - **Conversation branching** — Regenerate and edit responses to create sibling variants
-- SQLite local persistence with full thread/message history
+- SQLite local persistence with full thread/message history (schema v9)
 - Automatic server health polling with fallback endpoints (`/health` → `/props` → `/v1/models`)
 - Dark mode by default (OLED-optimized), configurable light and custom themes
 - Custom theme presets (Warm, Cool, Pastel) with persisted user color selections
@@ -177,8 +177,8 @@ Before creating or editing characters, you can create reusable persona templates
 Characters can have multiple opening messages:
 
 1. In the character creation wizard (step 2) or edit dialog, add alternate greetings (one per line)
-2. When viewing a character's chat, alternate greetings appear as selectable chips above the prompt input
-3. Selecting one starts a new conversation with that greeting
+2. When viewing a character's chat, alternate greetings appear as selectable chips above the prompt input (only visible before the user has replied — disappears after first user message)
+3. Selecting one starts a new conversation branch with that greeting as the opening message (always creates a new thread, never reuses existing)
 
 ## Architecture
 
@@ -186,7 +186,7 @@ Characters can have multiple opening messages:
 - **No codegen** — all JSON serialization is manual (`jsonEncode`/`jsonDecode` + `toMap()`/`fromMap()`)
 - **Shared constants** in `lib/core/constants/app_constants.dart` — all magic numbers and default strings centralized
 - **Shared mixin** `StreamMutationMixin` in `lib/ui/shared/mixins/stream_mutation_mixin.dart` — provides streaming, undo, switchVariant, stopGeneration logic for both ChatViewModel and RoleplayViewModel
-- **Shared settings sections** in `lib/ui/features/settings/views/sections/` — `profile_section.dart`, `safety_section.dart`, `app_mode_section.dart`
+- **Shared settings sections** in `lib/ui/features/settings/views/sections/` — `profile_section.dart`, `safety_section.dart`, `app_mode_section.dart`, `theme_section.dart`
 - **ServerProfile consolidation:** `ServerConnectionDetails` removed; `ServerProfile` serves as connection details throughout
 - **Dependency wiring** in `lib/main.dart` via constructor injection
 - **Four root providers**: `SettingsViewModel`, `ChatViewModel`, `RoleplayViewModel`, `PersonaTemplateViewModel`
@@ -236,7 +236,7 @@ This produces `CLAN-AI_Setup.exe` in the `dist/` directory. The installer:
 
 ```bash
 flutter analyze        # lint + typecheck
-flutter test           # runs all 28 test files (~465 total tests, includes reasoning)
+flutter test           # runs all 28 test files (465 total tests)
 flutter run            # launch app
 ```
 
@@ -256,7 +256,7 @@ flutter run            # launch app
 
 ## Gotchas
 
-- **Conversation branching**: Regenerate and edit operations truncate at the parent message and create new sibling branches. Navigation between variants uses `variantIndex` + `siblingIds`. Branches are linked via `branchFromThreadId` on `ChatThread`.
+- **Conversation branching**: Regenerate and edit operations truncate at the parent message and create new sibling branches. Navigation between variants uses `variantIndex` + `siblingIds`. Branches are linked via `branchFromThreadId` on `ChatThread`. In roleplay mode, the first assistant message (character's greeting) has the regenerate button disabled until the user has replied.
 - **Android networking**: `127.0.0.1` refers to the Android device's loopback, not your host machine. Use `10.0.2.2` for the Android emulator or your host's LAN IP for physical devices.
 - **SQLite desktop FFI**: On Linux/Windows/macOS, `sqflite_common_ffi` is initialized **once** in `main.dart` (`_initSqliteFfi()`). Do not call `sqfliteFfiInit()` again — it will trigger a warning.
 - **Database migration**: DB schema is version 8 (added `characters` and `persona_templates` tables with SharedPreferences migration). If you encounter schema errors, clear the app's local storage or delete `clan_ai.db`.

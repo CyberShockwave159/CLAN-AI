@@ -2,12 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:clan_ai/core/constants/clan_theme_colors.dart';
 import 'package:clan_ai/core/utils/latency_meter.dart';
+import 'dart:convert';
+
+import 'package:clan_ai/data/models/chat_message.dart';
 import 'package:clan_ai/ui/features/chat/views/message_bubble.dart';
 import 'package:clan_ai/ui/features/chat/views/prompt_input_bar.dart';
 import 'package:clan_ai/ui/features/roleplay/views/roleplay_drawer.dart';
 import 'package:clan_ai/ui/features/roleplay/view_models/roleplay_view_model.dart';
 import 'package:clan_ai/ui/features/settings/view_models/settings_view_model.dart';
 import 'package:clan_ai/ui/features/settings/views/parameter_tuning_sheet.dart';
+import 'package:clan_ai/domain/models/generation_params.dart';
 import 'package:clan_ai/ui/features/settings/views/settings_screen.dart';
 import 'package:clan_ai/ui/shared/connection_badge.dart';
 import 'package:clan_ai/ui/features/roleplay/widgets/alternate_greeting_selector.dart';
@@ -61,6 +65,34 @@ class _RoleplayScreenState extends State<RoleplayScreen> with AutoScrollMixin {
         scrollToBottom();
       },
       onThreadDeleted: () => scrollToBottom(false),
+    );
+  }
+
+  MessageDebugContext? _buildDebugContext(ChatMessage message, RoleplayViewModel roleplayVM, SettingsViewModel settingsVM) {
+    if (message.role != MessageRole.assistant || message.status != MessageStatus.completed) return null;
+
+    final thread = roleplayVM.activeThread;
+    final systemPrompt = thread?.systemPrompt ?? settingsVM.config.systemPrompt;
+    final params = settingsVM.config.defaultParams;
+    final ragMemories = message.ragMemoryContents != null && message.ragMemoryContents!.isNotEmpty
+        ? List<String>.from(jsonDecode(message.ragMemoryContents!))
+        : <String>[];
+
+    return MessageDebugContext(
+      model: settingsVM.config.selectedModel ?? 'unknown',
+      systemPrompt: systemPrompt,
+      ragMemories: ragMemories,
+      temperature: params.temperature,
+      topP: params.topP,
+      topK: params.topK,
+      contextSize: params.contextSize,
+      presencePenalty: params.presencePenalty,
+      frequencyPenalty: params.frequencyPenalty,
+      repeatPenalty: params.repeatPenalty,
+      timeToFirstTokenMs: message.timeToFirstTokenMs,
+      tokensPerSecond: message.tokensPerSecond,
+      totalTokens: message.totalTokens,
+      generationTimeSec: message.generationTimeSec,
     );
   }
 
@@ -224,21 +256,27 @@ class _RoleplayScreenState extends State<RoleplayScreen> with AutoScrollMixin {
                           final message = roleplayVM.messages[index];
                           final avatar = roleplayVM.activeCharacter?.avatarData;
                           final name = roleplayVM.activeCharacter?.name;
+                          // In roleplay mode, the first assistant message (character greeting) should not be regeneratable
+                          // until after the user has replied, since it's defined by the character card and has no prior user context.
+                          final isFirstAssistantMessage = index == 0 && message.role == MessageRole.assistant;
                           return MessageBubble(
                             key: ValueKey(message.id),
                             message: message,
                             messageIndex: index,
                             isLastMessage: index == roleplayVM.messages.length - 1,
+                            debugContext: _buildDebugContext(message, roleplayVM, settingsVM),
                             characterAvatar: avatar,
                             characterName: name,
-                            onRegenerate: () {
-                              roleplayVM.regenerateMessage(
-                                messageIndex: index,
-                                serverConfig: settingsVM.config,
-                                connection: settingsVM.connectionDetails,
-                                modelContextLength: settingsVM.getSelectedModelContextLength(),
-                              );
-                            },
+                            onRegenerate: isFirstAssistantMessage
+                                ? null
+                                : () {
+                                    roleplayVM.regenerateMessage(
+                                      messageIndex: index,
+                                      serverConfig: settingsVM.config,
+                                      connection: settingsVM.connectionDetails,
+                                      modelContextLength: settingsVM.getSelectedModelContextLength(),
+                                    );
+                                  },
                             onEdit: (newPrompt) {
                               roleplayVM.editUserPrompt(
                                 messageIndex: index,
@@ -303,14 +341,16 @@ class _RoleplayScreenState extends State<RoleplayScreen> with AutoScrollMixin {
             ),
           ),
 
-            // Alternate Greeting Selector
+            // Alternate Greeting Selector — only shown before the user has replied
           if (roleplayVM.activeCharacter != null &&
-              roleplayVM.activeCharacter!.alternateGreetings.isNotEmpty)
+              roleplayVM.activeCharacter!.alternateGreetings.isNotEmpty &&
+              roleplayVM.messages.every((m) => m.role == MessageRole.assistant))
             AlternateGreetingSelector(
               greetings: roleplayVM.activeCharacter!.alternateGreetings,
-              onSelectGreeting: () {
-                roleplayVM.startRoleplay(
+              onSelectGreeting: (selectedGreeting) {
+                roleplayVM.startRoleplayWithGreeting(
                   roleplayVM.activeCharacter!,
+                  selectedGreeting,
                   serverConfig: settingsVM.config,
                   connection: settingsVM.connectionDetails,
                   modelContextLength: settingsVM.getSelectedModelContextLength(),

@@ -181,7 +181,8 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
   }
 
   /// Start a roleplay session with a specific greeting message.
-  /// This is used for alternate greetings.
+  /// This is used for alternate greetings — always creates a new thread
+  /// so each alternate opening starts a fresh branch conversation.
   Future<void> _startRoleplayWithGreeting(CharacterProfile character, String greeting, {
     required ServerConfig serverConfig,
     required ServerProfile? connection,
@@ -193,17 +194,6 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
     }
 
     _activeCharacter = character;
-
-    // Check if a thread already exists for this character
-    final characterThreads = await _chatRepository.getThreadsForCharacter(character.id);
-    if (characterThreads.isNotEmpty) {
-      // Reuse existing thread
-      characterThreads.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-      _activeThread = characterThreads.first;
-      _messages = await _chatRepository.getMessagesForThread(_activeThread!.id);
-      notifyListeners();
-      return;
-    }
 
     // Build initial system prompt with RAG (empty memories on first message)
     final initialContext = await RoleplayContextBuilder().build(

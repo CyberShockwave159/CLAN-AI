@@ -4,10 +4,11 @@ import 'package:clan_ai/core/constants/clan_theme_colors.dart';
 /// Displays alternate greetings as selectable chips below the chat input.
 ///
 /// When a greeting is tapped, it triggers the [onSelectGreeting] callback
-/// which should start a new conversation with that greeting.
+/// with the selected greeting text, which should start a new conversation
+/// using that specific greeting.
 class AlternateGreetingSelector extends StatelessWidget {
   final List<String> greetings;
-  final VoidCallback onSelectGreeting;
+  final Function(String selectedGreeting) onSelectGreeting;
 
   const AlternateGreetingSelector({
     super.key,
@@ -53,7 +54,7 @@ class AlternateGreetingSelector extends StatelessWidget {
                 return Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: InkWell(
-                    onTap: onSelectGreeting,
+                    onTap: () => onSelectGreeting(greeting),
                     borderRadius: BorderRadius.circular(20),
                     child: Chip(
                       avatar: Icon(

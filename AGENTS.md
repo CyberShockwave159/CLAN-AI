@@ -5,7 +5,7 @@ Recommended order: `pub get` → `analyze` → `test` → `run`.
 ```
 flutter pub get            # fetch dependencies (required after git pull)
 flutter analyze            # lint + typecheck (uses flutter_lints)
-flutter test               # runs all 28 test files (~465 total tests, includes reasoning)
+flutter test               # runs all 28 test files (465 total tests)
 flutter run -d <device>    # devices: linux, macos, windows, <android-id>
 ```
 
@@ -50,7 +50,7 @@ flutter run -d <device>    # devices: linux, macos, windows, <android-id>
 - `lib/ui/features/roleplay/widgets/character_creation_wizard.dart` — 4-step wizard with persona template selector, system prompt override, post history instructions, and alternate greetings input.
  - `lib/ui/features/roleplay/widgets/persona_template_dialog.dart` — Create/edit/delete persona templates dialog.
  - `lib/ui/features/roleplay/widgets/character_memories_dialog.dart` — Per-character memory viewer and pruner. Lists all vector embeddings for a character; allows deleting individual memories or clearing all.
-- `lib/ui/features/roleplay/widgets/alternate_greeting_selector.dart` — Displays alternate greetings as selectable chips above the chat input.
+- `lib/ui/features/roleplay/widgets/alternate_greeting_selector.dart` — Displays alternate greetings as selectable chips above the chat input (only visible while all messages are assistant messages). Callback receives the selected greeting text via `Function(String selectedGreeting)`.
 - `lib/core/utils/roleplay_context_builder.dart` — Orchestrates RAG: embeds user input → searches memories → builds system prompt. Accepts `characterSystemPrompt` and `postHistoryInstructions` for per-character prompt overrides.
 - `lib/core/utils/roleplay_prompt_formatter.dart` — Compiles roleplay system prompt. Handles character system prompt override with `{{original}}` prefix support. Appends post history instructions after standard prompt.
 - `lib/core/utils/avatar_storage_service.dart` — Stores large character avatars as files on disk instead of inline in SQLite. 500KB threshold for file storage. Methods: `saveAvatar()`, `getAvatarBytes()`, `deleteAvatar()`, `clearAllAvatars()`.
@@ -128,7 +128,8 @@ flutter run -d <device>    # devices: linux, macos, windows, <android-id>
 - **`{{char}}` / `{{user}}` replacement:** Parser in `silly_tavern_card_parser.dart` replaces these tokens in personality, firstMessage, setting, userPersona, systemPrompt, and postHistoryInstructions fields. `{{user}}` falls back to "User" if userPersona is empty.
 - **`_showEditDialog` returns `Future<CharacterProfile>`:** Must pass `CharacterRepository` as parameter (not use `context.read` inside the dialog). Delegates to `CharacterEditDialog` (proper `StatefulWidget` with `context.watch<PersonaTemplateViewModel>()` and `_applyTemplate()` in `setState`). Returns updated character on Save, original on Cancel. Use `.then((value) => value ?? character)` to handle nullable return.
 - **Async snackbar safety:** Always check `context.mounted` before calling `ScaffoldMessenger.of(context)` in async handlers to avoid "deactivated widget ancestor" errors.
-- **Alternate greetings:** `CharacterProfile.alternateGreetings` is a `List<String>`. Displayed as chips via `AlternateGreetingSelector` widget above the prompt input. Selecting one triggers `RoleplayViewModel.startRoleplayWithGreeting()` which starts a new conversation with that greeting as the first message.
+- **Alternate greetings:** `CharacterProfile.alternateGreetings` is a `List<String>`. Displayed as chips via `AlternateGreetingSelector` widget above the prompt input (only visible while all messages are assistant messages — disappears after user replies). Selecting one calls `startRoleplayWithGreeting(selectedGreeting)` which **always creates a new thread** (never reuses existing), starting a fresh conversation branch with that specific greeting as the first message.
+- **Regenerate first message in roleplay:** The regenerate button is disabled on the first assistant message (index 0) in roleplay mode — passed as `null` to `onRegenerate` in `roleplay_screen.dart`. This is because the first message is the character's opening line from the card, defined before any user context exists. It becomes regeneratable once the user has replied.
 - **Persona templates:** Global reusable user personas managed by `PersonaTemplateViewModel`. Created/edited in Settings → Persona Templates section. Selected via dropdown in character creation wizard, edit dialog, and SillyTavern import dialog. Template's `personaText` is copied into the character's `userPersona` field when applied.
 
 ## Platform-specific
@@ -142,7 +143,7 @@ flutter run -d <device>    # devices: linux, macos, windows, <android-id>
 - **Bubble width:** Capped at 600px via `LayoutBuilder` to prevent overflow on tablets.
 
 ## Testing
-28 test files, ~463 total tests. All tests use fake repositories (no real SQLite or network). ViewModels expose private state via setters for test injection.
+28 test files, 465 total tests. All tests use fake repositories (no real SQLite or network). ViewModels expose private state via setters for test injection.
 
 ### Test structure
 - **Test helpers** (`test/helpers/`) — `FakeChatRepository`, `FakeCharacterRepository`, `FakeVectorStore`, `FakeServerRepository`, `FakePersonaTemplateRepository`, `FakeSystemPromptTemplatesRepository`, `test_model_factories.dart`.

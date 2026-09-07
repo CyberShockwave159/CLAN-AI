@@ -320,6 +320,19 @@ class SettingsViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<PingResult?> testConnectionAtUrl(String url, {String? apiKey}) async {
+    try {
+      final result = await _serverRepository.testConnectionAtUrl(url, apiKey: apiKey);
+      return result;
+    } catch (e) {
+      return PingResult(
+        status: ServerHealthStatus.offline,
+        latencyMs: -1,
+        errorMessage: e.toString(),
+      );
+    }
+  }
+
   Future<void> testConnection() async {
     _isTestingConnection = true;
     _testConnectionError = null;
@@ -365,7 +378,7 @@ class SettingsViewModel extends ChangeNotifier {
         healthStatus: ServerHealthStatus.offline,
         latencyMs: -1,
       );
-      _testConnectionError = e.toString();
+      _testConnectionError = PingResult.parseError(e.toString());
     } finally {
       _isTestingConnection = false;
       await _saveConfig();

@@ -11,6 +11,64 @@ import 'package:clan_ai/ui/features/chat/widgets/token_speed_badge.dart';
 import 'package:clan_ai/ui/features/chat/widgets/reasoning_block.dart';
 import 'package:clan_ai/ui/shared/avatar_utils.dart';
 
+/// Debug context data for message copy-to-clipboard.
+class MessageDebugContext {
+  final String model;
+  final String? systemPrompt;
+  final List<String> ragMemories;
+  final double temperature;
+  final double topP;
+  final int topK;
+  final int contextSize;
+  final double presencePenalty;
+  final double frequencyPenalty;
+  final double repeatPenalty;
+  final int? timeToFirstTokenMs;
+  final double? tokensPerSecond;
+  final int? totalTokens;
+  final double? generationTimeSec;
+
+  const MessageDebugContext({
+    required this.model,
+    required this.systemPrompt,
+    required this.ragMemories,
+    required this.temperature,
+    required this.topP,
+    required this.topK,
+    required this.contextSize,
+    required this.presencePenalty,
+    required this.frequencyPenalty,
+    required this.repeatPenalty,
+    required this.timeToFirstTokenMs,
+    required this.tokensPerSecond,
+    required this.totalTokens,
+    required this.generationTimeSec,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'model': model,
+      'systemPrompt': systemPrompt,
+      'ragMemories': ragMemories,
+      'params': {
+        'temperature': temperature,
+        'topP': topP,
+        'topK': topK,
+        'contextSize': contextSize,
+        'presencePenalty': presencePenalty,
+        'frequencyPenalty': frequencyPenalty,
+        'repeatPenalty': repeatPenalty,
+      },
+      'metrics': {
+        'timeToFirstTokenMs': timeToFirstTokenMs,
+        'tokensPerSecond': tokensPerSecond,
+        'totalTokens': totalTokens,
+        'generationTimeSec': generationTimeSec,
+      },
+    };
+  }
+}
+
 class MessageBubble extends StatelessWidget {
   final ChatMessage message;
   final int messageIndex;
@@ -24,6 +82,7 @@ class MessageBubble extends StatelessWidget {
   final Function(String newContent)? onEditAssistant;
   final Uint8List? characterAvatar;
   final String? characterName;
+  final MessageDebugContext? debugContext;
 
   const MessageBubble({
     super.key,
@@ -39,6 +98,7 @@ class MessageBubble extends StatelessWidget {
     this.onEditAssistant,
     this.characterAvatar,
     this.characterName,
+    this.debugContext,
   });
 
   void _copyToClipboard(BuildContext context) {
@@ -46,6 +106,20 @@ class MessageBubble extends StatelessWidget {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: const Text('Message copied to clipboard'),
+        duration: const Duration(seconds: 1),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+
+  void _copyDebugContext(BuildContext context) {
+    if (debugContext == null) return;
+    final jsonStr = jsonEncode(debugContext!.toMap());
+    Clipboard.setData(ClipboardData(text: jsonStr));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Debug context copied to clipboard'),
         duration: const Duration(seconds: 1),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -503,6 +577,20 @@ class MessageBubble extends StatelessWidget {
                     tooltip: 'Copy',
                   ),
                 ),
+
+                // Copy Debug Context Action (assistant messages only)
+                if (!isUser && debugContext != null)
+                  Semantics(
+                    label: 'Copy debug context',
+                    child: IconButton(
+                      icon: const Icon(Icons.bug_report_outlined, size: 15),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                      color: context.clanTextMuted,
+                      onPressed: () => _copyDebugContext(context),
+                      tooltip: 'Copy debug context',
+                    ),
+                  ),
 
                 // Edit User Prompt Action
                 if (isUser)

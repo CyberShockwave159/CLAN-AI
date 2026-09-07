@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:clan_ai/core/constants/clan_theme_colors.dart';
@@ -5,6 +8,7 @@ import 'package:clan_ai/ui/features/chat/view_models/chat_view_model.dart';
 import 'package:clan_ai/ui/features/settings/view_models/settings_view_model.dart';
 import 'package:clan_ai/ui/features/settings/views/settings_screen.dart';
 import 'package:clan_ai/ui/shared/connection_badge.dart';
+import 'package:clan_ai/ui/shared/widgets/desktop_keyboard_shortcuts.dart';
 
 class AppHeader extends StatelessWidget implements PreferredSizeWidget {
   const AppHeader({super.key});
@@ -60,6 +64,21 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
           },
           tooltip: 'Settings',
         ),
+
+        // Desktop Keyboard Shortcuts Button
+        if (kIsWeb || Platform.isLinux || Platform.isWindows || Platform.isMacOS) ...[
+          const SizedBox(width: 4),
+          IconButton(
+            icon: const Icon(Icons.keyboard_outlined, size: 20),
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (_) => const ShortcutsHelpDialog(),
+              );
+            },
+            tooltip: 'Keyboard Shortcuts (Ctrl+/)',
+          ),
+        ],
 
         const SizedBox(width: 4),
       ],

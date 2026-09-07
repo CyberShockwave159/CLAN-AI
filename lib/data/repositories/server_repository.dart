@@ -188,5 +188,9 @@ class ServerRepository {
     return await ping(baseUrl, apiKey: apiKey);
   }
 
+  Future<PingResult> testConnectionAtUrl(String url, {String? apiKey}) async {
+    return await ping(url, apiKey: apiKey);
+  }
+
   // fetchModels is already exposed above; this alias is for compatibility
 }
