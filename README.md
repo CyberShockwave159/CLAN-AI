@@ -17,16 +17,44 @@ Frontier-class cross-platform llama.cpp client. A Flutter app that connects to a
 
 ### Windows
 
-The recommended way to install CLAN-AI on Windows is via the `.exe` installer:
+**Option A: Self-extracting installer (Recommended)**
 
-1. Download the latest `CLAN-AI_Setup.exe` from the [GitHub Releases](https://github.com/CyberShockwave159/CLAN-AI/releases) page
-2. Double-click the installer — it will install to your user profile (no admin rights needed)
-3. A Start Menu shortcut is created automatically
-4. The installer enables sideloading on first run (required for self-signed certificate)
+Download `CLAN-AI_Setup.exe` from the [GitHub Releases](https://github.com/CyberShockwave159/CLAN-AI/releases) page.
 
-**Alternative: MSIX package** — `clan_ai_*.msix` files can be installed by double-clicking them. If prompted about sideloading, enable it in **Settings → Apps → Developer Options → App Development Licenses**.
+1. Double-click the installer — it installs to `%LOCALAPPDATA%\Programs\CLAN-AI\` (no admin rights needed)
+2. A desktop shortcut and Start Menu entry are created automatically
+3. The installer enables sideloading on first run (required for self-signed certificate)
 
-**Requirements:** Windows 10 (version 1809) or later.
+**Option B: MSIX package**
+
+Download `clan_ai_*.msix` from the [GitHub Releases](https://github.com/CyberShockwave159/CLAN-AI/releases) page.
+
+1. Double-click the `.msix` file — Windows will prompt to install
+2. Or via PowerShell: `Add-AppxPackage -Path clan_ai_*.msix`
+3. If prompted about sideloading, enable it in **Settings → Apps → Developer Options → App Development Licenses**
+
+**Option C: Build from source**
+
+```powershell
+# Install Flutter SDK: https://docs.flutter.dev/get-started/install/windows
+git clone https://github.com/CyberShockwave159/CLAN-AI.git
+cd clan_ai
+flutter pub get
+flutter build windows --release
+
+# Build NSIS installer (requires NSIS: https://nsis.sourceforge.io/Download)
+.\scripts\build-windows-installer.bat
+```
+
+This produces `CLAN-AI_Setup.exe` in the `dist/` directory.
+
+**Requirements:** Windows 10 (version 1809) or later, 64-bit processor.
+
+**Verify installer integrity:**
+```powershell
+certutil -hashfile CLAN-AI_Setup.exe SHA256
+```
+Compare with the hash in `checksums.sha256` on the release page.
 
 ### Linux (Desktop)
 
@@ -212,27 +240,27 @@ Characters can have multiple opening messages:
 
 ### Building the Windows Installer (.exe)
 
-To create a distributable Windows installer:
+To create a distributable Windows installer from a Windows machine:
 
 1. Install [NSIS](https://nsis.sourceforge.io/Download) (adds `makensis` to PATH)
 2. Run the build script from the project root:
 
 ```powershell
-# Windows
 .\scripts\build-windows-installer.bat
+```
 
-# Linux / macOS
+Or on Linux/macOS (produces MSIX only, NSIS is Windows-only):
+```bash
 ./scripts/build-windows-installer.sh
 ```
 
-This produces `CLAN-AI_Setup.exe` in the `dist/` directory. The installer:
-- Bundles the MSIX package and installs it via PowerShell
-- Creates a Start Menu shortcut
-- Enables sideloading automatically
-- Registers the uninstaller
-- Generates SHA-256 checksums
+This produces files in the `dist/` directory:
+- `CLAN-AI_Setup.exe` — NSIS installer (bundles MSIX, creates Start Menu shortcut, enables sideloading)
+- `clan_ai_*.msix` — MSIX package (standalone install)
+- `checksums.sha256` — SHA-256 verification hashes
+- `README.txt` — Installation instructions
 
-**CI/CD:** Pushing to `main`/`master` triggers an automated Windows build in GitHub Actions. Build artifacts are uploaded as downloadable files.
+**CI/CD:** Pushing to `main`/`master` triggers an automated Windows build in GitHub Actions. Build artifacts are uploaded as downloadable files on the [Releases](https://github.com/CyberShockwave159/CLAN-AI/releases) page.
 
 ```bash
 flutter analyze        # lint + typecheck
