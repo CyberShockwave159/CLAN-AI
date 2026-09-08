@@ -98,11 +98,15 @@ Section "Install"
             Push "$INSTDIR\clan_ai.msix"
             Pop $R1
             ; Check if running on Windows 10+
-            ${If} ${AtLeastWin10}
-            ${Else}
+            System::Call 'kernel32::GetVersion() i.r0'
+            IntOp $0 $R0 & 0xFFFF
+            IntCmp $0 10 Win10ok Win98ok Win98ok
+            Win10ok:
+                Goto AfterWinCheck
+            Win98ok:
                 MessageBox MB_ICONSTOP "CLAN-AI requires Windows 10 or later."
                 Quit
-            ${EndIf}
+            AfterWinCheck:
 
             ; Install MSIX package silently
             ; First, ensure sideloading is enabled
