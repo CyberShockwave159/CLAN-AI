@@ -15,7 +15,7 @@
 !endif
 
 !ifndef DIST_DIR
-  !define DIST_DIR "dist"
+  !define DIST_DIR "..\dist"
 !endif
 
 !define INSTALLER_OUTPUT "${DIST_DIR}\CLAN-AI_Setup.exe"
@@ -118,7 +118,7 @@ Section "Install"
 
             ; Install the MSIX package
             ; Using Add-AppxPackage which handles registration
-            nsExec::ExecToStack '"$ENV:SystemRoot\system32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -Command "Add-AppxPackage -Path $\"$R1$\" -ForceApplicationShutdown -ForceShieldUIClosing -Verbose"'
+            nsExec::ExecToStack '"${ENV:SystemRoot}\system32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -Command "Add-AppxPackage -Path $\"$R1$\" -ForceApplicationShutdown -ForceShieldUIClosing -Verbose"'
             Pop $R0
             
             ; Check exit code (0 = success)
@@ -163,7 +163,7 @@ SectionEnd
 ; --- Uninstall Section ---
 Section "Uninstall"
     ; Uninstall MSIX package
-    nsExec::ExecToStack '"$ENV:SystemRoot\system32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -Command "Get-AppxPackage *clan_ai* | Remove-AppxPackage"'
+    nsExec::ExecToStack '"${ENV:SystemRoot}\system32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -Command "Get-AppxPackage *clan_ai* | Remove-AppxPackage"'
     
     ; Remove Start Menu shortcut
     Delete "$SMPROGRAMS\CLAN-AI.lnk"
