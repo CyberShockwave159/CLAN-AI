@@ -113,6 +113,7 @@ jobs:
           Remove-Item "installer\temp_icon.png" -Force
           New-Item -ItemType Directory -Path "installer\dist" -Force | Out-Null
           makensis /DMSIX_SOURCE="dist\$(Split-Path $msixPath -Leaf)" /DDIST_DIR="dist" installer\nsis_installer.nsi
+          Move-Item "installer\dist\CLAN-AI_Setup.exe" "dist\CLAN-AI_Setup.exe" -Force
         shell: pwsh
 
       - name: Generate checksums
