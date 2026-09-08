@@ -59,7 +59,8 @@ NSIS_SCRIPT="$PROJECT_ROOT/installer/nsis_installer.nsi"
 
 # Create a temporary NSIS script with correct paths
 TEMP_NSI="$DIST_DIR/temp_installer.nsi"
-sed "s|${MSIX_SOURCE}|${MSIX_COPY}|g; s|${INSTALLER_OUTPUT}|${DIST_DIR}/CLAN-AI_$(date +%Y%m%d)_Setup.exe|g" \
+NSIS_OUTPUT="$DIST_DIR/CLAN-AI_$(date +%Y%m%d)_Setup.exe"
+sed "s|${MSIX_SOURCE}|${MSIX_COPY}|g; s|${INSTALLER_OUTPUT}|${NSIS_OUTPUT}|g" \
     "$NSIS_SCRIPT" > "$TEMP_NSI"
 
 if command -v makensis &> /dev/null; then

@@ -1,0 +1,137 @@
+name: Release Windows Build
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Build Windows Installer
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-channel: stable
+          flutter-version: '3.27.x'
+          cache: true
+
+      - name: Install NSIS
+        run: |
+          choco install nsis -y
+        shell: pwsh
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build Windows binary
+        run: flutter build windows --release
+        shell: pwsh
+
+      - name: Build MSIX package
+        run: dart run msix:create
+        shell: pwsh
+
+      - name: Locate MSIX file
+        id: locate_msix
+        run: |
+          $msix = Get-ChildItem -Path build/msix/windows -Filter "*.msix" | Select-Object -First 1
+          if (-not $msix) {
+            $msix = Get-ChildItem -Path build/msix -Filter "*.msix" | Select-Object -First 1
+          }
+          if (-not $msix) {
+            Write-Error "MSIX file not found"
+            exit 1
+          }
+          echo "msix_path=$($msix.FullName)" | Out-File -Append -FilePath $env:GITHUB_OUTPUT
+          echo "msix_name=$($msix.Name)" | Out-File -Append -FilePath $env:GITHUB_OUTPUT
+        shell: pwsh
+
+      - name: Build NSIS installer
+        id: nsis
+        run: |
+          $msix = "${{ steps.locate_msix.outputs.msix_path }}"
+          $dist_dir = "dist"
+          New-Item -ItemType Directory -Force -Path $dist_dir | Out-Null
+          $date_stamp = Get-Date -Format "yyyyMMdd"
+          $msix_copy = Join-Path $dist_dir "clan_ai_${date_stamp}.msix"
+          Copy-Item $msix $msix_copy
+          $nsis_exe = Join-Path $dist_dir "CLAN-AI_${date_stamp}_Setup.exe"
+          makensis /DMSIX_SOURCE="$msix_copy" /DDIST_DIR="$dist_dir" installer\nsis_installer.nsi
+          if (Test-Path $nsis_exe) {
+            echo "nsis_path=$nsis_exe" | Out-File -Append -FilePath $env:GITHUB_OUTPUT
+            echo "nsis_name=$(Split-Path $nsis_exe -Leaf)" | Out-File -Append -FilePath $env:GITHUB_OUTPUT
+          } else {
+            echo "nsis_path=" | Out-File -Append -FilePath $env:GITHUB_OUTPUT
+          }
+        shell: pwsh
+
+      - name: Generate checksums
+        run: |
+          $dist_dir = "dist"
+          $date_stamp = Get-Date -Format "yyyyMMdd"
+          $files = Get-ChildItem -Path $dist_dir -Filter "*$date_stamp*"
+          $hash = $files[0].Name + "  " + (Get-FileHash $files[0] -Algorithm SHA256).Hash.ToLower()
+          foreach ($f in $files) {
+            $hash += "`n" + $f.Name + "  " + (Get-FileHash $f -Algorithm SHA256).Hash.ToLower()
+          }
+          $hash | Out-File -FilePath "$dist_dir/checksums.sha256" -Encoding utf8
+        shell: pwsh
+
+      - name: Generate release README
+        run: |
+          $dist_dir = "dist"
+          $date_stamp = Get-Date -Format "yyyyMMdd"
+          $content = @"
+CLAN-AI Windows Installer
+=========================
+
+Files in this directory:
+
+  clan_ai_${date_stamp}.msix      - MSIX package (direct install via double-click or PowerShell)
+  CLAN-AI_${date_stamp}_Setup.exe - NSIS installer (recommended)
+  checksums.sha256                 - SHA-256 checksums for verification
+
+Installation:
+
+  Method 1 (Recommended):
+    Double-click CLAN-AI_*.exe installer
+    Installs to %LOCALAPPDATA%\Programs\CLAN-AI\
+
+  Method 2 (Direct MSIX):
+    Double-click clan_ai_*.msix
+    Or: Add-AppxPackage -Path clan_ai_*.msix
+
+  Method 3 (PowerShell):
+    Add-AppxPackage -Path clan_ai_*.msix
+
+  If prompted about sideloading, enable:
+    Settings -> Apps -> Developer Options -> App Development Licenses
+
+Requirements:
+  - Windows 10 (version 1809) or later, 64-bit
+"@
+          $content | Out-File -FilePath "$dist_dir/README.txt" -Encoding utf8
+        shell: pwsh
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: CLAN-AI v${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            dist/*.msix
+            dist/*.exe
+            dist/checksums.sha256
+            dist/README.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
