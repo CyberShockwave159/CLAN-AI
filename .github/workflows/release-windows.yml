@@ -43,12 +43,9 @@ jobs:
       - name: Locate MSIX file
         id: locate_msix
         run: |
-          $msix = Get-ChildItem -Path build/msix/windows -Filter "*.msix" | Select-Object -First 1
+          $msix = Get-ChildItem -Path build/msix -Filter "*.msix" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $msix) {
-            $msix = Get-ChildItem -Path build/msix -Filter "*.msix" | Select-Object -First 1
-          }
-          if (-not $msix) {
-            Write-Error "MSIX file not found"
+            Write-Error "MSIX file not found in build/msix"
             exit 1
           }
           echo "msix_path=$($msix.FullName)" | Out-File -Append -FilePath $env:GITHUB_OUTPUT
