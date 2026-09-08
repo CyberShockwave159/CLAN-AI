@@ -105,7 +105,9 @@ jobs:
           Add-Type -AssemblyName System.Drawing
           $bmp = [System.Drawing.Bitmap]::FromFile((Get-Item "installer\temp_icon.png"))
           $icon = [System.Drawing.Icon]::FromHandle($bmp.GetHicon())
-          $icon.Save("installer\icon.png")
+          $stream = [System.IO.FileStream]::new("installer\icon.png", [System.IO.FileMode]::Create)
+          $icon.Save($stream)
+          $stream.Dispose()
           $icon.Dispose()
           $bmp.Dispose()
           Remove-Item "installer\temp_icon.png" -Force
