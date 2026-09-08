@@ -111,7 +111,7 @@ jobs:
           $icon.Dispose()
           $bmp.Dispose()
           Remove-Item "installer\temp_icon.png" -Force
-          makensis /DMSIX_SOURCE="dist\$(Split-Path $msixPath -Leaf)" /DDIST_DIR="dist" installer\nsis_installer.nsi
+          makensis /DMSIX_SOURCE="dist\$(Split-Path $msixPath -Leaf)" /DDIST_DIR="..\dist" installer\nsis_installer.nsi
         shell: pwsh
 
       - name: Generate checksums
