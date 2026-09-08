@@ -15,7 +15,7 @@
 !endif
 
 !ifndef DIST_DIR
-  !define DIST_DIR "..\dist"
+  !define DIST_DIR "dist"
 !endif
 
 !define INSTALLER_OUTPUT "${DIST_DIR}\CLAN-AI_Setup.exe"
