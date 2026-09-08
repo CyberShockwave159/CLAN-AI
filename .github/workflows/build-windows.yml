@@ -111,6 +111,7 @@ jobs:
           $icon.Dispose()
           $bmp.Dispose()
           Remove-Item "installer\temp_icon.png" -Force
+          New-Item -ItemType Directory -Path "installer\dist" -Force | Out-Null
           makensis /DMSIX_SOURCE="dist\$(Split-Path $msixPath -Leaf)" /DDIST_DIR="dist" installer\nsis_installer.nsi
         shell: pwsh
 
