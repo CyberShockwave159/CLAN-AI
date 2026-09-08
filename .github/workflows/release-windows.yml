@@ -24,11 +24,6 @@ jobs:
           flutter-version: '3.47.x'
           cache: true
 
-      - name: Install NSIS
-        run: |
-          choco install nsis -y
-        shell: pwsh
-
       - name: Get dependencies
         run: flutter pub get
 
@@ -65,11 +60,17 @@ jobs:
           $msix_copy = Join-Path $dist_dir "clan_ai_${date_stamp}.msix"
           Copy-Item $msix $msix_copy
           $nsis_exe = Join-Path $dist_dir "CLAN-AI_${date_stamp}_Setup.exe"
-          makensis /DMSIX_SOURCE="$msix_copy" /DDIST_DIR="$dist_dir" installer\nsis_installer.nsi
-          if (Test-Path $nsis_exe) {
-            echo "nsis_path=$nsis_exe" | Out-File -Append -FilePath $env:GITHUB_OUTPUT
-            echo "nsis_name=$(Split-Path $nsis_exe -Leaf)" | Out-File -Append -FilePath $env:GITHUB_OUTPUT
+          $nsis_path = "C:\Program Files (x86)\NSIS\makensis.exe"
+          if (Test-Path $nsis_path) {
+            & $nsis_path /DMSIX_SOURCE="$msix_copy" /DDIST_DIR="$dist_dir" installer\nsis_installer.nsi
+            if (Test-Path $nsis_exe) {
+              echo "nsis_path=$nsis_exe" | Out-File -Append -FilePath $env:GITHUB_OUTPUT
+              echo "nsis_name=$(Split-Path $nsis_exe -Leaf)" | Out-File -Append -FilePath $env:GITHUB_OUTPUT
+            } else {
+              echo "nsis_path=" | Out-File -Append -FilePath $env:GITHUB_OUTPUT
+            }
           } else {
+            Write-Warning "NSIS not found at $nsis_path, skipping .exe installer"
             echo "nsis_path=" | Out-File -Append -FilePath $env:GITHUB_OUTPUT
           }
         shell: pwsh
