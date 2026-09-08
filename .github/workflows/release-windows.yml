@@ -43,7 +43,7 @@ jobs:
       - name: Locate MSIX file
         id: locate_msix
         run: |
-          $msix = Get-ChildItem -Path build/msix -Filter "*.msix" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          $msix = Get-ChildItem -Path build -Filter "*.msix" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $msix) {
             Write-Output "=== Build directory contents ==="
             Get-ChildItem -Path build -Recurse -Force -ErrorAction SilentlyContinue | Format-Table FullName, Length
