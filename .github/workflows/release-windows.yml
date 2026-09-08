@@ -59,11 +59,13 @@ jobs:
           $date_stamp = Get-Date -Format "yyyyMMdd"
           $msix_copy = Join-Path $dist_dir "clan_ai_${date_stamp}.msix"
           Copy-Item $msix $msix_copy
+          $nsis_src = Join-Path $dist_dir "CLAN-AI_Setup.exe"
           $nsis_exe = Join-Path $dist_dir "CLAN-AI_${date_stamp}_Setup.exe"
           $nsis_path = "C:\Program Files (x86)\NSIS\makensis.exe"
           if (Test-Path $nsis_path) {
             & $nsis_path /DMSIX_SOURCE="$msix_copy" /DDIST_DIR="$dist_dir" installer\nsis_installer.nsi
-            if (Test-Path $nsis_exe) {
+            if (Test-Path $nsis_src) {
+              Move-Item $nsis_src $nsis_exe -Force
               echo "nsis_path=$nsis_exe" | Out-File -Append -FilePath $env:GITHUB_OUTPUT
               echo "nsis_name=$(Split-Path $nsis_exe -Leaf)" | Out-File -Append -FilePath $env:GITHUB_OUTPUT
             } else {
@@ -79,12 +81,19 @@ jobs:
         run: |
           $dist_dir = "dist"
           $date_stamp = Get-Date -Format "yyyyMMdd"
-          $files = Get-ChildItem -Path $dist_dir -Filter "*$date_stamp*"
-          $hash = $files[0].Name + "  " + (Get-FileHash $files[0] -Algorithm SHA256).Hash.ToLower()
-          foreach ($f in $files) {
-            $hash += "`n" + $f.Name + "  " + (Get-FileHash $f -Algorithm SHA256).Hash.ToLower()
+          $msix_file = Get-ChildItem -Path $dist_dir -Filter "clan_ai_${date_stamp}.msix" -ErrorAction SilentlyContinue | Select-Object -First 1
+          $nsis_file = Get-ChildItem -Path $dist_dir -Filter "CLAN-AI_${date_stamp}_Setup.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          $hash_content = ""
+          if ($msix_file) {
+            $hash_content = "$($msix_file.Name)  " + (Get-FileHash $msix_file.FullName -Algorithm SHA256).Hash.ToLower()
           }
-          $hash | Out-File -FilePath "$dist_dir/checksums.sha256" -Encoding utf8
+          if ($nsis_file) {
+            if ($hash_content -ne "") { $hash_content += "`n" }
+            $hash_content += "$($nsis_file.Name)  " + (Get-FileHash $nsis_file.FullName -Algorithm SHA256).Hash.ToLower()
+          }
+          if ($hash_content -ne "") {
+            $hash_content | Out-File -FilePath "$dist_dir/checksums.sha256" -Encoding utf8
+          }
         shell: pwsh
 
       - name: Generate release README
