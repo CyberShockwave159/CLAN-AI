@@ -101,7 +101,14 @@ jobs:
           $installerName = "CLAN-AI_${version}_Setup.exe"
           New-Item -ItemType Directory -Path "dist" -Force | Out-Null
           Copy-Item $msixPath -Destination "dist\" -Force
-          Copy-Item "msix/assets/icon100x100.png" -Destination "installer/icon.png" -Force
+          Copy-Item "msix/assets/icon100x100.png" -Destination "installer\temp_icon.png" -Force
+          Add-Type -AssemblyName System.Drawing
+          $bmp = [System.Drawing.Bitmap]::FromFile((Get-Item "installer\temp_icon.png"))
+          $icon = [System.Drawing.Icon]::FromHandle($bmp.GetHicon())
+          $icon.Save("installer\icon.png")
+          $icon.Dispose()
+          $bmp.Dispose()
+          Remove-Item "installer\temp_icon.png" -Force
           makensis /DMSIX_SOURCE="dist\$(Split-Path $msixPath -Leaf)" /DDIST_DIR="dist" installer\nsis_installer.nsi
         shell: pwsh
 
