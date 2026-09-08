@@ -90,36 +90,36 @@ jobs:
         run: |
           $dist_dir = "dist"
           $date_stamp = Get-Date -Format "yyyyMMdd"
-          $content = @"
-CLAN-AI Windows Installer
-=========================
-
-Files in this directory:
-
-  clan_ai_${date_stamp}.msix      - MSIX package (direct install via double-click or PowerShell)
-  CLAN-AI_${date_stamp}_Setup.exe - NSIS installer (recommended)
-  checksums.sha256                 - SHA-256 checksums for verification
-
-Installation:
-
-  Method 1 (Recommended):
-    Double-click CLAN-AI_*.exe installer
-    Installs to %LOCALAPPDATA%\Programs\CLAN-AI\
-
-  Method 2 (Direct MSIX):
-    Double-click clan_ai_*.msix
-    Or: Add-AppxPackage -Path clan_ai_*.msix
-
-  Method 3 (PowerShell):
-    Add-AppxPackage -Path clan_ai_*.msix
-
-  If prompted about sideloading, enable:
-    Settings -> Apps -> Developer Options -> App Development Licenses
-
-Requirements:
-  - Windows 10 (version 1809) or later, 64-bit
-"@
-          $content | Out-File -FilePath "$dist_dir/README.txt" -Encoding utf8
+          $lines = @(
+            "CLAN-AI Windows Installer",
+            "=========================",
+            "",
+            "Files in this directory:",
+            "",
+            "  clan_ai_${date_stamp}.msix      - MSIX package (direct install via double-click or PowerShell)",
+            "  CLAN-AI_${date_stamp}_Setup.exe - NSIS installer (recommended)",
+            "  checksums.sha256                 - SHA-256 checksums for verification",
+            "",
+            "Installation:",
+            "",
+            "  Method 1 (Recommended):",
+            "    Double-click CLAN-AI_*.exe installer",
+            "    Installs to %LOCALAPPDATA%\Programs\CLAN-AI\",
+            "",
+            "  Method 2 (Direct MSIX):",
+            "    Double-click clan_ai_*.msix",
+            "    Or: Add-AppxPackage -Path clan_ai_*.msix",
+            "",
+            "  Method 3 (PowerShell):",
+            "    Add-AppxPackage -Path clan_ai_*.msix",
+            "",
+            "  If prompted about sideloading, enable:",
+            "    Settings -> Apps -> Developer Options -> App Development Licenses",
+            "",
+            "Requirements:",
+            "  - Windows 10 (version 1809) or later, 64-bit"
+          )
+          $lines -join "`n" | Out-File -FilePath "$dist_dir/README.txt" -Encoding utf8
         shell: pwsh
 
       - name: Create GitHub Release
