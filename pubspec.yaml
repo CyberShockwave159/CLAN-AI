@@ -45,6 +45,7 @@ msix_config:
   capabilities: internetClient, privateNetworkServerClient, removableStorage
   os_min_version: 10.0.17763.0
   enable_startup: false
-  
+  install_certificate: false
+
 scripts:
   msix: dart run msix:create

@@ -16,7 +16,7 @@ msix_version: 1.0.0.0
 # Export via: certutil -exportpfx -p "" "CLAN-AI" "release/clan_ai_certificate.pfx"
 # On CI: use environment variable CLAN_AI_CERT_PATH pointing to the .pfx
 certificate_path: release/clan_ai_certificate.pfx
-install_certificate: true
+install_certificate: false
 
 # Logo requirements: transparent PNG, square
 logo_path: msix/assets/icon100x100.png
