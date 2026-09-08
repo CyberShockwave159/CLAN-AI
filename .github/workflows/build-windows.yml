@@ -101,6 +101,7 @@ jobs:
           $installerName = "CLAN-AI_${version}_Setup.exe"
           New-Item -ItemType Directory -Path "dist" -Force | Out-Null
           Copy-Item $msixPath -Destination "dist\" -Force
+          Copy-Item "msix/assets/icon100x100.png" -Destination "installer/icon.png" -Force
           makensis /DMSIX_SOURCE="dist\$(Split-Path $msixPath -Leaf)" /DDIST_DIR="dist" installer\nsis_installer.nsi
         shell: pwsh
 

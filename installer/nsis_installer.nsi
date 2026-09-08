@@ -50,8 +50,8 @@ VIAddVersionKey /LANG=1033 "FileVersion" "${APP_VERSION}"
 ; --- Modern UI Settings ---
 !define MUI_HEADERIMAGE
 !define MUI_HEADERIMAGE_RIGHT
-!define MUI_ICON "msix/assets/icon100x100.png"
-!define MUI_UNICON "msix/assets/icon100x100.png"
+!define MUI_ICON "icon.png"
+!define MUI_UNICON "icon.png"
 !define MUI_ABORTWARNING
 !define MUI_FINISHPAGE_NOAUTOSTART
 
