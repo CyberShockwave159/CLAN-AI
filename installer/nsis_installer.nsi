@@ -98,7 +98,7 @@ Section "Install"
             Push "$INSTDIR\clan_ai.msix"
             Pop $R1
             ; Check if running on Windows 10+
-            ${IfNot} ${AtLeastWin10}
+            ${Unless} ${AtLeastWin10}
                 MessageBox MB_ICONSTOP "CLAN-AI requires Windows 10 or later."
                 Quit
             ${EndIf}
