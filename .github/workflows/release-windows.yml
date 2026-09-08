@@ -40,12 +40,23 @@ jobs:
         run: dart run msix:create
         shell: pwsh
 
+      - name: Debug MSIX output
+        if: failure()
+        run: |
+          if (Test-Path build/msix) {
+            Get-ChildItem -Path build/msix -Recurse -Force | Format-Table FullName, Length
+          } else {
+            Write-Output "build/msix directory does not exist"
+          }
+        shell: pwsh
+
       - name: Locate MSIX file
         id: locate_msix
         run: |
           $msix = Get-ChildItem -Path build/msix -Filter "*.msix" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $msix) {
             Write-Error "MSIX file not found in build/msix"
+            Get-ChildItem -Path build -Recurse -Directory | Format-Table FullName
             exit 1
           }
           echo "msix_path=$($msix.FullName)" | Out-File -Append -FilePath $env:GITHUB_OUTPUT
