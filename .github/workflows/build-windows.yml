@@ -13,7 +13,6 @@ on:
 
 env:
   FLUTTER_VERSION: '3.47.x'
-  NSIS_VERSION: '3.09'
   CARGO_TERM_COLOR: always
 
 jobs:
@@ -40,11 +39,8 @@ jobs:
 
       - name: Setup NSIS
         run: |
-          $nsisUrl = "https://github.com/nsis-apps/NsisApp/releases/download/${{ env.NSIS_VERSION }}/nsis-${{ env.NSIS_VERSION }}.zip"
-          Invoke-WebRequest -Uri $nsisUrl -OutFile nsis.zip
-          Expand-Archive -Path nsis.zip -DestinationPath $env:TEMP\nsis
-          Copy-Item "$env:TEMP\nsis\makensis.exe" -Destination "$env:ProgramFiles\NSIS\" -Force
-          echo "$env:ProgramFiles\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          choco install nsis -y --force
+          echo "C:\Program Files (x86)\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           makensis /VERSION
         shell: pwsh
 
