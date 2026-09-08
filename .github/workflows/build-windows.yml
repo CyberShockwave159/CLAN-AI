@@ -83,19 +83,20 @@ jobs:
         shell: pwsh
 
       - name: Verify MSIX output
+        id: verify_msix
         run: |
-          $msixFiles = Get-ChildItem -Path build -Filter "*.msix" -Recurse | Select-Object -First 1
-          if (-not $msixFiles) {
+          $msixFile = Get-ChildItem -Path build -Filter "*.msix" -Recurse -File | Select-Object -First 1
+          if (-not $msixFile) {
             Write-Error "No MSIX files found after build"
             exit 1
           }
-          Write-Host "Found MSIX: $($msixFiles.FullName) ($([math]::Round($msixFiles.Length/1MB, 2)) MB)"
-          $msixFiles.FullName | Out-File -FilePath $env:MSIX_PATH -Encoding utf8
+          Write-Host "Found MSIX: $($msixFile.FullName) ($([math]::Round($msixFile.Length/1MB, 2)) MB)"
+          echo "msix_path=$($msixFile.FullName)" | Out-File -Append -FilePath $env:GITHUB_OUTPUT
         shell: pwsh
 
       - name: Build NSIS installer
         run: |
-          $msixPath = Get-Content $env:MSIX_PATH
+          $msixPath = "${{ steps.verify_msix.outputs.msix_path }}"
           $version = (Get-Content pubspec.yaml | Select-String "version:").ToString().Split('+')[0].Trim()
           $installerName = "CLAN-AI_${version}_Setup.exe"
           New-Item -ItemType Directory -Path "dist" -Force | Out-Null
