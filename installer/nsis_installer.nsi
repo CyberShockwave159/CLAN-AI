@@ -10,11 +10,11 @@
 !define APP_URL "https://github.com/clan-ai/clan_ai"
 
 ; Defaults (can be overridden via /D on command line)
-!if !defined MSIX_SOURCE
+!ifndef MSIX_SOURCE
   !define MSIX_SOURCE "dist\clan_ai_1.0.0.msix"
 !endif
 
-!if !defined DIST_DIR
+!ifndef DIST_DIR
   !define DIST_DIR "dist"
 !endif
 
