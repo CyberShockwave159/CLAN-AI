@@ -50,7 +50,7 @@ class LocalDatabase {
 
     return await openDatabase(
       path,
-      version: 9,
+      version: 11,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
     );
@@ -150,6 +150,39 @@ class LocalDatabase {
         await db.execute('ALTER TABLE messages ADD COLUMN rag_memory_contents TEXT DEFAULT NULL');
       }
     }
+    if (oldVersion < 10) {
+      final columns = await db.rawQuery("PRAGMA table_info(characters)");
+      final hasPersonaName = (columns as List<dynamic>)
+          .any((col) => (col as Map<String, dynamic>)['name'] == 'persona_name');
+      if (!hasPersonaName) {
+        await db.execute('ALTER TABLE characters ADD COLUMN persona_name TEXT');
+        await db.execute('ALTER TABLE characters ADD COLUMN persona_description TEXT');
+      }
+    }
+    if (oldVersion < 11) {
+      final columns = await db.rawQuery("PRAGMA table_info(persona_templates)");
+      final hasPersonaNameCol = (columns as List<dynamic>)
+          .any((col) => (col as Map<String, dynamic>)['name'] == 'persona_name');
+      if (!hasPersonaNameCol) {
+        await db.execute('ALTER TABLE persona_templates ADD COLUMN persona_name TEXT');
+        // Derive persona_name from first word of persona_text for existing templates
+        final templates = await db.query('persona_templates');
+        for (final tpl in templates) {
+          final personaText = tpl['persona_text'] as String? ?? '';
+          final existingPersonaName = tpl['persona_name'] as String?;
+          if (existingPersonaName == null || existingPersonaName.isEmpty) {
+            final firstWord = personaText.trim().split(RegExp(r'\s+')).first;
+            final name = firstWord.isNotEmpty ? firstWord : (tpl['name'] as String? ?? 'Unnamed');
+            await db.update(
+              'persona_templates',
+              {'persona_name': name},
+              where: 'id = ?',
+              whereArgs: [tpl['id']],
+            );
+          }
+        }
+      }
+    }
   }
 
   Future<void> _createDB(Database db, int version) async {
@@ -208,6 +241,8 @@ class LocalDatabase {
         first_message TEXT NOT NULL,
         setting TEXT,
         user_persona TEXT,
+        persona_name TEXT,
+        persona_description TEXT,
         avatar_data BLOB,
         is_favorite INTEGER NOT NULL DEFAULT 0,
         system_prompt TEXT,
@@ -223,6 +258,7 @@ class LocalDatabase {
       CREATE TABLE persona_templates (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
+        persona_name TEXT NOT NULL,
         persona_text TEXT NOT NULL,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
@@ -251,6 +287,8 @@ class LocalDatabase {
             'first_message': map['first_message'],
             'setting': map['setting'],
             'user_persona': map['user_persona'],
+            'persona_name': null,
+            'persona_description': null,
             'avatar_data': avatarBytes,
             'is_favorite': map['is_favorite'] ?? 0,
             'system_prompt': map['system_prompt'],
@@ -273,6 +311,7 @@ class LocalDatabase {
           await db.insert('persona_templates', {
             'id': map['id'],
             'name': map['name'],
+            'persona_name': _extractFirstWord(map['persona_text'] as String? ?? ''),
             'persona_text': map['persona_text'] ?? map['description'],
             'created_at': map['created_at'],
             'updated_at': map['updated_at'],
@@ -544,6 +583,12 @@ class LocalDatabase {
   }
 
   // --- Persona Template Persistence ---
+
+  static String _extractFirstWord(String text) {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return '';
+    return trimmed.split(RegExp(r'\s+')).first;
+  }
 
   static const String _keyPersonaTemplates = 'clan_persona_templates';
 

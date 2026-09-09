@@ -22,7 +22,7 @@ void main() {
 
   test('template application to character sets userPersona', () async {
     // Create template
-    await templateRepo.addTemplate('Detective', 'A sharp detective persona');
+    await templateRepo.addTemplate('Detective', 'Detective', 'A sharp detective persona');
     final template = templateRepo.all.first;
 
     // Create character with template applied
@@ -38,7 +38,7 @@ void main() {
 
   test('independent characters with same template are not linked', () async {
     // Create template
-    await templateRepo.addTemplate('Detective', 'A sharp detective persona');
+    await templateRepo.addTemplate('Detective', 'Detective', 'A sharp detective persona');
     final template = templateRepo.all.first;
 
     // Create two characters with same template applied
@@ -66,7 +66,7 @@ void main() {
 
   test('template update does not affect existing characters', () async {
     // Create template and character
-    await templateRepo.addTemplate('Detective', 'Original description');
+    await templateRepo.addTemplate('Detective', 'Detective', 'Original description');
     final templateId = templateRepo.all.first.id;
 
     final char = buildCharacter(
@@ -77,7 +77,7 @@ void main() {
     await charRepo.createCharacter(char);
 
     // Update template
-    await templateRepo.updateTemplate(templateId, 'Detective', 'Updated description');
+    await templateRepo.updateTemplate(templateId, 'Detective', 'Detective', 'Updated description');
 
     // Character should still have old value
     final reloaded = await charRepo.getCharacterById('char-1');
@@ -86,7 +86,7 @@ void main() {
 
   test('template deletion does not affect characters', () async {
     // Create template and character
-    await templateRepo.addTemplate('Detective', 'Description');
+    await templateRepo.addTemplate('Detective', 'Detective', 'Description');
     final templateId = templateRepo.all.first.id;
 
     final char = buildCharacter(
@@ -107,11 +107,11 @@ void main() {
 
   test('persona template has independent lifecycle', () async {
     // Create template
-    await templateRepo.addTemplate('Detective', 'Description');
+    await templateRepo.addTemplate('Detective', 'Detective', 'Description');
     final templateId = templateRepo.all.first.id;
 
     // Update template
-    await templateRepo.updateTemplate(templateId, 'Detective', 'Updated');
+    await templateRepo.updateTemplate(templateId, 'Detective', 'Detective', 'Updated');
 
     // Delete template
     await templateRepo.deleteTemplate(templateId);
@@ -121,9 +121,9 @@ void main() {
   });
 
   test('multiple templates can coexist', () async {
-    await templateRepo.addTemplate('Template 1', 'Desc 1');
-    await templateRepo.addTemplate('Template 2', 'Desc 2');
-    await templateRepo.addTemplate('Template 3', 'Desc 3');
+    await templateRepo.addTemplate('Template 1', 'Template 1', 'Desc 1');
+    await templateRepo.addTemplate('Template 2', 'Template 2', 'Desc 2');
+    await templateRepo.addTemplate('Template 3', 'Template 3', 'Desc 3');
 
     expect(templateRepo.all, hasLength(3));
 

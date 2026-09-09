@@ -19,8 +19,8 @@ void main() {
     });
 
     test('returns templates when they exist', () async {
-      await fakeRepo.addTemplate('Template 1', 'Description 1');
-      await fakeRepo.addTemplate('Template 2', 'Description 2');
+      await fakeRepo.addTemplate('Template 1', 'Template 1', 'Description 1');
+      await fakeRepo.addTemplate('Template 2', 'Template 2', 'Description 2');
 
       final templates = await fakeRepo.loadTemplates();
       expect(templates, hasLength(2));
@@ -29,21 +29,22 @@ void main() {
 
   group('PersonaTemplateViewModel addTemplate', () {
     test('adds template', () async {
-      await vm.addTemplate('Test Template', 'Test description');
+      await vm.addTemplate('Test Template', 'Test Template', 'Test description');
 
       expect(vm.templates, isNotEmpty);
       expect(vm.templates.first.name, equals('Test Template'));
       expect(vm.templates.first.description, equals('Test description'));
+      expect(vm.templates.first.personaName, equals('Test Template'));
     });
 
     test('template has generated id', () async {
-      await vm.addTemplate('Test', 'Desc');
+      await vm.addTemplate('Test', 'Test', 'Desc');
 
       expect(vm.templates.first.id, isNotNull);
     });
 
     test('template has timestamps', () async {
-      await vm.addTemplate('Test', 'Desc');
+      await vm.addTemplate('Test', 'Test', 'Desc');
 
       expect(vm.templates.first.createdAt, isNotNull);
       expect(vm.templates.first.updatedAt, isNotNull);
@@ -52,30 +53,30 @@ void main() {
 
   group('PersonaTemplateViewModel updateTemplate', () {
     test('updates template', () async {
-      await vm.addTemplate('Original', 'Old description');
+      await vm.addTemplate('Original', 'Original', 'Old description');
       final template = vm.templates.first;
 
-      await vm.updateTemplate(template.id, 'Updated', 'New description');
+      await vm.updateTemplate(template.id, 'Updated', 'Updated', 'New description');
 
       expect(vm.templates.first.name, equals('Updated'));
       expect(vm.templates.first.description, equals('New description'));
     });
 
     test('updates updatedAt on modification', () async {
-      await vm.addTemplate('Test', 'Desc');
+      await vm.addTemplate('Test', 'Test', 'Desc');
       final template = vm.templates.first;
       final originalUpdated = template.updatedAt;
 
       await Future.delayed(const Duration(milliseconds: 10));
-      await vm.updateTemplate(template.id, 'Test', 'Updated');
+      await vm.updateTemplate(template.id, 'Test', 'Test', 'Updated');
 
       expect(vm.templates.first.updatedAt.isAfter(originalUpdated), isTrue);
     });
 
     test('does not update non-existent template', () async {
-      await vm.addTemplate('Keep', 'Description');
+      await vm.addTemplate('Keep', 'Keep', 'Description');
 
-      await vm.updateTemplate('non-existent', 'Changed', 'Description');
+      await vm.updateTemplate('non-existent', 'Changed', 'Changed', 'Description');
 
       expect(vm.templates.first.name, equals('Keep'));
     });
@@ -83,7 +84,7 @@ void main() {
 
   group('PersonaTemplateViewModel deleteTemplate', () {
     test('deletes template', () async {
-      await vm.addTemplate('Delete Me', 'Description');
+      await vm.addTemplate('Delete Me', 'Delete Me', 'Description');
 
       await vm.deleteTemplate(vm.templates.first.id);
 
@@ -91,7 +92,7 @@ void main() {
     });
 
     test('does nothing for non-existent template', () async {
-      await vm.addTemplate('Keep', 'Description');
+      await vm.addTemplate('Keep', 'Keep', 'Description');
 
       await vm.deleteTemplate('non-existent');
 
@@ -99,8 +100,8 @@ void main() {
     });
 
     test('removes only specified template', () async {
-      await vm.addTemplate('Keep 1', 'Desc 1');
-      await vm.addTemplate('Keep 2', 'Desc 2');
+      await vm.addTemplate('Keep 1', 'Keep 1', 'Desc 1');
+      await vm.addTemplate('Keep 2', 'Keep 2', 'Desc 2');
       final templateToDelete = vm.templates[1];
 
       await vm.deleteTemplate(templateToDelete.id);
@@ -112,8 +113,8 @@ void main() {
 
   group('PersonaTemplateViewModel templates getter', () {
     test('returns current templates list', () async {
-      await vm.addTemplate('Template 1', 'Desc 1');
-      await vm.addTemplate('Template 2', 'Desc 2');
+      await vm.addTemplate('Template 1', 'Template 1', 'Desc 1');
+      await vm.addTemplate('Template 2', 'Template 2', 'Desc 2');
 
       expect(vm.templates, hasLength(2));
     });
@@ -125,7 +126,7 @@ void main() {
 
   group('PersonaTemplateViewModel dispose', () {
     test('disposes without error', () async {
-      await vm.addTemplate('Test', 'Desc');
+      await vm.addTemplate('Test', 'Test', 'Desc');
       vm.dispose();
     });
   });

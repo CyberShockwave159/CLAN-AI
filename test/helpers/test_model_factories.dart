@@ -114,6 +114,7 @@ CharacterProfile buildCharacter({
 PersonaTemplate buildPersonaTemplate({
   String? id,
   String name = 'Test Template',
+  String personaName = 'Test Persona',
   String description = 'A test persona description',
   DateTime? createdAt,
   DateTime? updatedAt,
@@ -121,6 +122,7 @@ PersonaTemplate buildPersonaTemplate({
   return PersonaTemplate(
     id: id ?? 'tpl-${DateTime.now().millisecondsSinceEpoch}',
     name: name,
+    personaName: personaName,
     description: description,
     createdAt: createdAt ?? DateTime.now(),
     updatedAt: updatedAt ?? DateTime.now(),

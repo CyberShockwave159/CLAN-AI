@@ -131,7 +131,7 @@ Supported build targets: `linux`, `macos`, `windows`, `apk` (Android), `ios`.
 - **Server Health Status** — Chat and roleplay screens display a red warning banner when server is unreachable, with quick link to Settings
 - **Reasoning/Thinking Block View** — Toggle in Settings to request and display model reasoning/thinking as a collapsible block. Supports dedicated reasoning fields (`delta.reasoning`), inline tags (```xml, `<thought>`), and multiple field name conventions across models
 - **AI Roleplay Mode** — Toggle from Settings; mirrors assistant mode UI with per-character isolated sessions and client-side RAG memory
-- **Character Creation** — 4-step wizard (personality, setting/world, user persona, advanced prompt settings) with optional avatar upload and persona template selector
+- **Character Creation** — 4-step wizard (personality, setting/world, persona name + description, advanced prompt settings) with optional avatar upload and persona template selector
 - **SillyTavern Import** — Import `.json` character cards (`chara_card_v2` format) with auto-edit dialog; extracts system prompt override, post history instructions, and alternate greetings
 - **Persona Templates** — Create reusable user personas in Settings; any character can select a template to pre-fill its user persona
 - **Alternate Greetings** — Characters can have multiple opening messages shown as selectable chips above the prompt input
@@ -139,7 +139,7 @@ Supported build targets: `linux`, `macos`, `windows`, `apk` (Android), `ios`.
 - **Post History Instructions** — Additional text appended after each AI response for style reminders or state tracking
 - Client-Side RAG — Pure Dart feature hashing embeddings (256-dim, char trigrams) with SQLite cosine similarity; zero ML dependencies. Configurable Top-K (1-10) and minimum relevance threshold (0.0-1.0) in Generation Parameters sheet
 - **Conversation branching** — Regenerate and edit responses to create sibling variants
-- SQLite local persistence with full thread/message history (schema v9)
+- SQLite local persistence with full thread/message history (schema v11)
 - Automatic server health polling with fallback endpoints (`/health` → `/props` → `/v1/models`)
 - Dark mode by default (OLED-optimized), configurable light and custom themes
 - Custom theme presets (Warm, Cool, Pastel) with persisted user color selections
@@ -187,18 +187,18 @@ Toggle "Roleplay Mode" in Settings to switch to character roleplay:
 
 1. Open the sidebar (hamburger menu)
 2. Tap "New Roleplay" to create a character manually, or "Import ST Card" to import a SillyTavern `.json` character card
-3. SillyTavern cards (`chara_card_v2` spec) are automatically parsed — `{{char}}` and `{{user}}` tokens are replaced with the character name and user persona
+3. SillyTavern cards (`chara_card_v2` spec) are automatically parsed — `{{char}}` and `{{user}}` tokens are replaced with the character name and user persona (or explicit Persona Name if set). The prompt input placeholder shows "Reply as \<persona name\>..." using the character's Persona Name field
 4. Characters are listed in the sidebar; tap a character to start a session
 5. Conversations persist across mode switches; the last active session auto-loads
 6. RAG memory is client-side only (no embedding endpoint required on the server)
 
 #### Persona Templates
 
-Before creating or editing characters, you can create reusable persona templates from Settings:
+Reusable user personas with three distinct fields:
 
 1. Go to Settings → Persona Templates → "New Persona Template"
-2. Give it a name (e.g., "Soldier", "Detective") and write a user persona description
-3. When creating or editing a character, select the template from the dropdown to pre-fill the persona
+2. Fill in **Template Name** (display name for dropdown), **Persona Name** (name used when character refers to you), and **Persona Description** (full persona description)
+3. When creating or editing a character, select the template from the dropdown — it populates both the Persona Name and Persona Description fields
 
 #### Alternate Greetings
 
@@ -218,7 +218,7 @@ Characters can have multiple opening messages:
 - **ServerProfile consolidation:** `ServerConnectionDetails` removed; `ServerProfile` serves as connection details throughout
 - **Dependency wiring** in `lib/main.dart` via constructor injection
 - **Four root providers**: `SettingsViewModel`, `ChatViewModel`, `RoleplayViewModel`, `PersonaTemplateViewModel`
-- **SQLite** via `sqflite` (desktop uses `sqflite_common_ffi`, mobile uses native), schema version 8 (`threads`, `messages`, `characters`, `persona_templates` tables)
+- **SQLite** via `sqflite` (desktop uses `sqflite_common_ffi`, mobile uses native), schema version 11 (`threads`, `messages`, `characters`, `persona_templates` tables)
 - **Secure API keys** stored in OS Keychain/KeyStore via `SecureStorageService` (`flutter_secure_storage`)
 - **Single `CharacterRepository`** instance injected via constructor throughout the app
 - **Streaming** via Server-Sent Events with 20ms UI throttling to prevent frame drops
@@ -287,16 +287,17 @@ flutter run            # launch app
 - **Conversation branching**: Regenerate and edit operations truncate at the parent message and create new sibling branches. Navigation between variants uses `variantIndex` + `siblingIds`. Branches are linked via `branchFromThreadId` on `ChatThread`. In roleplay mode, the first assistant message (character's greeting) has the regenerate button disabled until the user has replied.
 - **Android networking**: `127.0.0.1` refers to the Android device's loopback, not your host machine. Use `10.0.2.2` for the Android emulator or your host's LAN IP for physical devices.
 - **SQLite desktop FFI**: On Linux/Windows/macOS, `sqflite_common_ffi` is initialized **once** in `main.dart` (`_initSqliteFfi()`). Do not call `sqfliteFfiInit()` again — it will trigger a warning.
-- **Database migration**: DB schema is version 8 (added `characters` and `persona_templates` tables with SharedPreferences migration). If you encounter schema errors, clear the app's local storage or delete `clan_ai.db`.
+- **Database migration**: DB schema is version 11 (added `persona_name` to `persona_templates` table in v11, `persona_name`/`persona_description` to `characters` in v10). If you encounter schema errors, clear the app's local storage or delete `clan_ai.db`.
 - **Reasoning block streaming**: The `ReasoningBlock` widget displays thinking/reasoning content when the "View Thinking" toggle is enabled in Settings. Models can provide reasoning via dedicated fields (`delta.reasoning`, `delta.reasoning_content`, `delta.thought`) or inline tags (```xml, `<thought>`, `<reasoning>`). The `filterReasoning` stream pipeline handles both formats. Older llama.cpp versions may not return reasoning content.
 - **Roleplay thread separation**: `ChatViewModel.loadThreads()` filters out threads with `characterId != null` (roleplay threads). `RoleplayViewModel.loadLastChat()` loads threads with `characterId != null` (or falls back for legacy threads).
 - **RAG isolation**: Each character's embeddings are stored with `character_id` in the vector store. Queries are strictly `WHERE character_id = ?` — no cross-character memory leakage.
 - **RAG params**: `ragTopK` (default 3) controls how many memories are retrieved. `ragMinScore` (default 0.0) filters memories below this cosine similarity threshold. Both configurable in Settings → Generation Parameters. `RoleplayContextBuilder.build()` accepts these as parameters.
 - **Memory chip**: Assistant messages show a chip with `ragMemoryCount` when RAG memories were injected. Tapping displays the actual memory content from `ragMemoryContents` field (JSON-encoded list). `vector_store.getAllMemories()` lists all embeddings for a character.
 - **Export**: Chat export is only available via context menus in the chat drawer and character drawer. On mobile, tapping export opens a native save dialog (Android SAF / iOS UIDocumentPicker) so users choose the destination. On desktop, files write to the app documents directory.
+- **Roleplay prompt placeholder**: The input field shows "Reply as \<persona name\>..." where \<persona name\> comes from the character's Persona Name field (falls back to "you" if unset).
 - **Roleplay system prompt**: In roleplay mode the system prompt is fully managed by the RAG context builder, which respects per-character `systemPrompt` overrides and appends `postHistoryInstructions`. The System Prompt Customization section in Settings is hidden when roleplay mode is active.
-- **Character fields**: `CharacterProfile` now includes `systemPrompt` (per-character system prompt override), `postHistoryInstructions` (text appended after AI responses), and `alternateGreetings` (list of alternative opening messages). Stored in SQLite `characters` table (migrated from SharedPreferences in v8).
-- **SillyTavern parser**: `ParsedCharacterCard` now extracts `system_prompt`, `post_history_instructions`, and `alternate_greetings` from SillyTavern `.json` files. The `system_prompt` may start with `{{original}}` to prepend to the default prompt.
+- **Character fields**: `CharacterProfile` now includes `systemPrompt` (per-character system prompt override), `postHistoryInstructions` (text appended after AI responses), `alternateGreetings` (list of alternative opening messages), `personaName` (explicit name for `{{user}}` replacement), and `personaDescription` (full persona description). Stored in SQLite `characters` table (migrated from SharedPreferences in v8).
+- **SillyTavern parser**: `ParsedCharacterCard` extracts `system_prompt`, `post_history_instructions`, `alternate_greetings`, `user_persona`, `persona_name`, and `persona_description` from SillyTavern `.json` files. The `system_prompt` may start with `{{original}}` to prepend to the default prompt. All truncation limits removed — full content preserved.
 
 ## License
 

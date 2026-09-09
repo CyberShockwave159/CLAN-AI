@@ -17,30 +17,49 @@ class PersonaTemplateDialog extends StatefulWidget {
 }
 
 class _PersonaTemplateDialogState extends State<PersonaTemplateDialog> {
-  late TextEditingController _nameController;
-  late TextEditingController _personaController;
+  late TextEditingController _templateNameController;
+  late TextEditingController _personaNameController;
+  late TextEditingController _personaDescriptionController;
   bool _canSave = false;
 
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: widget.existingTemplate?.name ?? '');
-    _personaController = TextEditingController(text: widget.existingTemplate?.description ?? '');
+    _templateNameController = TextEditingController(text: widget.existingTemplate?.name ?? '');
+    _personaNameController = TextEditingController(text: widget.existingTemplate?.personaName ?? '');
+    _personaDescriptionController = TextEditingController(text: widget.existingTemplate?.description ?? '');
     _validateFields();
   }
 
   @override
   void dispose() {
-    _nameController.dispose();
-    _personaController.dispose();
+    _templateNameController.dispose();
+    _personaNameController.dispose();
+    _personaDescriptionController.dispose();
     super.dispose();
   }
 
   void _validateFields() {
+    final descText = _personaDescriptionController.text.trim();
     setState(() {
-      _canSave = _nameController.text.trim().isNotEmpty &&
-          _personaController.text.trim().isNotEmpty;
+      _canSave = descText.isNotEmpty;
     });
+  }
+
+  void _onTemplateNameChanged(String value) {
+    if (value.trim().isEmpty && _personaDescriptionController.text.trim().isNotEmpty) {
+      final firstWord = _personaDescriptionController.text.trim().split(RegExp(r'\s+')).first;
+      _personaNameController.text = firstWord;
+    }
+    _validateFields();
+  }
+
+  void _onPersonaDescriptionChanged(String value) {
+    if (value.trim().isNotEmpty && _templateNameController.text.trim().isEmpty) {
+      final firstWord = value.trim().split(RegExp(r'\s+')).first;
+      _personaNameController.text = firstWord;
+    }
+    _validateFields();
   }
 
   @override
@@ -78,26 +97,35 @@ class _PersonaTemplateDialogState extends State<PersonaTemplateDialog> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     TextField(
-                      controller: _nameController,
+                      controller: _templateNameController,
                       decoration: const InputDecoration(
                         labelText: 'Template Name',
                         hintText: 'e.g. Soldier, Detective, Merchant',
                         prefixIcon: Icon(Icons.label_outline_rounded),
                       ),
-                      onChanged: (_) => _validateFields(),
+                      onChanged: (_) => _onTemplateNameChanged(_templateNameController.text),
                     ),
                     const SizedBox(height: 16),
                     TextField(
-                      controller: _personaController,
+                      controller: _personaNameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Persona Name',
+                        hintText: 'Name used when the character refers to you',
+                        prefixIcon: Icon(Icons.badge_rounded),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _personaDescriptionController,
                       maxLines: 12,
                       decoration: InputDecoration(
-                        labelText: 'Description',
+                        labelText: 'Persona Description',
                         hintText: 'Describe the user\'s role, identity, and background in this roleplay...\n\n'
                             'e.g. A seasoned bounty hunter with a cybernetic arm, seeking redemption for past crimes.',
                         prefixIcon: const Icon(Icons.description_rounded),
                         helperText: 'This will be used as the character\'s view of you during roleplay.',
                       ),
-                      onChanged: (_) => _validateFields(),
+                      onChanged: (_) => _onPersonaDescriptionChanged(_personaDescriptionController.text),
                     ),
                   ],
                 ),
@@ -148,13 +176,18 @@ class _PersonaTemplateDialogState extends State<PersonaTemplateDialog> {
                       if (isEditing) {
                         viewModel.updateTemplate(
                           widget.existingTemplate!.id,
-                          _nameController.text.trim(),
-                          _personaController.text.trim(),
+                          _templateNameController.text.trim(),
+                          _personaNameController.text.trim(),
+                          _personaDescriptionController.text.trim(),
                         );
                       } else {
+                        final personaName = _personaNameController.text.trim().isEmpty
+                            ? (_personaDescriptionController.text.trim().split(RegExp(r'\s+')).first)
+                            : _personaNameController.text.trim();
                         viewModel.addTemplate(
-                          _nameController.text.trim(),
-                          _personaController.text.trim(),
+                          _templateNameController.text.trim(),
+                          personaName,
+                          _personaDescriptionController.text.trim(),
                         );
                       }
                       Navigator.of(context).pop();

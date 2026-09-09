@@ -95,7 +95,7 @@ void main() {
       expect(prompt, contains('Speak in archaic English.'));
     });
 
-    test('truncates personality at 2000 chars', () {
+    test('preserves full long personality without truncation', () {
       final longPersonality = 'Brave. ' * 1000;
       final prompt = RoleplayPromptFormatter.buildSystemPrompt(
         characterName: 'Aria',
@@ -103,11 +103,12 @@ void main() {
         retrievedMemories: [],
       );
 
-      expect(prompt, contains('[truncated]'));
-      expect(prompt.length, lessThanOrEqualTo(2500));
+      // Should contain approximately 1000 instances of 'Brave.' (trimming removes the last space)
+      expect(prompt.split('Brave.').length, greaterThan(990));
+      expect(prompt, isNot(contains('[truncated]')));
     });
 
-    test('truncates setting at 1000 chars', () {
+    test('preserves full long setting without truncation', () {
       final longSetting = 'A world. ' * 120;
       final prompt = RoleplayPromptFormatter.buildSystemPrompt(
         characterName: 'Aria',
@@ -116,10 +117,11 @@ void main() {
         retrievedMemories: [],
       );
 
-      expect(prompt, contains('[truncated]'));
+      expect(prompt, contains(longSetting));
+      expect(prompt, isNot(contains('[truncated]')));
     });
 
-    test('truncates userPersona at 1000 chars', () {
+    test('preserves full long userPersona without truncation', () {
       final longPersona = 'A knight. ' * 120;
       final prompt = RoleplayPromptFormatter.buildSystemPrompt(
         characterName: 'Aria',
@@ -128,10 +130,11 @@ void main() {
         retrievedMemories: [],
       );
 
-      expect(prompt, contains('[truncated]'));
+      expect(prompt, contains(longPersona));
+      expect(prompt, isNot(contains('[truncated]')));
     });
 
-    test('limits retrieved memories to top 3', () {
+    test('includes all retrieved memories without limit', () {
       final memories = List.generate(10, (i) => 'Memory $i content here.');
       final prompt = RoleplayPromptFormatter.buildSystemPrompt(
         characterName: 'Aria',
@@ -139,18 +142,13 @@ void main() {
         retrievedMemories: memories,
       );
 
-      // Should contain only first 3 memories
-      var count = 0;
-      for (int i = 0; i < 3; i++) {
-        if (prompt.contains('Memory $i content here.')) count++;
+      // Should contain all memories
+      for (final memory in memories) {
+        expect(prompt, contains(memory));
       }
-      expect(count, equals(3));
-
-      // Memory 4+ should not appear
-      expect(prompt, isNot(contains('Memory 4 content here.')));
     });
 
-    test('truncates each memory at 1000 chars', () {
+    test('preserves full long memory without truncation', () {
       final longMemory = 'Memory content. ' * 100;
       final prompt = RoleplayPromptFormatter.buildSystemPrompt(
         characterName: 'Aria',
@@ -158,7 +156,8 @@ void main() {
         retrievedMemories: [longMemory],
       );
 
-      expect(prompt, contains('[truncated]'));
+      expect(prompt, contains(longMemory));
+      expect(prompt, isNot(contains('[truncated]')));
     });
 
     test('empty personality is omitted', () {

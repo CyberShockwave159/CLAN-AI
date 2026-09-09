@@ -9,6 +9,8 @@ class CharacterProfile {
   final String firstMessage;
   final String? setting;
   final String? userPersona;
+  final String? personaName;
+  final String? personaDescription;
   final Uint8List? avatarData;
   final bool isFavorite;
   final String? systemPrompt;
@@ -24,6 +26,8 @@ class CharacterProfile {
     required this.firstMessage,
     this.setting,
     this.userPersona,
+    this.personaName,
+    this.personaDescription,
     this.avatarData,
     this.isFavorite = false,
     this.systemPrompt,
@@ -43,6 +47,8 @@ class CharacterProfile {
     String? firstMessage,
     String? setting,
     String? userPersona,
+    String? personaName,
+    String? personaDescription,
     Uint8List? avatarData,
     bool? isFavorite,
     String? systemPrompt,
@@ -58,6 +64,8 @@ class CharacterProfile {
       firstMessage: firstMessage ?? this.firstMessage,
       setting: setting ?? this.setting,
       userPersona: userPersona ?? this.userPersona,
+      personaName: personaName ?? this.personaName,
+      personaDescription: personaDescription ?? this.personaDescription,
       avatarData: avatarData ?? this.avatarData,
       isFavorite: isFavorite ?? this.isFavorite,
       systemPrompt: systemPrompt ?? this.systemPrompt,
@@ -76,6 +84,8 @@ class CharacterProfile {
       'first_message': firstMessage,
       'setting': setting,
       'user_persona': userPersona,
+      'persona_name': personaName,
+      'persona_description': personaDescription,
       'avatar_data': avatarData != null ? base64Encode(avatarData!) : null,
       'is_favorite': isFavorite ? 1 : 0,
       'system_prompt': systemPrompt,
@@ -103,6 +113,8 @@ class CharacterProfile {
       firstMessage: map['first_message'] as String? ?? '',
       setting: map['setting'] as String?,
       userPersona: map['user_persona'] as String?,
+      personaName: map['persona_name'] as String?,
+      personaDescription: map['persona_description'] as String?,
       avatarData: map['avatar_data'] != null
           ? map['avatar_data'] is Uint8List
               ? map['avatar_data'] as Uint8List

@@ -201,7 +201,7 @@ Assistant messages include a memory chip when `ragMemoryCount > 0`:
 
 ## SQLite Schema
 
-### Version 9 (Latest)
+### Version 11 (Latest)
 
 ```sql
 -- Thread table: conversation containers
@@ -249,7 +249,9 @@ CREATE TABLE characters (
   personality TEXT NOT NULL,
   first_message TEXT NOT NULL,
   setting TEXT,                          -- world/scenario description
-  user_persona TEXT,                     -- user character description
+  user_persona TEXT,                     -- deprecated, use persona_description
+  persona_name TEXT,                     -- name used when character refers to user
+  persona_description TEXT,              -- full persona description
   avatar_data BLOB,                      -- PNG/JPEG/WebP image bytes
   is_favorite INTEGER NOT NULL DEFAULT 0,
   system_prompt TEXT,                    -- per-character system prompt override
@@ -263,6 +265,7 @@ CREATE TABLE characters (
 CREATE TABLE persona_templates (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
+  persona_name TEXT NOT NULL,
   persona_text TEXT NOT NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
@@ -281,6 +284,8 @@ CREATE TABLE persona_templates (
 | v6 → v7 | Added `reasoning_content` column to messages (thinking blocks) |
 | v7 → v8 | Created `characters` and `persona_templates` tables; migrated data from SharedPreferences |
 | v8 → v9 | Added `rag_memory_contents` column to messages (JSON-encoded memory content strings) |
+| v9 → v10 | Added `persona_name` and `persona_description` columns to characters |
+| v10 → v11 | Added `persona_name` column to persona_templates; auto-derives from `persona_text` for existing templates |
 
 ---
 

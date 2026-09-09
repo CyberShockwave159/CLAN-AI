@@ -42,6 +42,7 @@ void main() {
     final template = PersonaTemplate(
       id: 'template-1',
       name: 'Detective Persona',
+      personaName: 'Detective',
       description: 'A sharp, observant detective solving crimes.',
     );
 
@@ -80,7 +81,7 @@ void main() {
     // Verify initial values
     expect(find.text('Alice'), findsOneWidget);
     expect(find.text('Curious explorer'), findsOneWidget);
-    expect(find.text('Initial Persona'), findsOneWidget);
+    expect(find.text('User'), findsOneWidget);
 
     // Tap on Dropdown to open persona template list
     final dropdownFinder = find.byType(DropdownButtonFormField<String>);
@@ -95,7 +96,7 @@ void main() {
     await tester.tap(itemFinder);
     await tester.pumpAndSettle();
 
-    // Verify 'Your Persona' field now contains the template's description
+    // Verify 'Persona Description' field now contains the template's description
     expect(find.text('A sharp, observant detective solving crimes.'), findsOneWidget);
 
     // Ensure Save button is visible and tap Save
@@ -105,9 +106,10 @@ void main() {
     await tester.tap(saveFinder);
     await tester.pumpAndSettle();
 
-    // Verify character repository received the updated userPersona
+    // Verify character repository received the updated persona
     expect(charRepo.lastUpdated, isNotNull);
-    expect(charRepo.lastUpdated!.userPersona, equals('A sharp, observant detective solving crimes.'));
+    expect(charRepo.lastUpdated!.personaName, equals('Detective'));
+    expect(charRepo.lastUpdated!.personaDescription, equals('A sharp, observant detective solving crimes.'));
   });
 
   test('RoleplayViewModel.updateActiveCharacter updates in-memory active character and notifies listeners', () async {

@@ -446,6 +446,7 @@ void main() {
       final original = PersonaTemplate(
         id: 'tpl-1',
         name: 'Detective',
+        personaName: 'Detective Persona',
         description: 'A sharp detective persona',
       );
 
@@ -454,6 +455,7 @@ void main() {
 
       expect(restored.id, equals(original.id));
       expect(restored.name, equals(original.name));
+      expect(restored.personaName, equals(original.personaName));
       expect(restored.description, equals(original.description));
       expect(restored.createdAt, isNotNull);
       expect(restored.updatedAt, isNotNull);
@@ -462,11 +464,13 @@ void main() {
     test('copyWith updates fields', () {
       final original = PersonaTemplate(
         name: 'Old',
+        personaName: 'Old Persona',
         description: 'Old desc',
       );
-      final updated = original.copyWith(name: 'New', description: 'New desc');
+      final updated = original.copyWith(name: 'New', personaName: 'New Persona', description: 'New desc');
 
       expect(updated.name, equals('New'));
+      expect(updated.personaName, equals('New Persona'));
       expect(updated.description, equals('New desc'));
       expect(updated.id, equals(original.id));
     });
@@ -475,33 +479,39 @@ void main() {
       final map = <String, dynamic>{
         'id': 'tpl-1',
         'name': 'Test',
+        'persona_name': 'Test Persona',
         'persona_text': 'Test description',
         'created_at': DateTime.now().toIso8601String(),
         'updated_at': DateTime.now().toIso8601String(),
       };
       final tpl = PersonaTemplate.fromMap(map);
       expect(tpl.id, equals('tpl-1'));
+      expect(tpl.personaName, equals('Test Persona'));
     });
 
     test('toJson/fromString roundtrip', () {
       final original = PersonaTemplate(
         name: 'Detective',
+        personaName: 'Detective Persona',
         description: 'A sharp detective persona',
       );
       final json = original.toJson();
       final restored = PersonaTemplate.fromJson(json);
 
       expect(restored.name, equals(original.name));
+      expect(restored.personaName, equals(original.personaName));
       expect(restored.description, equals(original.description));
     });
 
-    test('toString includes name and description length', () {
+    test('toString includes name, personaName and description length', () {
       final tpl = PersonaTemplate(
         name: 'Detective',
+        personaName: 'Detective Persona',
         description: 'A short description',
       );
       final str = tpl.toString();
       expect(str, contains('Detective'));
+      expect(str, contains('Detective Persona'));
       expect(str, contains('19 chars'));
     });
   });

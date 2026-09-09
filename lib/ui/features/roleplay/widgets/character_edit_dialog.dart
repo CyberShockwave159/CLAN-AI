@@ -30,7 +30,8 @@ class _CharacterEditDialogState extends State<CharacterEditDialog> {
   late TextEditingController _personalityCtrl;
   late TextEditingController _firstMsgCtrl;
   late TextEditingController _settingCtrl;
-  late TextEditingController _userPersonaCtrl;
+  late TextEditingController _personaNameCtrl;
+  late TextEditingController _personaDescriptionCtrl;
   late TextEditingController _systemPromptCtrl;
   late TextEditingController _postHistoryCtrl;
   late TextEditingController _alternateGreetingsCtrl;
@@ -45,7 +46,8 @@ class _CharacterEditDialogState extends State<CharacterEditDialog> {
     _personalityCtrl = TextEditingController(text: widget.character.personality);
     _firstMsgCtrl = TextEditingController(text: widget.character.firstMessage);
     _settingCtrl = TextEditingController(text: widget.character.setting ?? '');
-    _userPersonaCtrl = TextEditingController(text: widget.character.userPersona ?? '');
+    _personaNameCtrl = TextEditingController(text: widget.character.personaName ?? 'User');
+    _personaDescriptionCtrl = TextEditingController(text: widget.character.personaDescription ?? '');
     _systemPromptCtrl = TextEditingController(text: widget.character.systemPrompt ?? '');
     _postHistoryCtrl = TextEditingController(text: widget.character.postHistoryInstructions ?? '');
     _alternateGreetingsCtrl = TextEditingController(
@@ -60,7 +62,8 @@ class _CharacterEditDialogState extends State<CharacterEditDialog> {
     _personalityCtrl.dispose();
     _firstMsgCtrl.dispose();
     _settingCtrl.dispose();
-    _userPersonaCtrl.dispose();
+    _personaNameCtrl.dispose();
+    _personaDescriptionCtrl.dispose();
     _systemPromptCtrl.dispose();
     _postHistoryCtrl.dispose();
     _alternateGreetingsCtrl.dispose();
@@ -70,7 +73,8 @@ class _CharacterEditDialogState extends State<CharacterEditDialog> {
   void _applyTemplate(PersonaTemplate template) {
     setState(() {
       _selectedTemplateId = template.id;
-      _userPersonaCtrl.text = template.description;
+      _personaNameCtrl.text = template.personaName.isNotEmpty ? template.personaName : 'User';
+      _personaDescriptionCtrl.text = template.description;
     });
   }
 
@@ -96,7 +100,9 @@ class _CharacterEditDialogState extends State<CharacterEditDialog> {
       personality: _personalityCtrl.text.trim(),
       firstMessage: _firstMsgCtrl.text.trim(),
       setting: _settingCtrl.text.trim().isEmpty ? null : _settingCtrl.text.trim(),
-      userPersona: _userPersonaCtrl.text.trim().isEmpty ? null : _userPersonaCtrl.text.trim(),
+      userPersona: _personaDescriptionCtrl.text.trim().isEmpty ? null : _personaDescriptionCtrl.text.trim(),
+      personaName: _personaNameCtrl.text.trim().isEmpty ? 'User' : _personaNameCtrl.text.trim(),
+      personaDescription: _personaDescriptionCtrl.text.trim(),
       avatarData: _avatarPreview,
       isFavorite: widget.character.isFavorite,
       systemPrompt: _systemPromptCtrl.text.trim().isEmpty ? null : _systemPromptCtrl.text.trim(),
@@ -231,11 +237,19 @@ class _CharacterEditDialogState extends State<CharacterEditDialog> {
             ),
             const SizedBox(height: 8),
             TextField(
-              controller: _userPersonaCtrl,
+              controller: _personaNameCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Persona Name',
+                hintText: 'Name used when the character refers to you',
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _personaDescriptionCtrl,
               maxLines: 3,
               decoration: const InputDecoration(
-                labelText: 'Your Persona (Optional)',
-                hintText: 'Describe your role in this roleplay',
+                labelText: 'Persona Description',
+                hintText: 'Brief description of your character for the AI',
               ),
             ),
             const SizedBox(height: 8),

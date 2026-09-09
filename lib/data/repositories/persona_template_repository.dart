@@ -15,22 +15,24 @@ class PersonaTemplateRepository {
     await _localDb.savePersonaTemplates(templates);
   }
 
-  Future<void> addTemplate(String name, String description) async {
+  Future<void> addTemplate(String name, String personaName, String description) async {
     final templates = await loadTemplates();
     final newTemplate = PersonaTemplate(
       name: name,
+      personaName: personaName,
       description: description,
     );
     templates.add(newTemplate);
     await saveTemplates(templates);
   }
 
-  Future<void> updateTemplate(String id, String name, String description) async {
+  Future<void> updateTemplate(String id, String name, String personaName, String description) async {
     final templates = await loadTemplates();
     final index = templates.indexWhere((t) => t.id == id);
     if (index != -1) {
       templates[index] = templates[index].copyWith(
         name: name,
+        personaName: personaName,
         description: description,
       );
       await saveTemplates(templates);

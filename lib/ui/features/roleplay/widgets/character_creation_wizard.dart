@@ -27,7 +27,8 @@ class _CharacterCreationWizardState extends State<CharacterCreationWizard> {
   late TextEditingController _personalityController;
   late TextEditingController _firstMessageController;
   late TextEditingController _settingController;
-  late TextEditingController _userPersonaController;
+  late TextEditingController _personaNameController;
+  late TextEditingController _personaDescriptionController;
   late TextEditingController _systemPromptController;
   late TextEditingController _postHistoryController;
   late TextEditingController _alternateGreetingsController;
@@ -42,7 +43,8 @@ class _CharacterCreationWizardState extends State<CharacterCreationWizard> {
     _personalityController = TextEditingController();
     _firstMessageController = TextEditingController();
     _settingController = TextEditingController();
-    _userPersonaController = TextEditingController();
+    _personaNameController = TextEditingController();
+    _personaDescriptionController = TextEditingController();
     _systemPromptController = TextEditingController();
     _postHistoryController = TextEditingController();
     _alternateGreetingsController = TextEditingController();
@@ -59,7 +61,8 @@ class _CharacterCreationWizardState extends State<CharacterCreationWizard> {
   void _applyTemplate(PersonaTemplate template) {
     setState(() {
       _selectedTemplateId = template.id;
-      _userPersonaController.text = template.description;
+      _personaNameController.text = template.personaName.isNotEmpty ? template.personaName : 'User';
+      _personaDescriptionController.text = template.description;
     });
   }
 
@@ -85,7 +88,9 @@ class _CharacterCreationWizardState extends State<CharacterCreationWizard> {
       personality: _personalityController.text.trim(),
       firstMessage: _firstMessageController.text.trim(),
       setting: _settingController.text.trim().isEmpty ? null : _settingController.text.trim(),
-      userPersona: _userPersonaController.text.trim().isEmpty ? null : _userPersonaController.text.trim(),
+      userPersona: _personaDescriptionController.text.trim().isEmpty ? null : _personaDescriptionController.text.trim(),
+      personaName: _personaNameController.text.trim().isEmpty ? 'User' : _personaNameController.text.trim(),
+      personaDescription: _personaDescriptionController.text.trim(),
       avatarData: _avatarData,
       systemPrompt: _systemPromptController.text.trim().isEmpty ? null : _systemPromptController.text.trim(),
       postHistoryInstructions: _postHistoryController.text.trim().isEmpty ? null : _postHistoryController.text.trim(),
@@ -102,7 +107,8 @@ class _CharacterCreationWizardState extends State<CharacterCreationWizard> {
     _personalityController.dispose();
     _firstMessageController.dispose();
     _settingController.dispose();
-    _userPersonaController.dispose();
+    _personaNameController.dispose();
+    _personaDescriptionController.dispose();
     _systemPromptController.dispose();
     _postHistoryController.dispose();
     _alternateGreetingsController.dispose();
@@ -329,14 +335,22 @@ class _CharacterCreationWizardState extends State<CharacterCreationWizard> {
 
   List<Widget> _buildStep3(bool isDark, PersonaTemplateViewModel personaVM) => [
         TextField(
-          controller: _userPersonaController,
-          maxLines: 4,
+          controller: _personaNameController,
           decoration: InputDecoration(
-            labelText: 'Your Persona',
-            hintText: 'Describe your character\'s role in this roleplay...\n\n'
-                'e.g. A wandering mercenary, a fellow detective, the character\'s closest friend...',
-            prefixIcon: const Icon(Icons.account_circle_rounded),
-            helperText: 'Optional',
+            labelText: 'Persona Name',
+            hintText: 'Name used when the character refers to you (default: User)',
+            prefixIcon: const Icon(Icons.badge_rounded),
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        TextField(
+          controller: _personaDescriptionController,
+          maxLines: 3,
+          decoration: InputDecoration(
+            labelText: 'Persona Description',
+            hintText: 'Brief description of your character for the AI to reference',
+            prefixIcon: const Icon(Icons.info_outline_rounded),
           ),
         ),
         const SizedBox(height: 12),

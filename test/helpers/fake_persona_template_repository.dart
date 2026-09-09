@@ -18,18 +18,18 @@ class FakePersonaTemplateRepository extends PersonaTemplateRepository {
   }
 
   @override
-  Future<void> addTemplate(String name, String description) async {
+  Future<void> addTemplate(String name, String personaName, String description) async {
     final templates = await loadTemplates();
-    templates.add(PersonaTemplate(name: name, description: description));
+    templates.add(PersonaTemplate(name: name, personaName: personaName, description: description));
     await saveTemplates(templates);
   }
 
   @override
-  Future<void> updateTemplate(String id, String name, String description) async {
+  Future<void> updateTemplate(String id, String name, String personaName, String description) async {
     final templates = await loadTemplates();
     final index = templates.indexWhere((t) => t.id == id);
     if (index != -1) {
-      templates[index] = templates[index].copyWith(name: name, description: description);
+      templates[index] = templates[index].copyWith(name: name, personaName: personaName, description: description);
       _lastSaved = templates[index];
     }
     await saveTemplates(templates);

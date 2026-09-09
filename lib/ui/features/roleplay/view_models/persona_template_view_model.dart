@@ -18,13 +18,13 @@ class PersonaTemplateViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> addTemplate(String name, String description) async {
-    await _repository.addTemplate(name, description);
+  Future<void> addTemplate(String name, String personaName, String description) async {
+    await _repository.addTemplate(name, personaName, description);
     await _loadTemplates();
   }
 
-  Future<void> updateTemplate(String id, String name, String description) async {
-    await _repository.updateTemplate(id, name, description);
+  Future<void> updateTemplate(String id, String name, String personaName, String description) async {
+    await _repository.updateTemplate(id, name, personaName, description);
     await _loadTemplates();
   }
 

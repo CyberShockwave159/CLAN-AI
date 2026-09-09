@@ -110,7 +110,7 @@ void main() {
       expect(card.firstMessage, contains('User'));
     });
 
-    test('truncates personality at 4000 chars', () {
+    test('preserves long personality without truncation', () {
       final longDescription = 'A ' * 5000;
       final json = {
         'spec': 'chara_card_v2',
@@ -123,7 +123,7 @@ void main() {
       };
 
       final card = ParsedCharacterCard.fromJson(json);
-      expect(card.personality.length, lessThanOrEqualTo(4000));
+      expect(card.personality.length, greaterThan(5000));
     });
 
     test('appends mes_example to personality', () {

@@ -375,6 +375,8 @@ class _RoleplayScreenState extends State<RoleplayScreen> with AutoScrollMixin {
           // Bottom Prompt Input Bar
           PromptInputBar(
             isGenerating: roleplayVM.isGenerating,
+            isRoleplay: true,
+            personaName: roleplayVM.activeCharacter?.personaName ?? 'you',
             onSend: (prompt) {
               roleplayVM.sendMessage(
                 prompt: prompt,

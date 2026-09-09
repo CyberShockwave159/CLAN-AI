@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 class PersonaTemplate {
   final String id;
   final String name;
+  final String personaName;
   final String description;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -11,6 +12,7 @@ class PersonaTemplate {
   PersonaTemplate({
     String? id,
     required this.name,
+    required this.personaName,
     required this.description,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -21,6 +23,7 @@ class PersonaTemplate {
   PersonaTemplate copyWith({
     String? id,
     String? name,
+    String? personaName,
     String? description,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -28,6 +31,7 @@ class PersonaTemplate {
     return PersonaTemplate(
       id: id ?? this.id,
       name: name ?? this.name,
+      personaName: personaName ?? this.personaName,
       description: description ?? this.description,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? DateTime.now(),
@@ -38,6 +42,7 @@ class PersonaTemplate {
     return {
       'id': id,
       'name': name,
+      'persona_name': personaName,
       'persona_text': description,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
@@ -48,6 +53,7 @@ class PersonaTemplate {
     return PersonaTemplate(
       id: map['id'] as String? ?? const Uuid().v4(),
       name: map['name'] as String? ?? 'Untitled',
+      personaName: map['persona_name'] as String? ?? '',
       description: map['persona_text'] as String? ?? '',
       createdAt: DateTime.tryParse(map['created_at'] as String) ?? DateTime.now(),
       updatedAt: DateTime.tryParse(map['updated_at'] as String) ?? DateTime.now(),
@@ -59,5 +65,5 @@ class PersonaTemplate {
       PersonaTemplate.fromMap(jsonDecode(source) as Map<String, dynamic>);
 
   @override
-  String toString() => 'PersonaTemplate(name: $name, description: ${description.length} chars)';
+  String toString() => 'PersonaTemplate(name: $name, personaName: $personaName, description: ${description.length} chars)';
 }

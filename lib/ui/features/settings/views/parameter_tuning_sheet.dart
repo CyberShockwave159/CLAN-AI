@@ -73,11 +73,11 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
       _topK = 40;
       _minP = 0.05;
       _repeatPenalty = 1.1;
-      _maxTokens = 4096;
+      _maxTokens = 0;
       _contextSize = 4096;
       _ragTopK = 3;
       _ragMinScore = 0.0;
-      _maxTokensController.text = '4096';
+      _maxTokensController.text = '0';
       _contextSizeController.text = '4096';
     });
   }

@@ -7,6 +7,8 @@ class PromptInputBar extends StatefulWidget {
   final Function(String text) onSend;
   final VoidCallback onStop;
   final VoidCallback onOpenParams;
+  final bool isRoleplay;
+  final String? personaName;
 
   const PromptInputBar({
     super.key,
@@ -14,6 +16,8 @@ class PromptInputBar extends StatefulWidget {
     required this.onSend,
     required this.onStop,
     required this.onOpenParams,
+    this.isRoleplay = false,
+    this.personaName,
   });
 
   @override
@@ -99,7 +103,9 @@ class _PromptInputBarState extends State<PromptInputBar> {
                     color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
                   ),
                   decoration: InputDecoration(
-                    hintText: 'Ask anything...',
+                    hintText: widget.isRoleplay
+                        ? 'Reply as ${widget.personaName ?? 'you'}...'
+                        : 'Ask anything...',
                     hintStyle: TextStyle(
                       fontSize: 14.5,
                       color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,

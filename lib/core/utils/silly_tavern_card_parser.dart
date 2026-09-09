@@ -8,6 +8,8 @@ class ParsedCharacterCard {
   final String firstMessage;
   final String? setting;
   final String? userPersona;
+  final String? personaName;
+  final String? personaDescription;
   final String? avatarUrl;
   final String? systemPrompt;
   final String? postHistoryInstructions;
@@ -20,6 +22,8 @@ class ParsedCharacterCard {
     required this.firstMessage,
     this.setting,
     this.userPersona,
+    this.personaName,
+    this.personaDescription,
     this.avatarUrl,
     this.systemPrompt,
     this.postHistoryInstructions,
@@ -59,6 +63,27 @@ class ParsedCharacterCard {
     final userPersona = (data['user_persona'] as String?)?.trim();
     final avatar = (data['avatar'] as String?)?.trim();
     final mesExample = (data['mes_example'] as String?) ?? '';
+
+    // Extract user persona name and description
+    String? personaName;
+    String? personaDescription;
+    if (userPersona != null && userPersona.isNotEmpty) {
+      personaDescription = userPersona;
+      final firstLine = userPersona.trim().split('\n').first.trim();
+      if (firstLine.isNotEmpty) {
+        personaName = firstLine;
+      }
+    }
+    // Support SillyTavern's alternate 'user' field
+    final rawUser = (data['user'] as String?)?.trim();
+    if (rawUser != null && rawUser.isNotEmpty) {
+      personaDescription ??= rawUser;
+      final firstLine = rawUser.trim().split('\n').first.trim();
+      if (firstLine.isNotEmpty) {
+        personaName ??= firstLine;
+      }
+    }
+    personaName ??= 'User';
 
     // System prompt with {{original}} prefix support
     final rawSystemPrompt = (data['system_prompt'] as String?)?.trim();
@@ -108,12 +133,6 @@ class ParsedCharacterCard {
     combinedPersonality = combinedPersonality.replaceAll('{{char}}', name);
     combinedPersonality = combinedPersonality.replaceAll('{{user}}', userName);
 
-    // Truncate personality if too long
-    const maxPersonalityLength = 4000;
-    if (combinedPersonality.length > maxPersonalityLength) {
-      combinedPersonality = combinedPersonality.substring(0, maxPersonalityLength);
-    }
-
     // Clean up avatar URL
     String? cleanAvatarUrl;
     if (avatar != null && avatar.isNotEmpty && avatar.startsWith('http')) {
@@ -149,6 +168,8 @@ class ParsedCharacterCard {
       firstMessage: firstMesClean,
       setting: cleanSetting,
       userPersona: cleanUserPersona,
+      personaName: personaName,
+      personaDescription: personaDescription,
       avatarUrl: cleanAvatarUrl,
       systemPrompt: systemPrompt != null && systemPrompt.isNotEmpty ? systemPrompt : null,
       postHistoryInstructions: postHistoryInstructions != null && postHistoryInstructions.isNotEmpty ? postHistoryInstructions : null,
