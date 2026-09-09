@@ -80,32 +80,26 @@ class ChatViewModel extends ChangeNotifier with StreamMutationMixin {
     return _threads.where((t) => t.title.toLowerCase().contains(q)).toList();
   }
 
-  Future<List<ChatThread>> searchThreads() async {
-    if (_searchQuery.trim().isEmpty) return _threads;
-    final q = _searchQuery.toLowerCase();
-    _isLoadingThreads = true;
-    notifyListeners();
+  Future<List<ChatThread>> searchThreads({String? query}) async {
+    final effectiveQuery = query ?? _searchQuery;
+    if (effectiveQuery.trim().isEmpty) return _threads;
+    final q = effectiveQuery.toLowerCase();
 
-    try {
-      final matches = <ChatThread>[];
-      for (final thread in _threads) {
-        if (thread.title.toLowerCase().contains(q)) {
+    final matches = <ChatThread>[];
+    for (final thread in _threads) {
+      if (thread.title.toLowerCase().contains(q)) {
+        matches.add(thread);
+        continue;
+      }
+      final messages = await _chatRepository.getMessagesForThread(thread.id);
+      for (final msg in messages) {
+        if (msg.content.toLowerCase().contains(q)) {
           matches.add(thread);
-          continue;
-        }
-        final messages = await _chatRepository.getMessagesForThread(thread.id);
-        for (final msg in messages) {
-          if (msg.content.toLowerCase().contains(q)) {
-            matches.add(thread);
-            break;
-          }
+          break;
         }
       }
-      return matches;
-    } finally {
-      _isLoadingThreads = false;
-      notifyListeners();
     }
+    return matches;
   }
 
   Future<void> loadThreads() async {

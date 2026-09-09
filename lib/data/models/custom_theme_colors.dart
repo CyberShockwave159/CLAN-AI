@@ -86,43 +86,43 @@ class CustomThemeColors {
 
   // Presets
 
-  /// Warm preset — warm browns, amber tones, cream backgrounds.
+  /// Warm preset — volcanic: deep charcoals, molten reds, fiery oranges.
   static const CustomThemeColors warm = CustomThemeColors(
-    bg: Color(0xFF1A1410),
-    surface: Color(0xFF241E18),
-    surfaceVariant: Color(0xFF332B22),
-    border: Color(0xFF4A3F34),
-    textPrimary: Color(0xFFF5E6D3),
-    textSecondary: Color(0xFFC4A882),
-    textMuted: Color(0xFF96826B),
-    userBubble: Color(0xFF3D3228),
-    assistantBubble: Color(0xFF241E18),
+    bg: Color(0xFF1A100E),
+    surface: Color(0xFF241814),
+    surfaceVariant: Color(0xFF332018),
+    border: Color(0xFF5C3A28),
+    textPrimary: Color(0xFFF5E0D0),
+    textSecondary: Color(0xFFD4A080),
+    textMuted: Color(0xFFA07060),
+    userBubble: Color(0xFF4A2818),
+    assistantBubble: Color(0xFF241814),
   );
 
-  /// Cool preset — deep blues, slate tones, icy accents.
+  /// Cool preset — glacier: deep night skies, crisp icy blues, frost whites.
   static const CustomThemeColors cool = CustomThemeColors(
-    bg: Color(0xFF0D1B2A),
-    surface: Color(0xFF1B2838),
-    surfaceVariant: Color(0xFF243447),
-    border: Color(0xFF2D4A5E),
-    textPrimary: Color(0xFFE0ECF5),
-    textSecondary: Color(0xFF9FB4C7),
-    textMuted: Color(0xFF6B8AA3),
-    userBubble: Color(0xFF243447),
-    assistantBubble: Color(0xFF1B2838),
+    bg: Color(0xFF0A1628),
+    surface: Color(0xFF122040),
+    surfaceVariant: Color(0xFF1A2C50),
+    border: Color(0xFF2A4A6A),
+    textPrimary: Color(0xFFE8F4FF),
+    textSecondary: Color(0xFFA0C8E8),
+    textMuted: Color(0xFF6AA0C0),
+    userBubble: Color(0xFF1E3A5F),
+    assistantBubble: Color(0xFF122040),
   );
 
-  /// Pastel preset — soft purples, lavenders, gentle tones.
+  /// Pastel preset — light sky blues, rose pinks, cream greens.
   static const CustomThemeColors pastel = CustomThemeColors(
-    bg: Color(0xFF1E1528),
-    surface: Color(0xFF281E35),
-    surfaceVariant: Color(0xFF352A45),
-    border: Color(0xFF4A3D5C),
-    textPrimary: Color(0xFFF0E8F8),
-    textSecondary: Color(0xFFB8A8D0),
-    textMuted: Color(0xFF8A78A8),
-    userBubble: Color(0xFF352A45),
-    assistantBubble: Color(0xFF281E35),
+    bg: Color(0xFFF5F0FA),
+    surface: Color(0xFFEDE5F5),
+    surfaceVariant: Color(0xFFE0D5EC),
+    border: Color(0xFFC8B8DC),
+    textPrimary: Color(0xFF2A2040),
+    textSecondary: Color(0xFF5A4A70),
+    textMuted: Color(0xFF8A7A9A),
+    userBubble: Color(0xFFE8D5F0),
+    assistantBubble: Color(0xFFEDE5F5),
   );
 
   bool operator ==(Object other) =>

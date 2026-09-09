@@ -40,6 +40,7 @@ class ServerRepository {
     required String baseUrl,
     String? apiKey,
     required ApiProtocol protocol,
+    bool reasoning = false,
   }) async {
     ServerProfile? result;
     try {
@@ -50,6 +51,7 @@ class ServerRepository {
           baseUrl: baseUrl,
           apiKey: null,
           protocol: protocol,
+          reasoning: reasoning,
         );
         profiles.add(profile);
         await saveProfiles(profiles);
@@ -63,6 +65,7 @@ class ServerRepository {
           baseUrl: profile.baseUrl,
           apiKey: apiKey,
           protocol: profile.protocol,
+          reasoning: profile.reasoning,
         );
       });
     } catch (_) {}
@@ -147,6 +150,7 @@ class ServerRepository {
       baseUrl: profile?.baseUrl ?? globalConfig.baseUrl,
       apiKey: apiKey,
       protocol: profile?.protocol ?? globalConfig.protocol,
+      reasoning: profile?.reasoning ?? globalConfig.reasoning,
     );
     return globalConfig;
   }
@@ -161,6 +165,7 @@ class ServerRepository {
           name: config.name,
           baseUrl: config.baseUrl,
           protocol: config.protocol,
+          reasoning: config.reasoning,
         );
         await saveProfiles(profiles);
         if (config.apiKey != null && config.apiKey!.isNotEmpty) {

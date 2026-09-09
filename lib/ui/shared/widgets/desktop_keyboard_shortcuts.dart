@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:clan_ai/core/constants/clan_theme_colors.dart';
 import 'package:clan_ai/data/models/app_mode.dart';
 import 'package:clan_ai/data/models/chat_thread.dart';
 import 'package:clan_ai/ui/features/chat/view_models/chat_view_model.dart';
@@ -16,6 +17,23 @@ class DesktopKeyboardShortcuts extends StatefulWidget {
   final Widget child;
 
   const DesktopKeyboardShortcuts({required this.child, super.key});
+
+  /// Navigator key set by the app for use in showDialog.
+  static GlobalKey<NavigatorState>? navigatorKey;
+
+  /// Returns the current context from the navigator key, if available.
+  static BuildContext? get navigatorContext => navigatorKey?.currentContext;
+
+  /// Shows the shortcuts help dialog using the navigator key's current context.
+  static void showShortcutsHelpDialog() {
+    final context = navigatorContext;
+    if (context != null) {
+      showDialog(
+        context: context,
+        builder: (_) => const ShortcutsHelpDialog(),
+      );
+    }
+  }
 
   @override
   State<DesktopKeyboardShortcuts> createState() => _DesktopKeyboardShortcutsState();
@@ -46,23 +64,22 @@ class _DesktopKeyboardShortcutsState extends State<DesktopKeyboardShortcuts> {
     final chatVM = context.read<ChatViewModel>();
     if (chatVM.threads.isEmpty) return;
 
+    final searchContext = DesktopKeyboardShortcuts.navigatorContext ?? context;
     showSearch<ChatThread>(
-      context: context,
+      context: searchContext,
       delegate: _ThreadSearchDelegate(chatVM),
     );
   }
 
   void _handleSettings() {
-    Navigator.of(context).push(
+    final settingsContext = DesktopKeyboardShortcuts.navigatorContext ?? context;
+    Navigator.of(settingsContext).push(
       MaterialPageRoute(builder: (_) => const SettingsScreen()),
     );
   }
 
   void _handleShortcutsHelp() {
-    showDialog(
-      context: context,
-      builder: (_) => const ShortcutsHelpDialog(),
-    );
+    DesktopKeyboardShortcuts.showShortcutsHelpDialog();
   }
 
   void _handleStopGeneration() {
@@ -238,57 +255,67 @@ class _ThreadSearchDelegate extends SearchDelegate<ChatThread> {
 
   Widget _buildSearchResults() {
     final q = query.toLowerCase().trim();
-    final isSearching = q.isNotEmpty;
 
-    if (isSearching) {
-      return FutureBuilder<List<ChatThread>>(
-        future: chatVM.searchThreads(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final results = snapshot.data!;
-          return ListView.builder(
-            itemCount: results.length,
-            itemBuilder: (context, index) {
-              final thread = results[index];
-              return ListTile(
-                leading: const Icon(Icons.chat_rounded),
-                title: Text(thread.title),
-                subtitle: Text(
-                  'Last updated: ${_formatDate(thread.updatedAt)}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Theme.of(context).brightness == Brightness.dark
-                        ? Colors.grey[600]
-                        : Colors.grey[600],
-                  ),
-                ),
-                onTap: () => close(context, thread),
-              );
-            },
+    if (q.isEmpty) {
+      return ListView.builder(
+        itemCount: chatVM.threads.length,
+        itemBuilder: (context, index) {
+          final thread = chatVM.threads[index];
+          return ListTile(
+            leading: const Icon(Icons.chat_rounded),
+            title: Text(thread.title),
+            subtitle: Text(
+              'Last updated: ${_formatDate(thread.updatedAt)}',
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.grey[600]
+                    : Colors.grey[600],
+              ),
+            ),
+            onTap: () => close(context, thread),
           );
         },
       );
     }
 
-    return ListView.builder(
-      itemCount: chatVM.threads.length,
-      itemBuilder: (context, index) {
-        final thread = chatVM.threads[index];
-        return ListTile(
-          leading: const Icon(Icons.chat_rounded),
-          title: Text(thread.title),
-          subtitle: Text(
-            'Last updated: ${_formatDate(thread.updatedAt)}',
-            style: TextStyle(
-              fontSize: 12,
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? Colors.grey[600]
-                  : Colors.grey[600],
+    return FutureBuilder<List<ChatThread>>(
+      future: chatVM.searchThreads(query: query),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final results = snapshot.data!;
+        if (results.isEmpty) {
+          return Center(
+            child: Text(
+              'No matching chats',
+              style: TextStyle(
+                color: context.clanTextMuted,
+                fontSize: 14,
+              ),
             ),
-          ),
-          onTap: () => close(context, thread),
+          );
+        }
+        return ListView.builder(
+          itemCount: results.length,
+          itemBuilder: (context, index) {
+            final thread = results[index];
+            return ListTile(
+              leading: const Icon(Icons.chat_rounded),
+              title: Text(thread.title),
+              subtitle: Text(
+                'Last updated: ${_formatDate(thread.updatedAt)}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.grey[600]
+                      : Colors.grey[600],
+                ),
+              ),
+              onTap: () => close(context, thread),
+            );
+          },
         );
       },
     );

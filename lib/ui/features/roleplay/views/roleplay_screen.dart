@@ -1,8 +1,11 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:clan_ai/core/constants/clan_theme_colors.dart';
 import 'package:clan_ai/core/utils/latency_meter.dart';
-import 'dart:convert';
 
 import 'package:clan_ai/data/models/chat_message.dart';
 import 'package:clan_ai/ui/features/chat/views/message_bubble.dart';
@@ -18,6 +21,7 @@ import 'package:clan_ai/ui/features/roleplay/widgets/alternate_greeting_selector
 import 'package:clan_ai/ui/shared/mixins/auto_scroll_mixin.dart';
 import 'package:clan_ai/ui/shared/avatar_utils.dart';
 import 'package:clan_ai/ui/shared/delete_message_handler.dart';
+import 'package:clan_ai/ui/shared/widgets/desktop_keyboard_shortcuts.dart';
 
 class RoleplayScreen extends StatefulWidget {
   final VoidCallback? themeRefresh;
@@ -238,6 +242,16 @@ class _RoleplayScreenState extends State<RoleplayScreen> with AutoScrollMixin {
             tooltip: 'Settings',
           ),
           const SizedBox(width: 4),
+          if (kIsWeb || Platform.isLinux || Platform.isWindows || Platform.isMacOS) ...[
+            const SizedBox(width: 4),
+            IconButton(
+              icon: const Icon(Icons.keyboard_outlined, size: 20),
+              onPressed: () {
+                DesktopKeyboardShortcuts.showShortcutsHelpDialog();
+              },
+              tooltip: 'Keyboard Shortcuts (Ctrl+/)',
+            ),
+          ],
         ],
       ),
       drawer: const RoleplayDrawer(),

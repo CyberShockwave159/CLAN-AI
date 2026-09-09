@@ -92,12 +92,14 @@ class ClanAiApp extends StatefulWidget {
 }
 
 class _ClanAiAppState extends State<ClanAiApp> with WidgetsBindingObserver {
+  final navigatorKey = GlobalKey<NavigatorState>();
   AppThemeMode _appThemeMode = AppThemeMode.dark;
   ThemeData _currentTheme = AppTheme.darkTheme;
 
   @override
   void initState() {
     super.initState();
+    DesktopKeyboardShortcuts.navigatorKey = navigatorKey;
     WidgetsBinding.instance.addObserver(this);
     _loadAppThemeMode();
   }
@@ -150,6 +152,7 @@ class _ClanAiAppState extends State<ClanAiApp> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'CLAN AI',
       debugShowCheckedModeBanner: false,
       theme: _currentTheme,

@@ -8,6 +8,7 @@ class ServerProfile {
   final String baseUrl;
   final String? apiKey;
   final ApiProtocol protocol;
+  final bool reasoning;
 
   ServerProfile({
     String? id,
@@ -15,6 +16,7 @@ class ServerProfile {
     required this.baseUrl,
     this.apiKey,
     required this.protocol,
+    this.reasoning = false,
   }) : id = id ?? const Uuid().v4();
 
   ServerProfile copyWith({
@@ -23,6 +25,7 @@ class ServerProfile {
     String? baseUrl,
     String? apiKey,
     ApiProtocol? protocol,
+    bool? reasoning,
   }) {
     return ServerProfile(
       id: id ?? this.id,
@@ -30,6 +33,7 @@ class ServerProfile {
       baseUrl: baseUrl ?? this.baseUrl,
       apiKey: apiKey ?? this.apiKey,
       protocol: protocol ?? this.protocol,
+      reasoning: reasoning ?? this.reasoning,
     );
   }
 
@@ -40,6 +44,7 @@ class ServerProfile {
       'baseUrl': baseUrl,
       'apiKey': apiKey,
       'protocol': protocol.name,
+      'reasoning': reasoning ? 1 : 0,
     };
   }
 
@@ -53,6 +58,7 @@ class ServerProfile {
         (p) => p.name == (map['protocol'] as String?),
         orElse: () => ApiProtocol.openAi,
       ),
+      reasoning: (map['reasoning'] as int?) == 1,
     );
   }
 

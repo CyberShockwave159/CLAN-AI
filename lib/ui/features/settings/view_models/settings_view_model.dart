@@ -98,6 +98,7 @@ class SettingsViewModel extends ChangeNotifier {
           baseUrl: legacyConfig.baseUrl,
           apiKey: legacyConfig.apiKey,
           protocol: legacyConfig.protocol,
+          reasoning: legacyConfig.reasoning,
         );
         _profiles = await _serverRepository.loadProfiles();
         _activeProfileId = profile.id;

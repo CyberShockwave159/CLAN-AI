@@ -77,6 +77,38 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
     );
   }
 
+  void _showThreadDeleteDialog(BuildContext context, ChatThread thread, RoleplayViewModel roleplayVM, String characterId) {
+    final drawerState = context.findAncestorStateOfType<_RoleplayDrawerState>();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Conversation?'),
+        content: Text('Are you sure you want to delete "${thread.title}"? This cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppTheme.statusError),
+            onPressed: () async {
+              final wasActive = roleplayVM.activeThread?.id == thread.id;
+              Navigator.of(ctx).pop();
+              await roleplayVM.deleteThread(thread.id);
+              if (drawerState != null) {
+                drawerState._expandedCharacters.remove(characterId);
+              }
+              if (wasActive && drawerState?.mounted == true) {
+                Navigator.of(drawerState!.context).pop();
+              }
+            },
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Color _getAvatarColor(String name) => AvatarUtils.getColor(name);
 
   String _getInitials(String name) => AvatarUtils.getInitials(name);
@@ -604,7 +636,10 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
                                                           color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
                                                         ),
                                                         onSelected: (action) {
-                                                          if (action == 'export_txt' || action == 'export_json') {
+                                                            if (action == 'delete') {
+                                                             Navigator.of(context).pop();
+                                                             _showThreadDeleteDialog(context, thread, roleplayVM, character.id);
+                                                          } else if (action == 'export_txt' || action == 'export_json') {
                                                             final format = action == 'export_txt' ? ExportFormat.txt : ExportFormat.json;
                                                             final path = roleplayVM.exportThread(format);
                                                             path.then((p) {
@@ -640,6 +675,17 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
                                                                 Icon(Icons.code_outlined, size: 18),
                                                                 SizedBox(width: 8),
                                                                 Text('Export as JSON'),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                          const PopupMenuDivider(),
+                                                          const PopupMenuItem(
+                                                            value: 'delete',
+                                                            child: Row(
+                                                              children: [
+                                                                Icon(Icons.delete_forever, size: 18, color: AppTheme.statusError),
+                                                                SizedBox(width: 8),
+                                                                Text('Delete Conversation', style: TextStyle(color: AppTheme.statusError)),
                                                               ],
                                                             ),
                                                           ),
