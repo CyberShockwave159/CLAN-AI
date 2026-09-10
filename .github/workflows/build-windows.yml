@@ -121,19 +121,8 @@ jobs:
           Copy-Item $msixPath -Destination "dist\" -Force
           New-Item -ItemType Directory -Path "installer" -Force | Out-Null
           if (Test-Path "msix/assets/icon100x100.png") {
-            $pngPath = "msix/assets/icon100x100.png"
-            Add-Type -AssemblyName System.Drawing
-            $img = [System.Drawing.Image]::FromFile($pngPath)
-            $bmp = New-Object System.Drawing.Bitmap(32, 32)
-            $gfx = [System.Drawing.Graphics]::FromImage($bmp)
-            $gfx.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
-            $gfx.InterpolationMode = [System.Drawing.InterpolationMode]::HighQualityBicubic
-            $gfx.DrawImage($img, 0, 0, 32, 32)
-            $bmp.Save("installer\icon.png", [System.Drawing.Imaging.ImageFormat]::Png)
-            $gfx.Dispose()
-            $bmp.Dispose()
-            $img.Dispose()
-            Write-Host "Created icon.png (size: $((Get-Item 'installer\icon.png').Length) bytes)"
+            Copy-Item "msix/assets/icon100x100.png" -Destination "installer\icon.png" -Force
+            Write-Host "Copied icon.png (size: $((Get-Item 'installer\icon.png').Length) bytes)"
           } elseif (Test-Path "installer\icon.png") {
             Write-Host "Using existing icon.png"
           } else {
