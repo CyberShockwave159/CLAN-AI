@@ -118,8 +118,9 @@ jobs:
           $version = (Get-Content pubspec.yaml | Select-String "version:").ToString().Split('+')[0].Trim()
           $installerName = "CLAN-AI_${version}_Setup.exe"
           New-Item -ItemType Directory -Path "dist" -Force | Out-Null
-          Copy-Item $msixPath -Destination "dist\" -Force
           New-Item -ItemType Directory -Path "installer" -Force | Out-Null
+          New-Item -ItemType Directory -Path "installer\dist" -Force | Out-Null
+          Copy-Item $msixPath -Destination "dist\" -Force
           if (Test-Path "msix/assets/icon100x100.png") {
             Add-Type -AssemblyName System.Drawing
             $png = [System.Drawing.Image]::FromFile("msix/assets/icon100x100.png")
@@ -135,11 +136,9 @@ jobs:
             $bmp.Dispose()
             $png.Dispose()
             $gfx.Dispose()
-            Write-Host "Created icon.ico (size: $((Get-Item 'installer\icon.ico').Length) bytes)"
           } elseif (Test-Path "installer\icon.ico") {
             Write-Host "Using existing icon.ico"
           } else {
-            Write-Warning "No icon found, creating minimal ICO"
             [System.IO.File]::WriteAllBytes("installer\icon.ico", @(
               0x00,0x00,0x01,0x00,0x01,0x00,0x20,0x20,0x01,0x00,0x68,
               0x04,0x00,0x00,0x16,0x00,0x00,0x00,0x28,0x00,0x00,0x00,
@@ -149,10 +148,8 @@ jobs:
               0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
               0x00,0x00,0x00,0x00
             ))
-            Write-Host "Created minimal ICO"
           }
-          New-Item -ItemType Directory -Path "installer\dist" -Force | Out-Null
-          makensis /DMSIX_SOURCE="dist\$(Split-Path $msixPath -Leaf)" /DDIST_DIR="dist" installer\nsis_installer.nsi
+          makensis /DMSIX_SOURCE="dist\$(Split-Path $msixPath -Leaf)" /DDIST_DIR="$PWD\installer\dist" installer\nsis_installer.nsi
           Move-Item "installer\dist\CLAN-AI_Setup.exe" "dist\CLAN-AI_Setup.exe" -Force
         shell: pwsh
 

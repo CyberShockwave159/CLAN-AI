@@ -129,7 +129,7 @@ jobs:
             exit 1
           }
           
-          & $makensis.Path /DMSIX_SOURCE="$msix_copy" /DDIST_DIR="$dist_dir" installer\nsis_installer.nsi
+          & $makensis.Path /DMSIX_SOURCE="$msix_copy" /DDIST_DIR="$PWD\$dist_dir" installer\nsis_installer.nsi
           if ($LASTEXITCODE -ne 0) {
             Write-Error "NSIS build failed with exit code $LASTEXITCODE"
             exit 1
