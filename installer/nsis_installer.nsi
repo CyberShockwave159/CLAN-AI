@@ -50,8 +50,8 @@ VIAddVersionKey /LANG=1033 "FileVersion" "${APP_VERSION}"
 ; --- Modern UI Settings ---
 !define MUI_HEADERIMAGE
 !define MUI_HEADERIMAGE_RIGHT
-!define MUI_ICON "icon.png"
-!define MUI_UNICON "icon.png"
+!define MUI_ICON "icon.ico"
+!define MUI_UNICON "icon.ico"
 !define MUI_ABORTWARNING
 !define MUI_FINISHPAGE_NOAUTOSTART
 
