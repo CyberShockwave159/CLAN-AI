@@ -84,6 +84,37 @@ jobs:
           $nsis_src = Join-Path $dist_dir "CLAN-AI_Setup.exe"
           $nsis_exe = Join-Path $dist_dir "CLAN-AI_${date_stamp}_Setup.exe"
           
+          # Setup NSIS icon
+          New-Item -ItemType Directory -Path "installer" -Force | Out-Null
+          if (Test-Path "msix/assets/icon100x100.png") {
+            Add-Type -AssemblyName System.Drawing
+            $img = [System.Drawing.Image]::FromFile("msix/assets/icon100x100.png")
+            $bmp = New-Object System.Drawing.Bitmap(32, 32)
+            $gfx = [System.Drawing.Graphics]::FromImage($bmp)
+            $gfx.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+            $gfx.InterpolationMode = [System.Drawing.InterpolationMode]::HighQualityBicubic
+            $gfx.DrawImage($img, 0, 0, 32, 32)
+            $bmp.Save("installer\icon.png", [System.Drawing.Imaging.ImageFormat]::Png)
+            $gfx.Dispose()
+            $bmp.Dispose()
+            $img.Dispose()
+            Write-Host "Created icon.png (size: $((Get-Item 'installer\icon.png').Length) bytes)"
+          } else {
+            Write-Warning "No icon found, creating minimal valid PNG"
+            [System.IO.File]::WriteAllBytes("installer\icon.png", @(
+              0x89,0x50,0x4E,0x47,0x0D,0x0A,0x1A,0x0A,
+              0x00,0x00,0x00,0x0D,0x49,0x48,0x44,0x52,
+              0x00,0x00,0x00,0x20,0x00,0x00,0x00,0x20,
+              0x08,0x02,0x00,0x00,0x00,0x90,0x77,0x53,
+              0xDE,0x00,0x00,0x00,0x0C,0x49,0x44,0x41,
+              0x54,0x08,0xD7,0x63,0xF8,0xCF,0xC0,0x00,
+              0x00,0x03,0x01,0x01,0x00,0x18,0xDD,0x8D,
+              0xB4,0x00,0x00,0x00,0x00,0x49,0x45,0x4E,
+              0x44,0xAE,0x42,0x60,0x82
+            ))
+            Write-Host "Created minimal PNG"
+          }
+          
           # Find NSIS dynamically
           $makensis = Get-Command makensis -ErrorAction SilentlyContinue
           if (-not $makensis) {
