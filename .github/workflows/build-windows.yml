@@ -19,6 +19,8 @@ jobs:
   build-windows:
     name: Build Windows (${{ matrix.target }})
     runs-on: windows-latest
+    permissions:
+      contents: write
     strategy:
       matrix:
         target: [x64]
@@ -117,16 +119,16 @@ jobs:
           $installerName = "CLAN-AI_${version}_Setup.exe"
           New-Item -ItemType Directory -Path "dist" -Force | Out-Null
           Copy-Item $msixPath -Destination "dist\" -Force
-          Copy-Item "msix/assets/icon100x100.png" -Destination "installer\temp_icon.png" -Force
-          Add-Type -AssemblyName System.Drawing
-          $bmp = [System.Drawing.Bitmap]::FromFile((Get-Item "installer\temp_icon.png"))
-          $icon = [System.Drawing.Icon]::FromHandle($bmp.GetHicon())
-          $stream = [System.IO.FileStream]::new("installer\icon.png", [System.IO.FileMode]::Create)
-          $icon.Save($stream)
-          $stream.Dispose()
-          $icon.Dispose()
-          $bmp.Dispose()
-          Remove-Item "installer\temp_icon.png" -Force
+          New-Item -ItemType Directory -Path "installer" -Force | Out-Null
+          if (Test-Path "msix/assets/icon100x100.png") {
+            Copy-Item "msix/assets/icon100x100.png" -Destination "installer\icon.png" -Force
+          } elseif (Test-Path "installer\icon.png") {
+            Write-Host "Using existing icon.png"
+          } else {
+            Write-Warning "No icon found, creating placeholder"
+            $null = New-Item "installer\icon.png" -ItemType File -Force
+            Set-Content "installer\icon.png" "" -Encoding Byte
+          }
           New-Item -ItemType Directory -Path "installer\dist" -Force | Out-Null
           makensis /DMSIX_SOURCE="dist\$(Split-Path $msixPath -Leaf)" /DDIST_DIR="dist" installer\nsis_installer.nsi
           Move-Item "installer\dist\CLAN-AI_Setup.exe" "dist\CLAN-AI_Setup.exe" -Force
@@ -195,3 +197,4 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
