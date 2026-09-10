@@ -1,5 +1,6 @@
 /// Shared constants used across the application.
 /// Centralizes magic numbers and strings to eliminate duplication.
+library;
 
 const Duration undoTimeoutDuration = Duration(seconds: 5);
 const Duration uiThrottleInterval = Duration(milliseconds: 20);

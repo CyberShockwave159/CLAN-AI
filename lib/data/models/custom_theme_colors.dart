@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:clan_ai/core/constants/app_theme.dart';
 
 /// Custom theme colors that can be persisted and applied as a theme preset.
 class CustomThemeColors {
@@ -53,15 +52,15 @@ class CustomThemeColors {
 
   Map<String, dynamic> toMap() {
     return {
-      'bg': bg.value,
-      'surface': surface.value,
-      'surfaceVariant': surfaceVariant.value,
-      'border': border.value,
-      'textPrimary': textPrimary.value,
-      'textSecondary': textSecondary.value,
-      'textMuted': textMuted.value,
-      'userBubble': userBubble.value,
-      'assistantBubble': assistantBubble.value,
+      'bg': bg.toARGB32(),
+      'surface': surface.toARGB32(),
+      'surfaceVariant': surfaceVariant.toARGB32(),
+      'border': border.toARGB32(),
+      'textPrimary': textPrimary.toARGB32(),
+      'textSecondary': textSecondary.toARGB32(),
+      'textMuted': textMuted.toARGB32(),
+      'userBubble': userBubble.toARGB32(),
+      'assistantBubble': assistantBubble.toARGB32(),
     };
   }
 
@@ -125,6 +124,7 @@ class CustomThemeColors {
     assistantBubble: Color(0xFFEDE5F5),
   );
 
+  @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is CustomThemeColors &&
@@ -139,6 +139,7 @@ class CustomThemeColors {
           userBubble == other.userBubble &&
           assistantBubble == other.assistantBubble;
 
+  @override
   int get hashCode =>
       bg.hashCode ^
       surface.hashCode ^

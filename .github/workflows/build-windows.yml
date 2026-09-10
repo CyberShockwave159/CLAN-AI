@@ -39,7 +39,23 @@ jobs:
 
       - name: Setup NSIS
         run: |
-          choco install nsis -y --force
+          $maxRetries = 3
+          $retryDelay = 30
+          $nsisInstalled = $false
+          for ($i = 1; $i -le $maxRetries; $i++) {
+            Write-Host "Attempting NSIS install (attempt $i of $maxRetries)..."
+            if (choco install nsis -y --force --no-progress | Select-String -Pattern "Failed|error" -Quiet) {
+              Write-Host "Install failed, retrying in ${retryDelay} seconds..."
+              Start-Sleep -Seconds $retryDelay
+              continue
+            }
+            $nsisInstalled = $true
+            break
+          }
+          if (-not $nsisInstalled) {
+            Write-Error "Failed to install NSIS after $maxRetries attempts"
+            exit 1
+          }
           $nsisDir = "C:\Program Files (x86)\NSIS"
           if (Test-Path "$nsisDir\makensis.exe") {
             echo "$nsisDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append

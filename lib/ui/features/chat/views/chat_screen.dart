@@ -9,7 +9,6 @@ import 'package:clan_ai/data/models/chat_message.dart';
 import 'package:clan_ai/ui/features/chat/view_models/chat_view_model.dart';
 import 'package:clan_ai/ui/features/chat/views/message_bubble.dart';
 import 'package:clan_ai/ui/features/chat/views/prompt_input_bar.dart';
-import 'package:clan_ai/domain/models/generation_params.dart';
 import 'package:clan_ai/ui/features/drawer/views/chat_drawer.dart';
 import 'package:clan_ai/ui/features/settings/view_models/settings_view_model.dart';
 import 'package:clan_ai/ui/features/settings/views/parameter_tuning_sheet.dart';
@@ -17,7 +16,6 @@ import 'package:clan_ai/ui/features/settings/views/settings_screen.dart';
 import 'package:clan_ai/ui/shared/app_header.dart';
 import 'package:clan_ai/ui/shared/mixins/auto_scroll_mixin.dart';
 import 'package:clan_ai/ui/shared/delete_message_handler.dart';
-import 'package:clan_ai/core/utils/latency_meter.dart';
 
 class ChatScreen extends StatefulWidget {
   final VoidCallback? themeRefresh;
@@ -100,7 +98,7 @@ class _ChatScreenState extends State<ChatScreen> with AutoScrollMixin {
       setState(() {
         _quickConnecting = false;
         _quickConnectResult = result;
-        if (result != null && result!.isHealthy) {
+        if (result != null && result.isHealthy) {
           settingsVM.updateBaseUrl(url);
         }
       });

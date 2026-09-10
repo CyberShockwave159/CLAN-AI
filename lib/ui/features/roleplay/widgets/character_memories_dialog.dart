@@ -196,13 +196,15 @@ class _CharacterMemoriesDialogState extends State<CharacterMemoriesDialog> {
                 await _vectorStore.deleteCharacterEmbeddings(widget.characterId);
                 if (mounted) {
                   _loadMemories();
-                  Navigator.of(context).pop(true);
+                  if (context.mounted) Navigator.of(context).pop(true);
                 }
               } catch (e) {
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Failed to clear memories: $e')),
-                  );
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Failed to clear memories: $e')),
+                    );
+                  }
                 }
               }
             }

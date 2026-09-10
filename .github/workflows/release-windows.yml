@@ -52,7 +52,24 @@ jobs:
         shell: pwsh
 
       - name: Install NSIS
-        run: choco install nsis -y
+        run: |
+          $maxRetries = 3
+          $retryDelay = 30
+          $nsisInstalled = $false
+          for ($i = 1; $i -le $maxRetries; $i++) {
+            Write-Host "Attempting NSIS install (attempt $i of $maxRetries)..."
+            if (choco install nsis -y --no-progress | Select-String -Pattern "Failed|error" -Quiet) {
+              Write-Host "Install failed, retrying in ${retryDelay} seconds..."
+              Start-Sleep -Seconds $retryDelay
+              continue
+            }
+            $nsisInstalled = $true
+            break
+          }
+          if (-not $nsisInstalled) {
+            Write-Error "Failed to install NSIS after $maxRetries attempts"
+            exit 1
+          }
         shell: pwsh
 
       - name: Build NSIS installer

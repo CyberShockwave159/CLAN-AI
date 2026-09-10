@@ -28,6 +28,7 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
   set activeCharacter(CharacterProfile? v) => _activeCharacter = v;
 
   ChatThread? _activeThread;
+  @override
   ChatThread? get activeThread => _activeThread;
   set activeThread(ChatThread? v) => _activeThread = v;
 
@@ -37,6 +38,7 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
 
   @override
   bool get isGenerating => _isGenerating;
+  @override
   set isGenerating(bool v) => _isGenerating = v;
 
   CancelToken? _currentCancelToken;
@@ -46,18 +48,22 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
 
   @override
   Timer? get uiThrottleTimer => _uiThrottleTimer;
+  @override
   set uiThrottleTimer(Timer? v) => _uiThrottleTimer = v;
 
   @override
   String get pendingStreamBuffer => _pendingStreamBuffer;
+  @override
   set pendingStreamBuffer(String v) => _pendingStreamBuffer = v;
 
   @override
   String get pendingReasoningBuffer => _pendingReasoningBuffer;
+  @override
   set pendingReasoningBuffer(String v) => _pendingReasoningBuffer = v;
 
   @override
   CancelToken? get currentCancelToken => _currentCancelToken;
+  @override
   set currentCancelToken(CancelToken? v) => _currentCancelToken = v;
 
   @override
@@ -65,6 +71,7 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
 
   @override
   List<ChatMessage> get messages => _messages;
+  @override
   set messages(List<ChatMessage> v) => _messages = v;
 
   RoleplayViewModel({

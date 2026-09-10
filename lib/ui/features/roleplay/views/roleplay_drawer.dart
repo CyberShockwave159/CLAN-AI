@@ -191,7 +191,7 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
                    );
                    if (result == null || result.files.isEmpty || result.files.first.path == null) return;
 
-                   Navigator.of(context).pop();
+                   if (context.mounted) Navigator.of(context).pop();
 
                    try {
                      final content = await File(result.files.first.path!).readAsString();
@@ -218,7 +218,7 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
                      await charRepo.createCharacter(character);
 
                      // Auto-open edit dialog for the imported character
-                     final updated = await _showEditDialog(context, character, charRepo);
+                     final updated = context.mounted ? await _showEditDialog(context, character, charRepo) : character;
 
                       await roleplayVM.startRoleplay(
                         updated,
@@ -443,9 +443,10 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
                                       ),
                                       onSelected: (action) async {
                                         if (action == 'edit') {
-                                          final updated = await _showEditDialog(context, character, context.read<CharacterRepository>());
-                                          final roleplayVM = context.read<RoleplayViewModel>();
-                                          roleplayVM.updateActiveCharacter(updated);
+                                          final repo = context.read<CharacterRepository>();
+                                          final updated = context.mounted ? await _showEditDialog(context, character, repo) : character;
+                                          final roleplayVM = context.mounted ? context.read<RoleplayViewModel>() : null;
+                                          roleplayVM?.updateActiveCharacter(updated);
                                           if (mounted) {
                                             setState(() {});
                                           }

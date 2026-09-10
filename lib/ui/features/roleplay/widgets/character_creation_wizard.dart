@@ -98,7 +98,7 @@ class _CharacterCreationWizardState extends State<CharacterCreationWizard> {
     );
 
     await context.read<CharacterRepository>().createCharacter(character);
-    Navigator.of(context).pop(character);
+    if (mounted) Navigator.of(context).pop(character);
   }
 
   @override
@@ -369,7 +369,7 @@ class _CharacterCreationWizardState extends State<CharacterCreationWizard> {
           children: [
             Expanded(
               child: DropdownButtonFormField<String>(
-                value: _selectedTemplateId,
+                initialValue: _selectedTemplateId,
                 decoration: InputDecoration(
                   labelText: 'Persona Template',
                   prefixIcon: const Icon(Icons.tag_rounded),

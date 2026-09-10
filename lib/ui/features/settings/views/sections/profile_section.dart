@@ -23,12 +23,12 @@ class ProfileSection extends StatelessWidget {
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setState) => WillPopScope(
-          onWillPop: () async {
+        builder: (ctx, setState) => PopScope(
+          canPop: true,
+          onPopInvokedWithResult: (didPop, result) {
             nameController.dispose();
             urlController.dispose();
             apiKeyController.dispose();
-            return true;
           },
           child: AlertDialog(
             title: const Text('Create Server Profile'),
@@ -112,12 +112,12 @@ class ProfileSection extends StatelessWidget {
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setState) => WillPopScope(
-          onWillPop: () async {
+        builder: (ctx, setState) => PopScope(
+          canPop: true,
+          onPopInvokedWithResult: (didPop, result) {
             nameController.dispose();
             urlController.dispose();
             apiKeyController.dispose();
-            return true;
           },
           child: AlertDialog(
             title: const Text('Edit Server Profile'),

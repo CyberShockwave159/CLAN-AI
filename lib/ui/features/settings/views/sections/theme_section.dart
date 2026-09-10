@@ -83,7 +83,7 @@ class ThemeSection extends StatelessWidget {
           runSpacing: 8,
           children: presets.map((preset) {
             final (colors, label) = preset;
-            final isSelected = settingsVM.customThemeColors?.bg.value == colors.bg.value;
+            final isSelected = settingsVM.customThemeColors?.bg.toARGB32() == colors.bg.toARGB32();
             return ChoiceChip(
               label: Row(
                 mainAxisSize: MainAxisSize.min,

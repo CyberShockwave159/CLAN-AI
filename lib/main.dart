@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:clan_ai/core/constants/app_theme.dart';
-import 'package:clan_ai/core/constants/clan_theme_colors.dart';
 import 'package:clan_ai/core/network/http_client.dart';
 import 'package:clan_ai/core/utils/latency_meter.dart';
 import 'package:clan_ai/data/datasources/llama_api_service.dart';
@@ -93,7 +92,6 @@ class ClanAiApp extends StatefulWidget {
 
 class _ClanAiAppState extends State<ClanAiApp> with WidgetsBindingObserver {
   final navigatorKey = GlobalKey<NavigatorState>();
-  AppThemeMode _appThemeMode = AppThemeMode.dark;
   ThemeData _currentTheme = AppTheme.darkTheme;
 
   @override
@@ -115,7 +113,6 @@ class _ClanAiAppState extends State<ClanAiApp> with WidgetsBindingObserver {
       final colors = await LocalDatabase.instance.loadCustomThemeColors();
       if (mounted) {
         setState(() {
-          _appThemeMode = mode;
           _currentTheme = _buildTheme(mode, colors);
         });
       }

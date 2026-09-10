@@ -304,7 +304,7 @@ class _SillyTavernImportDialogState extends State<SillyTavernImportDialog> {
                       children: [
                         Expanded(
                           child: DropdownButtonFormField<String>(
-                            value: _selectedTemplateId,
+                            initialValue: _selectedTemplateId,
                             decoration: InputDecoration(
                               labelText: 'Load Persona Template',
                               prefixIcon: const Icon(Icons.tag_rounded),

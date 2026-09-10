@@ -110,11 +110,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     showDialog(
       context: context,
-      builder: (ctx) => WillPopScope(
-        onWillPop: () async {
+      builder: (ctx) => PopScope(
+        canPop: true,
+        onPopInvokedWithResult: (didPop, result) {
           nameController.dispose();
           contentController.dispose();
-          return true;
         },
         child: AlertDialog(
           title: const Text('New System Prompt Template'),
@@ -650,12 +650,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 }
                 if (mounted) {
                   setState(() {});
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('All memories cleared'),
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('All memories cleared'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  }
                 }
               },
               icon: const Icon(Icons.clear_all_rounded, size: 16),

@@ -20,9 +20,7 @@ class SettingsViewModel extends ChangeNotifier {
   final SystemPromptTemplatesRepository _templateRepository;
   VoidCallback? _onThemeChanged;
 
-  ServerConfig _config = const ServerConfig();
-  ServerConfig get config => _config;
-  set config(ServerConfig v) => _config = v;
+  ServerConfig config = const ServerConfig();
 
   AppMode _appMode = AppMode.assistant;
   AppMode get appMode => _appMode;
@@ -39,9 +37,7 @@ class SettingsViewModel extends ChangeNotifier {
     _onThemeChanged = callback;
   }
 
-  List<ModelInfo> _availableModels = [];
-  List<ModelInfo> get availableModels => _availableModels;
-  set availableModels(List<ModelInfo> v) => _availableModels = v;
+  List<ModelInfo> availableModels = [];
 
   List<SystemPromptTemplate> _templates = [];
   List<SystemPromptTemplate> get templates => _templates;
@@ -102,10 +98,10 @@ class SettingsViewModel extends ChangeNotifier {
         );
         _profiles = await _serverRepository.loadProfiles();
         _activeProfileId = profile.id;
-        _config = legacyConfig;
+        config = legacyConfig;
       }
     } else {
-      _config = await _serverRepository.loadActiveConfig();
+      config = await _serverRepository.loadActiveConfig();
     }
 
     _templates = await _templateRepository.loadTemplates();
@@ -176,7 +172,7 @@ class SettingsViewModel extends ChangeNotifier {
       final updated = profile.copyWith(baseUrl: url);
       await _serverRepository.updateProfile(updated);
       _profiles = await _serverRepository.loadProfiles();
-      _config = _config.copyWith(baseUrl: url);
+      config = config.copyWith(baseUrl: url);
       await _saveConfig();
     }
     notifyListeners();
@@ -188,7 +184,7 @@ class SettingsViewModel extends ChangeNotifier {
       final updated = profile.copyWith(apiKey: key);
       await _serverRepository.updateProfile(updated);
       _profiles = await _serverRepository.loadProfiles();
-      _config = _config.copyWith(apiKey: key);
+      config = config.copyWith(apiKey: key);
       await _saveConfig();
     }
     notifyListeners();
@@ -200,38 +196,38 @@ class SettingsViewModel extends ChangeNotifier {
       final updated = profile.copyWith(protocol: protocol);
       await _serverRepository.updateProfile(updated);
       _profiles = await _serverRepository.loadProfiles();
-      _config = _config.copyWith(protocol: protocol);
+      config = config.copyWith(protocol: protocol);
       await _saveConfig();
     }
     notifyListeners();
   }
 
   Future<void> updateSelectedModel(String modelId) async {
-    _config = _config.copyWith(selectedModel: modelId);
+    config = config.copyWith(selectedModel: modelId);
     await _saveConfig();
     notifyListeners();
   }
 
   Future<void> updateSystemPrompt(String systemPrompt) async {
-    _config = _config.copyWith(systemPrompt: systemPrompt);
+    config = config.copyWith(systemPrompt: systemPrompt);
     await _saveConfig();
     notifyListeners();
   }
 
   Future<void> updateDefaultParams(GenerationParams params) async {
-    _config = _config.copyWith(defaultParams: params);
+    config = config.copyWith(defaultParams: params);
     await _saveConfig();
     notifyListeners();
   }
 
   Future<void> toggleConfirmDeleteMessage(bool value) async {
-    _config = _config.copyWith(confirmDeleteMessage: value);
+    config = config.copyWith(confirmDeleteMessage: value);
     await _saveConfig();
     notifyListeners();
   }
 
   Future<void> toggleReasoning(bool value) async {
-    _config = _config.copyWith(reasoning: value);
+    config = config.copyWith(reasoning: value);
     await _saveConfig();
     notifyListeners();
   }
@@ -265,8 +261,8 @@ class SettingsViewModel extends ChangeNotifier {
   Future<void> switchProfile(String profileId) async {
     await _serverRepository.setActiveProfileId(profileId);
     _activeProfileId = profileId;
-    _config = await _serverRepository.loadActiveConfig();
-    _availableModels.clear();
+    config = await _serverRepository.loadActiveConfig();
+    availableModels.clear();
     _testConnectionError = null;
     notifyListeners();
     // Test connection with new profile
@@ -287,7 +283,7 @@ class SettingsViewModel extends ChangeNotifier {
     );
     _profiles = await _serverRepository.loadProfiles();
     _activeProfileId = await _serverRepository.getActiveProfileId();
-    _config = await _serverRepository.loadActiveConfig();
+    config = await _serverRepository.loadActiveConfig();
     notifyListeners();
   }
 
@@ -295,7 +291,7 @@ class SettingsViewModel extends ChangeNotifier {
     await _serverRepository.updateProfile(updatedProfile);
     _profiles = await _serverRepository.loadProfiles();
     if (_activeProfileId == updatedProfile.id) {
-      _config = await _serverRepository.loadActiveConfig();
+      config = await _serverRepository.loadActiveConfig();
     }
     notifyListeners();
   }
@@ -316,7 +312,7 @@ class SettingsViewModel extends ChangeNotifier {
     _profiles = await _serverRepository.loadProfiles();
     _activeProfileId = await _serverRepository.getActiveProfileId();
     if (_profiles.isNotEmpty) {
-      _config = await _serverRepository.loadActiveConfig();
+      config = await _serverRepository.loadActiveConfig();
     }
     notifyListeners();
   }
@@ -337,12 +333,12 @@ class SettingsViewModel extends ChangeNotifier {
   Future<void> testConnection() async {
     _isTestingConnection = true;
     _testConnectionError = null;
-    _config = _config.copyWith(healthStatus: ServerHealthStatus.connecting);
+    config = config.copyWith(healthStatus: ServerHealthStatus.connecting);
     notifyListeners();
 
     final conn = connectionDetails;
     if (conn == null) {
-      _config = _config.copyWith(
+      config = config.copyWith(
         healthStatus: ServerHealthStatus.offline,
         latencyMs: -1,
       );
@@ -355,7 +351,7 @@ class SettingsViewModel extends ChangeNotifier {
 
     try {
       final pingRes = await _serverRepository.testConnection(conn.baseUrl, apiKey: conn.apiKey);
-      _config = _config.copyWith(
+      config = config.copyWith(
         healthStatus: pingRes.status,
         latencyMs: pingRes.latencyMs,
       );
@@ -363,19 +359,19 @@ class SettingsViewModel extends ChangeNotifier {
       if (pingRes.isHealthy) {
         _testConnectionError = null;
         // Fetch models
-        _availableModels = await _serverRepository.fetchModels(conn.baseUrl, apiKey: conn.apiKey);
-        if (_availableModels.isNotEmpty) {
-          if (_config.selectedModel == null || _config.selectedModel!.isEmpty) {
-            _config = _config.copyWith(selectedModel: _availableModels.first.id);
-          } else if (!_availableModels.any((m) => m.id == _config.selectedModel)) {
-            _config = _config.copyWith(selectedModel: _availableModels.first.id);
+        availableModels = await _serverRepository.fetchModels(conn.baseUrl, apiKey: conn.apiKey);
+        if (availableModels.isNotEmpty) {
+          if (config.selectedModel == null || config.selectedModel!.isEmpty) {
+            config = config.copyWith(selectedModel: availableModels.first.id);
+          } else if (!availableModels.any((m) => m.id == config.selectedModel)) {
+            config = config.copyWith(selectedModel: availableModels.first.id);
           }
         }
       } else {
         _testConnectionError = pingRes.errorMessage ?? 'Server unreachable';
       }
     } catch (e) {
-      _config = _config.copyWith(
+      config = config.copyWith(
         healthStatus: ServerHealthStatus.offline,
         latencyMs: -1,
       );
@@ -391,8 +387,8 @@ class SettingsViewModel extends ChangeNotifier {
     if (_isTestingConnection) return;
     final conn = connectionDetails;
     if (conn == null) {
-      if (_config.healthStatus != ServerHealthStatus.offline || _config.latencyMs != -1) {
-        _config = _config.copyWith(
+      if (config.healthStatus != ServerHealthStatus.offline || config.latencyMs != -1) {
+        config = config.copyWith(
           healthStatus: ServerHealthStatus.offline,
           latencyMs: -1,
         );
@@ -404,16 +400,16 @@ class SettingsViewModel extends ChangeNotifier {
       final pingRes = await _serverRepository.testConnection(conn.baseUrl, apiKey: conn.apiKey);
       final newStatus = pingRes.status;
       final newLatency = pingRes.latencyMs;
-      if (_config.healthStatus != newStatus || _config.latencyMs != newLatency) {
-        _config = _config.copyWith(
+      if (config.healthStatus != newStatus || config.latencyMs != newLatency) {
+        config = config.copyWith(
           healthStatus: newStatus,
           latencyMs: newLatency,
         );
         notifyListeners();
       }
     } catch (_) {
-      if (_config.healthStatus != ServerHealthStatus.offline || _config.latencyMs != -1) {
-        _config = _config.copyWith(
+      if (config.healthStatus != ServerHealthStatus.offline || config.latencyMs != -1) {
+        config = config.copyWith(
           healthStatus: ServerHealthStatus.offline,
           latencyMs: -1,
         );
@@ -423,14 +419,14 @@ class SettingsViewModel extends ChangeNotifier {
   }
 
   Future<void> _saveConfig() async {
-    await _serverRepository.saveActiveConfig(_config);
+    await _serverRepository.saveActiveConfig(config);
   }
 
   /// Returns the context length of the currently selected model, or null if unknown.
   int? getSelectedModelContextLength() {
-    final modelId = _config.selectedModel;
+    final modelId = config.selectedModel;
     if (modelId == null) return null;
-    for (final model in _availableModels) {
+    for (final model in availableModels) {
       if (model.id == modelId) {
         return model.contextLength;
       }

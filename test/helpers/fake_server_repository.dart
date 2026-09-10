@@ -7,14 +7,11 @@ import 'package:clan_ai/core/utils/latency_meter.dart';
 class FakeServerRepository extends ServerRepository {
   final List<ServerProfile> _profiles = [];
   String? _activeProfileId;
-  ServerConfig? _activeConfig;
-  PingResult? _lastPingResult;
+   ServerConfig? activeConfig;
+   PingResult? _lastPingResult;
 
-  List<ServerProfile> get all => _profiles;
-  String? get activeProfileId => _activeProfileId;
-  ServerConfig? get activeConfig => _activeConfig;
-  set activeConfig(ServerConfig? config) => _activeConfig = config;
-  PingResult? get lastPingResult => _lastPingResult;
+   List<ServerProfile> get all => _profiles;
+   String? get activeProfileId => _activeProfileId;
 
   @override
   Future<List<ServerProfile>> loadProfiles() async => _profiles.toList();
@@ -72,12 +69,12 @@ class FakeServerRepository extends ServerRepository {
 
   @override
   Future<ServerConfig> loadActiveConfig() async {
-    return _activeConfig ?? const ServerConfig();
+    return activeConfig ?? const ServerConfig();
   }
 
   @override
   Future<void> saveActiveConfig(ServerConfig config) async {
-    _activeConfig = config;
+    activeConfig = config;
   }
 
   @override
