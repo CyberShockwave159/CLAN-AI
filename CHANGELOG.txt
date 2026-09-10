@@ -21,6 +21,13 @@
 
 ### 🔧 Changes
 
+**Windows CI/CD Pipeline**
+- Release workflow triggers on semantic version tags (`v*`) instead of pushes to `main`/`master`
+- NSIS installed via Chocolatey (`choco install nsis`) in CI before build step
+- NSIS resolved dynamically via `Get-Command makensis` with fallback to default path
+- Build fails if NSIS installer is not produced (removed silent skip)
+- Release title uses `${{ github.ref_name }}` directly from tag
+
 **Desktop Keyboard Shortcuts Migration**
 - `DesktopKeyboardShortcuts` migrated from deprecated `RawKeyboardListener` to `KeyboardListener` with `HardwareKeyboard.instance`
 - `onKey` callback replaced with `onKeyEvent` (`KeyDownEvent` check)

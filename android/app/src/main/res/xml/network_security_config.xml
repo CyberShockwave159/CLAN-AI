@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- Base config: force HTTPS for public web & remote APIs -->
-    <base-config cleartextTrafficPermitted="false">
+    <!-- Base config: allow cleartext for local network LLM servers (llama.cpp, Ollama, LM Studio on LAN) -->
+    <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system" />
             <certificates src="user" />

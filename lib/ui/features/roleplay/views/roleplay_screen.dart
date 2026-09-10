@@ -14,7 +14,6 @@ import 'package:clan_ai/ui/features/roleplay/views/roleplay_drawer.dart';
 import 'package:clan_ai/ui/features/roleplay/view_models/roleplay_view_model.dart';
 import 'package:clan_ai/ui/features/settings/view_models/settings_view_model.dart';
 import 'package:clan_ai/ui/features/settings/views/parameter_tuning_sheet.dart';
-import 'package:clan_ai/domain/models/generation_params.dart';
 import 'package:clan_ai/ui/features/settings/views/settings_screen.dart';
 import 'package:clan_ai/ui/shared/connection_badge.dart';
 import 'package:clan_ai/ui/features/roleplay/widgets/alternate_greeting_selector.dart';

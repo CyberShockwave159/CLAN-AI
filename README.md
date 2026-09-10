@@ -58,13 +58,7 @@ Compare with the hash in `checksums.sha256` on the release page.
 
 ### Linux (Desktop)
 
-**Option A: Flatpak (recommended)**
-
-```bash
-flatpak install io.github.cybershockwave159.clan_ai
-```
-
-**Option B: From source**
+**From source**
 
 ```bash
 # Install Flutter SDK first: https://docs.flutter.dev/get-started/install/linux
@@ -73,6 +67,8 @@ cd clan_ai
 flutter pub get
 flutter run -d linux
 ```
+
+> Flatpak packaging is planned. No published Flatpak package is available yet.
 
 ### macOS (Desktop)
 

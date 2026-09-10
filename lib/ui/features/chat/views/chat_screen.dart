@@ -431,6 +431,15 @@ class _ChatScreenState extends State<ChatScreen> with AutoScrollMixin {
               _buildPresetChip('LM Studio', 'http://127.0.0.1:1234', context),
             ],
           ),
+          const SizedBox(height: 8),
+          Text(
+            'Connecting from a phone or another device? Use your computer\'s LAN IP (e.g. `http://192.168.1.50:8080`).',
+            style: TextStyle(
+              fontSize: 11,
+              color: context.clanTextMuted,
+              height: 1.3,
+            ),
+          ),
           const SizedBox(height: 12),
           // URL input field
           TextField(
