@@ -413,7 +413,6 @@ class _ChatDrawerState extends State<ChatDrawer> {
                   ),
                 ),
                 onPressed: () async {
-                  Navigator.of(context).pop();
                   try {
                     final result = await FilePicker.platform.pickFiles(
                       type: FileType.custom,
@@ -422,6 +421,9 @@ class _ChatDrawerState extends State<ChatDrawer> {
                     );
                     if (result == null || result.files.isEmpty || result.files.first.path == null) return;
 
+                    if (!context.mounted) return;
+                    Navigator.of(context).pop();
+
                     final content = await File(result.files.first.path!).readAsString();
                     final json = jsonDecode(content) as Map<String, dynamic>;
 
@@ -429,7 +431,7 @@ class _ChatDrawerState extends State<ChatDrawer> {
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text('Invalid import file format'),
+                            content: const Text('Invalid import file format'),
                             duration: const Duration(seconds: 3),
                             behavior: SnackBarBehavior.floating,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -447,7 +449,7 @@ class _ChatDrawerState extends State<ChatDrawer> {
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text('Chat imported successfully'),
+                            content: const Text('Chat imported successfully'),
                             duration: const Duration(seconds: 3),
                             behavior: SnackBarBehavior.floating,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
