@@ -363,13 +363,27 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
     final nextVariantIndex = targetMsg.totalVariants;
     final newTotalVariants = targetMsg.totalVariants + 1;
 
+    final allSiblings = List<String>.from(targetMsg.siblingIds);
+
     final updatedOldMsg = targetMsg.copyWith(
       variantIndex: targetMsg.variantIndex,
       totalVariants: newTotalVariants,
-      siblingIds: [...targetMsg.siblingIds, newAssistantId],
+      siblingIds: [...allSiblings, newAssistantId],
     );
     _messages[messageIndex] = updatedOldMsg;
     await _chatRepository.saveMessage(updatedOldMsg);
+
+    for (final siblingId in allSiblings) {
+      try {
+        final existingSiblings = await _chatRepository.getAllMessagesForThread(targetMsg.threadId);
+        final siblingMsg = existingSiblings.firstWhere((m) => m.id == siblingId, orElse: () => ChatMessage(threadId: targetMsg.threadId, role: MessageRole.assistant, content: ''));
+        if (siblingMsg.id != targetMsg.id) {
+          await _chatRepository.saveMessage(siblingMsg.copyWith(
+            siblingIds: [...siblingMsg.siblingIds, newAssistantId],
+          ));
+        }
+      } catch (_) {}
+    }
 
     final newAssistantMsg = ChatMessage(
       id: newAssistantId,
@@ -380,7 +394,7 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
       status: MessageStatus.streaming,
       variantIndex: nextVariantIndex,
       totalVariants: newTotalVariants,
-      siblingIds: [...targetMsg.siblingIds, targetMsg.id],
+      siblingIds: [...allSiblings, targetMsg.id],
     );
 
     _messages[messageIndex] = newAssistantMsg;

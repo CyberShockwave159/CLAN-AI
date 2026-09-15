@@ -92,6 +92,10 @@ class ChatRepository {
 
   // --- Message Methods ---
 
+  Future<List<ChatMessage>> getAllMessagesForThread(String threadId) async {
+    return await _localDb.getMessagesForThread(threadId);
+  }
+
   Future<List<ChatMessage>> getMessagesForThread(String threadId) async {
     final messages = await _localDb.getMessagesForThread(threadId);
     return _deduplicateVariantMessages(messages);
