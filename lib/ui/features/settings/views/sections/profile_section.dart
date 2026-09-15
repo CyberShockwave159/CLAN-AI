@@ -81,16 +81,17 @@ class ProfileSection extends StatelessWidget {
                 child: const Text('Cancel'),
               ),
               FilledButton(
-                onPressed: () {
+                onPressed: () async {
                   final name = nameController.text.trim();
                   final baseUrl = urlController.text.trim();
                   if (name.isEmpty || baseUrl.isEmpty) return;
-                  settingsVM.createProfile(
+                  await settingsVM.createProfile(
                     name: name,
                     baseUrl: baseUrl,
                     apiKey: apiKeyController.text.trim().isEmpty ? null : apiKeyController.text.trim(),
                     protocol: selectedProtocol,
                   );
+                  if (!ctx.mounted) return;
                   Navigator.of(ctx).pop();
                 },
                 child: const Text('Create'),
@@ -161,7 +162,7 @@ class ProfileSection extends StatelessWidget {
                 child: const Text('Cancel'),
               ),
               FilledButton(
-                onPressed: () {
+                onPressed: () async {
                   final name = nameController.text.trim();
                   final baseUrl = urlController.text.trim();
                   if (name.isEmpty || baseUrl.isEmpty) return;
@@ -171,7 +172,8 @@ class ProfileSection extends StatelessWidget {
                     apiKey: apiKeyController.text.trim().isEmpty ? null : apiKeyController.text.trim(),
                     protocol: selectedProtocol,
                   );
-                  settingsVM.updateProfile(updatedProfile);
+                  await settingsVM.updateProfile(updatedProfile);
+                  if (!ctx.mounted) return;
                   Navigator.of(ctx).pop();
                 },
                 child: const Text('Save'),
@@ -197,8 +199,9 @@ class ProfileSection extends StatelessWidget {
           ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: AppTheme.statusError),
-            onPressed: () {
-              settingsVM.deleteProfile(profileId);
+            onPressed: () async {
+              await settingsVM.deleteProfile(profileId);
+              if (!ctx.mounted) return;
               Navigator.of(ctx).pop();
             },
             child: const Text('Delete'),
