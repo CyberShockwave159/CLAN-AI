@@ -201,7 +201,7 @@ Assistant messages include a memory chip when `ragMemoryCount > 0`:
 
 ## SQLite Schema
 
-### Version 11 (Latest)
+### Version 12 (Latest)
 
 ```sql
 -- Thread table: conversation containers
@@ -286,6 +286,7 @@ CREATE TABLE persona_templates (
 | v8 → v9 | Added `rag_memory_contents` column to messages (JSON-encoded memory content strings) |
 | v9 → v10 | Added `persona_name` and `persona_description` columns to characters |
 | v10 → v11 | Added `persona_name` column to persona_templates; auto-derives from `persona_text` for existing templates |
+| v11 → v12 | Added `variant_index`, `total_variants`, `sibling_ids` columns to messages for conversation branching |
 
 ---
 
@@ -385,13 +386,14 @@ All optional — defaults to production instances.
 ## Key Constraints & Gotchas
 
 1. **StreamMutationMixin** is shared by ChatViewModel and RoleplayViewModel — all streaming, undo, stopGeneration, and switchVariant logic lives here
-2. **SQLite FFI** must be initialized once — calling again triggers "You are changing sqflite default factory" warning
-3. **Thread isolation**: `characterId` null = assistant, non-null = roleplay — ChatViewModel filters by null, RoleplayViewModel filters by non-null
-4. **RAG isolation**: Embeddings stored with `character_id` — queries use `WHERE character_id = ?` — no cross-character leakage
-5. **Hash embedding**: Pure Dart 256-dim vectors via FNV-1a hash — deterministic, <5ms per vector, <1KB per vector
-6. **RAG config**: `ragTopK` (1-10) and `ragMinScore` (0.0-1.0) control memory retrieval. Default: topK=3, minScore=0.0. Passed through `GenerationParams` → `RoleplayViewModel` → `RoleplayContextBuilder.build()`. Filtered by minimum cosine similarity in `RoleplayContextBuilder`.
-7. **Memory chip**: `ChatMessage.ragMemoryCount` shows count of injected memories. `ChatMessage.ragMemoryContents` stores JSON-encoded memory content strings. Displayed in MessageBubble as clickable chip.
-8. **Memory management**: `VectorStore.getAllMemories()` returns all embeddings for a character. `VectorStore.deleteEmbedding(id)` removes a single embedding. Accessed via `CharacterMemoriesDialog` from RoleplayDrawer character menu.
-6. **SharedPreferences** still used for: server profiles (`clan_server_profiles`), active profile ID (`clan_active_profile_id`), active server config (`clan_active_server_config`), theme mode (`clan_theme_mode`), custom theme colors (`clan_custom_theme_colors`), app mode (`clan_app_mode`), last roleplay thread ID (`clan_last_roleplay_thread_id`), system prompt templates (`clan_system_prompt_templates`). Characters and persona templates were migrated from SharedPreferences to SQLite in v7→v8 and are no longer stored there.
-7. **SQLite** used for: threads, messages, characters, persona templates, embeddings (separate database file)
-8. **Secure storage** used for: API keys (per profile, via `flutter_secure_storage`)
+2. **Conversation branching**: Regenerate/edit operations create sibling variants that share a complete `siblingIds` array. `doSwitchVariant` loads siblings from DB via `getAllMessagesForThread()` (bypasses message deduplication), sorts by `variantIndex`, and indexes into the sorted list. Only messages with same `parentId` and `role == assistant` are considered variants. Regenerate builds `allSiblingIds` set (filtered by `role == assistant` and shared `parentId`) and assigns it to every variant in the group. Navigation uses `variantIndex + 1` for next, `variantIndex - 1` for previous. Branches are linked via `branchFromThreadId` on `ChatThread`.
+3. **SQLite FFI** must be initialized once — calling again triggers "You are changing sqflite default factory" warning
+4. **Thread isolation**: `characterId` null = assistant, non-null = roleplay — ChatViewModel filters by null, RoleplayViewModel filters by non-null
+5. **RAG isolation**: Embeddings stored with `character_id` — queries use `WHERE character_id = ?` — no cross-character leakage
+6. **Hash embedding**: Pure Dart 256-dim vectors via FNV-1a hash — deterministic, <5ms per vector, <1KB per vector
+7. **RAG config**: `ragTopK` (1-10) and `ragMinScore` (0.0-1.0) control memory retrieval. Default: topK=3, minScore=0.0. Passed through `GenerationParams` → `RoleplayViewModel` → `RoleplayContextBuilder.build()`. Filtered by minimum cosine similarity in `RoleplayContextBuilder`.
+8. **Memory chip**: `ChatMessage.ragMemoryCount` shows count of injected memories. `ChatMessage.ragMemoryContents` stores JSON-encoded memory content strings. Displayed in MessageBubble as clickable chip.
+9. **Memory management**: `VectorStore.getAllMemories()` returns all embeddings for a character. `VectorStore.deleteEmbedding(id)` removes a single embedding. Accessed via `CharacterMemoriesDialog` from RoleplayDrawer character menu.
+10. **SharedPreferences** still used for: server profiles (`clan_server_profiles`), active profile ID (`clan_active_profile_id`), active server config (`clan_active_server_config`), theme mode (`clan_theme_mode`), custom theme colors (`clan_custom_theme_colors`), app mode (`clan_app_mode`), last roleplay thread ID (`clan_last_roleplay_thread_id`), system prompt templates (`clan_system_prompt_templates`). Characters and persona templates were migrated from SharedPreferences to SQLite in v7→v8 and are no longer stored there.
+11. **SQLite** used for: threads, messages, characters, persona templates, embeddings (separate database file)
+12. **Secure storage** used for: API keys (per profile, via `flutter_secure_storage`)
