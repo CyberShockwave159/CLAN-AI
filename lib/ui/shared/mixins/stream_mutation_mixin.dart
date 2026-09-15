@@ -198,7 +198,7 @@ mixin StreamMutationMixin on ChangeNotifier {
     final currentMsg = messages[messageIndex];
     if (currentMsg.siblingIds.isEmpty) return;
 
-    final siblingIndex = previous ? currentMsg.variantIndex - 1 : currentMsg.variantIndex;
+    final siblingIndex = previous ? currentMsg.variantIndex - 1 : currentMsg.variantIndex + 1;
     if (siblingIndex < 0 || siblingIndex >= currentMsg.siblingIds.length) return;
 
     final siblingId = currentMsg.siblingIds[siblingIndex];
