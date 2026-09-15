@@ -100,7 +100,8 @@ class ChatRepository {
   List<ChatMessage> _deduplicateVariantMessages(List<ChatMessage> messages) {
     final grouped = <String, List<ChatMessage>>{};
     for (final msg in messages) {
-      grouped.putIfAbsent(msg.parentId ?? '', () => []).add(msg);
+      final key = '${msg.role}_${msg.parentId ?? "_null_"}';
+      grouped.putIfAbsent(key, () => []).add(msg);
     }
     final deduplicated = <ChatMessage>[];
     for (final group in grouped.values) {
