@@ -49,7 +49,7 @@ class LocalDatabase {
 
     return await openDatabase(
       path,
-      version: 11,
+      version: 12,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
     );
@@ -180,6 +180,16 @@ class LocalDatabase {
             );
           }
         }
+      }
+    }
+    if (oldVersion < 12) {
+      final columns = await db.rawQuery("PRAGMA table_info(messages)");
+      final hasVariantIndex = (columns as List<dynamic>)
+          .any((col) => (col as Map<String, dynamic>)['name'] == 'variant_index');
+      if (!hasVariantIndex) {
+        await db.execute('ALTER TABLE messages ADD COLUMN variant_index INTEGER NOT NULL DEFAULT 0');
+        await db.execute('ALTER TABLE messages ADD COLUMN total_variants INTEGER NOT NULL DEFAULT 1');
+        await db.execute('ALTER TABLE messages ADD COLUMN sibling_ids TEXT');
       }
     }
   }
