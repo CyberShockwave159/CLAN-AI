@@ -49,8 +49,8 @@ void main() {
       // Create first character
       final char1 = buildCharacter(name: 'Aria', id: 'char-1');
       await repo.createCharacter(char1);
-      vectorStore.saveEmbedding(characterId: 'char-1', messageId: 'msg-1', content: 'Memory 1.', vector: [0.0, ...List<double>.filled(255, 0.0)]);
-      vectorStore.saveEmbedding(characterId: 'char-1', messageId: 'msg-2', content: 'Memory 2.', vector: [0.0, ...List<double>.filled(255, 0.0)]);
+      vectorStore.saveEmbedding(characterId: 'char-1', threadId: 'thread-1', messageId: 'msg-1', content: 'Memory 1.', vector: [0.0, ...List<double>.filled(255, 0.0)]);
+      vectorStore.saveEmbedding(characterId: 'char-1', threadId: 'thread-1', messageId: 'msg-2', content: 'Memory 2.', vector: [0.0, ...List<double>.filled(255, 0.0)]);
 
       // Create duplicate character
       final char2 = buildCharacter(name: 'Aria', id: 'char-2', firstMessage: 'New greeting');

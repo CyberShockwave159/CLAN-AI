@@ -1,4 +1,8 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:clan_ai/core/constants/app_theme.dart';
 import 'package:clan_ai/core/constants/clan_theme_colors.dart';
@@ -391,6 +395,81 @@ class _ChatDrawerState extends State<ChatDrawer> {
             ),
 
             const Divider(height: 1),
+
+            // Import button
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.import_export_rounded, size: 20),
+                label: const Text('Import Chat', style: TextStyle(fontWeight: FontWeight.w600)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: context.clanTextPrimary,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  side: BorderSide(
+                    color: context.clanBorder,
+                  ),
+                ),
+                onPressed: () async {
+                  Navigator.of(context).pop();
+                  try {
+                    final result = await FilePicker.platform.pickFiles(
+                      type: FileType.custom,
+                      allowedExtensions: ['json'],
+                      allowMultiple: false,
+                    );
+                    if (result == null || result.files.isEmpty || result.files.first.path == null) return;
+
+                    final content = await File(result.files.first.path!).readAsString();
+                    final json = jsonDecode(content) as Map<String, dynamic>;
+
+                    if (!json.containsKey('thread') || !json.containsKey('messages')) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Invalid import file format'),
+                            duration: const Duration(seconds: 3),
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                        );
+                      }
+                      return;
+                    }
+
+                    final (thread, messages, _) = ConversationExport.fromJson(json);
+
+                    if (context.mounted) {
+                      final chatVM = context.read<ChatViewModel>();
+                      await chatVM.importThread(thread, messages);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Chat imported successfully'),
+                            duration: const Duration(seconds: 3),
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                        );
+                      }
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Import failed: $e'),
+                          duration: const Duration(seconds: 3),
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      );
+                    }
+                  }
+                },
+              ),
+            ),
 
             // Footer with Settings Action
             ListTile(

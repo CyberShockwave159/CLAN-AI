@@ -71,10 +71,43 @@ class ChatRepository {
     await _localDb.deleteThread(threadId);
   }
 
+  /// Returns a list of thread IDs representing the current thread and all
+  /// its ancestor threads (up the branch chain). Used for RAG memory scoping.
+  Future<List<String>> getThreadLineageIds(String threadId) async {
+    final lineageIds = <String>[threadId];
+    var currentId = threadId;
+    var depth = 0;
+    const maxDepth = 20;
+
+    while (depth < maxDepth) {
+      final thread = await _localDb.getThreadById(currentId);
+      if (thread == null || thread.branchFromThreadId == null) break;
+      lineageIds.add(thread.branchFromThreadId!);
+      currentId = thread.branchFromThreadId!;
+      depth++;
+    }
+
+    return lineageIds;
+  }
+
   // --- Message Methods ---
 
   Future<List<ChatMessage>> getMessagesForThread(String threadId) async {
-    return await _localDb.getMessagesForThread(threadId);
+    final messages = await _localDb.getMessagesForThread(threadId);
+    return _deduplicateVariantMessages(messages);
+  }
+
+  List<ChatMessage> _deduplicateVariantMessages(List<ChatMessage> messages) {
+    final grouped = <String, List<ChatMessage>>{};
+    for (final msg in messages) {
+      grouped.putIfAbsent(msg.parentId ?? '', () => []).add(msg);
+    }
+    final deduplicated = <ChatMessage>[];
+    for (final group in grouped.values) {
+      group.sort((a, b) => a.variantIndex.compareTo(b.variantIndex));
+      deduplicated.add(group.last);
+    }
+    return deduplicated;
   }
 
   Future<void> saveMessage(ChatMessage message) async {

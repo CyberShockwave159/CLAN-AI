@@ -248,16 +248,17 @@ void main() {
 
   test('RAG isolation: different characters have separate memories', () async {
     // Add memories for character 1
-    vectorStore.saveEmbedding(characterId: 'char-1', messageId: 'msg-1', content: 'Aria memory.', vector: [0.0, ...List<double>.filled(255, 0.0)]);
-    vectorStore.saveEmbedding(characterId: 'char-1', messageId: 'msg-2', content: 'Aria fact.', vector: [0.0, ...List<double>.filled(255, 0.0)]);
+    vectorStore.saveEmbedding(characterId: 'char-1', threadId: 'thread-1', messageId: 'msg-1', content: 'Aria memory.', vector: [0.0, ...List<double>.filled(255, 0.0)]);
+    vectorStore.saveEmbedding(characterId: 'char-1', threadId: 'thread-1', messageId: 'msg-2', content: 'Aria fact.', vector: [0.0, ...List<double>.filled(255, 0.0)]);
 
     // Add memories for character 2
-    vectorStore.saveEmbedding(characterId: 'char-2', messageId: 'msg-3', content: 'Bob memory.', vector: [0.0, ...List<double>.filled(255, 0.0)]);
+    vectorStore.saveEmbedding(characterId: 'char-2', threadId: 'thread-2', messageId: 'msg-3', content: 'Bob memory.', vector: [0.0, ...List<double>.filled(255, 0.0)]);
 
     // Search for character 1
     final results1 = await vectorStore.searchSimilar(
       characterId: 'char-1',
       queryVector: [0.0, ...List<double>.filled(255, 0.0)],
+      threadIds: [],
       topK: 10,
     );
 
@@ -270,6 +271,7 @@ void main() {
     final results2 = await vectorStore.searchSimilar(
       characterId: 'char-2',
       queryVector: [0.0, ...List<double>.filled(255, 0.0)],
+      threadIds: [],
       topK: 10,
     );
 
@@ -289,8 +291,8 @@ void main() {
     vm.activeCharacter = character;
 
     // Add embeddings for thread messages
-    vectorStore.saveEmbedding(characterId: 'char-1', messageId: 'msg-1', content: 'Message 1.', vector: [0.0, ...List<double>.filled(255, 0.0)]);
-    vectorStore.saveEmbedding(characterId: 'char-1', messageId: 'msg-2', content: 'Message 2.', vector: [0.0, ...List<double>.filled(255, 0.0)]);
+    vectorStore.saveEmbedding(characterId: 'char-1', threadId: thread.id, messageId: 'msg-1', content: 'Message 1.', vector: [0.0, ...List<double>.filled(255, 0.0)]);
+    vectorStore.saveEmbedding(characterId: 'char-1', threadId: thread.id, messageId: 'msg-2', content: 'Message 2.', vector: [0.0, ...List<double>.filled(255, 0.0)]);
 
     // Delete thread
     await vm.deleteThread(thread.id);

@@ -16,6 +16,7 @@ class RoleplayContextBuilder {
   /// 
   /// [ragTopK] controls how many memories to retrieve (1-10). Defaults to 3.
   /// [ragMinScore] filters memories below this similarity threshold (0.0-1.0). Defaults to 0.0.
+  /// [threadIds] limits RAG search to these specific thread IDs. Empty list searches all character threads.
   Future<RoleplayContext> build({
     required String characterId,
     required String characterName,
@@ -28,14 +29,16 @@ class RoleplayContextBuilder {
     required String userInput,
     int ragTopK = 3,
     double ragMinScore = 0.0,
+    List<String> threadIds = const [],
   }) async {
     // 1. Embed the user input (kept for search but not stored in result)
     final queryVector = HashEmbedding.embed(userInput);
 
-    // 2. Search for relevant memories (strictly scoped to characterId)
+    // 2. Search for relevant memories (scoped to character and specific threads)
     final memories = await _vectorStore.searchSimilar(
       characterId: characterId,
       queryVector: queryVector,
+      threadIds: threadIds,
       topK: ragTopK,
     );
 

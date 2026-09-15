@@ -704,7 +704,7 @@ void main() {
       final thread = await fakeChatRepo.createThread(title: 'Chat', characterId: 'char-1');
       vm.activeThread = thread;
       vm.activeCharacter = character;
-      fakeVectorStore.saveEmbedding(characterId: 'char-1', messageId: 'user-1', content: 'User message', vector: [0.0, ...List<double>.filled(255, 0.0)]);
+      fakeVectorStore.saveEmbedding(characterId: 'char-1', threadId: thread.id, messageId: 'user-1', content: 'User message', vector: [0.0, ...List<double>.filled(255, 0.0)]);
 
       await vm.deleteThread(thread.id);
 

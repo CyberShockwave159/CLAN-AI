@@ -76,7 +76,7 @@ void main() {
         firstMessage: 'Original greeting',
       );
       await repo.createCharacter(char1);
-      repo.addEmbedding('char-1', 'msg-1', 'A memory.');
+      repo.addEmbedding('char-1', 'thread-1', 'msg-1', 'A memory.');
 
       final char2 = buildCharacter(
         name: 'Aria',
@@ -145,8 +145,8 @@ void main() {
     test('removes character embeddings', () async {
       final char = buildCharacter(name: 'Test', id: 'char-1');
       await repo.createCharacter(char);
-      repo.addEmbedding('char-1', 'msg-1', 'Memory 1');
-      repo.addEmbedding('char-1', 'msg-2', 'Memory 2');
+      repo.addEmbedding('char-1', 'thread-1', 'msg-1', 'Memory 1');
+      repo.addEmbedding('char-1', 'thread-1', 'msg-2', 'Memory 2');
 
       await repo.deleteCharacter('char-1');
 
@@ -171,11 +171,15 @@ void main() {
     test('removes specific message embeddings', () async {
       final char = buildCharacter(name: 'Test', id: 'char-1');
       await repo.createCharacter(char);
-      repo.addEmbedding('char-1', 'msg-1', 'Memory 1');
-      repo.addEmbedding('char-1', 'msg-2', 'Memory 2');
-      repo.addEmbedding('char-1', 'msg-3', 'Memory 3');
+      repo.addEmbedding('char-1', 'thread-1', 'msg-1', 'Memory 1');
+      repo.addEmbedding('char-1', 'thread-1', 'msg-2', 'Memory 2');
+      repo.addEmbedding('char-1', 'thread-1', 'msg-3', 'Memory 3');
 
-      await repo.deleteEmbeddingsForMessages('char-1', ['msg-1', 'msg-3']);
+      await repo.deleteEmbeddingsForMessages(
+        characterId: 'char-1',
+        threadId: 'thread-1',
+        messageIds: ['msg-1', 'msg-3'],
+      );
 
       expect(repo.getEmbeddingCount('char-1'), equals(1));
     });
@@ -183,9 +187,13 @@ void main() {
     test('handles empty messageIds list', () async {
       final char = buildCharacter(name: 'Test', id: 'char-1');
       await repo.createCharacter(char);
-      repo.addEmbedding('char-1', 'msg-1', 'Memory 1');
+      repo.addEmbedding('char-1', 'thread-1', 'msg-1', 'Memory 1');
 
-      await repo.deleteEmbeddingsForMessages('char-1', []);
+      await repo.deleteEmbeddingsForMessages(
+        characterId: 'char-1',
+        threadId: 'thread-1',
+        messageIds: [],
+      );
 
       expect(repo.getEmbeddingCount('char-1'), equals(1));
     });

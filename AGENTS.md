@@ -5,7 +5,7 @@ Recommended order: `pub get` → `analyze` → `test` → `run`.
 ```
 flutter pub get            # fetch dependencies (required after git pull)
 flutter analyze            # lint + typecheck (uses flutter_lints)
-flutter test               # runs all 28 test files (465 total tests)
+flutter test               # runs all 28 test files (473 total tests)
 flutter run -d <device>    # devices: linux, macos, windows, <android-id>
 ```
 
@@ -31,12 +31,12 @@ flutter run -d <device>    # devices: linux, macos, windows, <android-id>
 
 ## Entry points
 - `lib/main.dart` — bootstrap, Provider scope (4 providers + CharacterRepository), SQLite FFI init (**once** at startup), HTTP client singleton (lifecycle via `WidgetsBindingObserver`), theme mode loading from prefs.
-- `lib/ui/features/chat/view_models/chat_view_model.dart` — assistant chat state. `loadThreads()` calls `getAssistantThreads()` which filters out roleplay threads (`characterId != null`). Undo support for message deletion. Thread search via `searchThreads()` (accepts optional `query` parameter) filters by title + message content. `setFilteredThreads()` for async search results.
-- `lib/ui/features/roleplay/view_models/roleplay_view_model.dart` — roleplay state with RAG. `_init()` calls `loadLastChat()` which uses `getThreads()` (all threads) then filters by `characterId`. Auto-loads last active thread by `characterId`. Supports `startRoleplay()` and `startRoleplayWithGreeting()` for alternate greetings. `exportCharacterWithRAG()` exports character card bundled with vector memories as JSON.
+- `lib/ui/features/chat/view_models/chat_view_model.dart` — assistant chat state. `loadThreads()` calls `getAssistantThreads()` which filters out roleplay threads (`characterId != null`). Undo support for message deletion. Thread search via `searchThreads()` (accepts optional `query` parameter) filters by title + message content. `setFilteredThreads()` for async search results. `importThread()` creates a thread from imported conversation JSON.
+- `lib/ui/features/roleplay/view_models/roleplay_view_model.dart` — roleplay state with RAG. `_init()` calls `loadLastChat()` which uses `getThreads()` (all threads) then filters by `characterId`. Auto-loads last active thread by `characterId`. Supports `startRoleplay()` and `startRoleplayWithGreeting()` for alternate greetings. `exportCharacterWithRAG()` exports character card bundled with vector memories as JSON. `importThread()` creates a thread from imported conversation JSON.
 - `lib/ui/features/settings/view_models/settings_view_model.dart` — profiles, templates, server config, health polling, appMode. 15s health polling timer.
 - `lib/ui/features/roleplay/view_models/persona_template_view_model.dart` — manages persona templates CRUD. Exposes templates list and create/update/delete methods.
 - `lib/data/datasources/local_storage.dart` — SQLite schema v11 (threads, messages, characters, persona_templates tables) + SharedPreferences singleton for legacy config. Migration guards check column existence before `ALTER TABLE`. Characters and persona templates migrated from SharedPreferences to SQLite on v8 upgrade. `messages` table includes `rag_memory_count`, `rag_memory_contents`, `reasoning_content` columns. `persona_templates` table includes `persona_name` column.
- - `lib/data/datasources/vector_store.dart` — SQLite vector store for roleplay character memory. Separate database file from main SQLite. Methods: `saveEmbedding`, `searchSimilar` (configurable topK/limit), `deleteCharacterEmbeddings`, `deleteEmbeddingsForMessages`, `deleteEmbedding` (single), `getAllMemories`, `getEmbeddingCount`.
+ - `lib/data/datasources/vector_store.dart` — SQLite vector store for roleplay character memory. Separate database file from main SQLite. Schema v12 adds `thread_id` column with migration v11→v12. Methods: `saveEmbedding` (accepts `threadId`), `batchSave`, `searchSimilar` (accepts `threadIds` list for scoped queries), `deleteCharacterEmbeddings`, `deleteEmbeddingsForMessages` (accepts `threadId` + `messageIds`), `deleteEmbedding` (single), `getAllMemories`, `getEmbeddingCount`.
 - `lib/data/datasources/secure_storage_service.dart` — Encapsulates `flutter_secure_storage` for secure API key storage (iOS Keychain / Android KeyStore / Linux Secret Service). Methods: `saveApiKey`, `getApiKey`, `deleteApiKey`.
 - `lib/data/datasources/llama_api_service.dart` — streams completions (OpenAI `/v1/chat/completions` or llama.cpp native `/completion`). Context-fit caps `contextSize` to model capacity minus reserved output tokens. Passes `serverConfig.reasoning` through to params for reasoning-capable models.
 - `lib/core/network/sse_client.dart` — SSE parser for OpenAI delta and native `{content, stop}` formats. Produces `StreamChunk` + `StreamMetrics`. Extracts reasoning from multiple field names (`reasoning`, `reasoning_content`, `thought`). `filterReasoning()` stream pipeline processes inline thinking tags and forwards dedicated reasoning fields.
@@ -51,7 +51,7 @@ flutter run -d <device>    # devices: linux, macos, windows, <android-id>
  - `lib/ui/features/roleplay/widgets/persona_template_dialog.dart` — Create/edit/delete persona templates dialog.
  - `lib/ui/features/roleplay/widgets/character_memories_dialog.dart` — Per-character memory viewer and pruner. Lists all vector embeddings for a character; allows deleting individual memories or clearing all.
 - `lib/ui/features/roleplay/widgets/alternate_greeting_selector.dart` — Displays alternate greetings as selectable chips above the chat input (only visible while all messages are assistant messages). Callback receives the selected greeting text via `Function(String selectedGreeting)`.
-- `lib/core/utils/roleplay_context_builder.dart` — Orchestrates RAG: embeds user input → searches memories → builds system prompt. Accepts `characterSystemPrompt` and `postHistoryInstructions` for per-character prompt overrides.
+- `lib/core/utils/roleplay_context_builder.dart` — Orchestrates RAG: embeds user input → searches memories → builds system prompt. Accepts `threadIds` for thread-scoped queries, `characterSystemPrompt` and `postHistoryInstructions` for per-character prompt overrides.
 - `lib/core/utils/roleplay_prompt_formatter.dart` — Compiles roleplay system prompt. Handles character system prompt override with `{{original}}` prefix support. Appends post history instructions after standard prompt. Includes persona name in header section (`{{user}}` placeholder replaced with `personaName`).
 - `lib/core/utils/avatar_storage_service.dart` — Stores large character avatars as files on disk instead of inline in SQLite. 500KB threshold for file storage. Methods: `saveAvatar()`, `getAvatarBytes()`, `deleteAvatar()`, `clearAllAvatars()`.
 
@@ -78,14 +78,16 @@ flutter run -d <device>    # devices: linux, macos, windows, <android-id>
 5. `SseClient.filterReasoning()` stream pipeline processes inline thinking tags (```xml, `<thought>`, `<reasoning>`) and forwards dedicated reasoning fields. Applied to both OpenAI and native streams.
 6. Context limit errors → `ContextLimitExceededException`.
 7. **UI throttling:** `uiThrottleInterval` (20ms) buffers both `content` and `reasoningContent` tokens to avoid frame drops. Timer looks up message by ID each tick to handle mutations. Implemented via `StreamMutationMixin`.
-8. Final metrics and `reasoningContent` written to SQLite on completion.
+8. **Auto-scroll:** Auto-scroll to bottom during streaming is opt-out: `_onScroll` in `AutoScrollMixin` sets `_showScrollToBottom = true` when user scrolls more than 10px from bottom; `build` only auto-scrolls when `isGenerating && !showScrollToBottom`. FAB appears to manually scroll back down.
+9. Final metrics and `reasoningContent` written to SQLite on completion.
 
 ## RAG flow (roleplay only)
 - `RoleplayViewModel.startRoleplay()` creates thread with initial RAG context (empty memories on first session).
-- `RoleplayViewModel.sendMessage()` → `RoleplayContextBuilder.build()` → embeds user input → searches top-K similar memories via `VectorStore.searchSimilar(characterId: ...)` where topK defaults to `defaultRagTopK` (3).
+- `RoleplayViewModel.sendMessage()` → `RoleplayContextBuilder.build()` → embeds user input → searches top-K similar memories via `VectorStore.searchSimilar(characterId: ..., threadIds: ...)` where `threadIds` includes current thread + ancestors for branch threads. `RoleplayViewModel.getThreadLineageIds()` resolves ancestor chain.
 - Retrieved memories injected into thread's `systemPrompt` before sending to API.
-- After stream completes: `onComplete` hook in `StreamMutationMixin` fires `_embedMessageAsync()` — embeds user+assistant pair into vector store.
-- `RoleplayViewModel.deleteThread()` calls `_characterRepository.deleteEmbeddingsForMessages(characterId, messageIds)` — only deletes embeddings for messages in the deleted thread, **not** all character embeddings.
+- After stream completes: `onComplete` hook in `StreamMutationMixin` fires `_embedMessageAsync()` — embeds user+assistant pair into vector store with `threadId`.
+- `RoleplayViewModel.deleteThread()` calls `_characterRepository.deleteEmbeddingsForMessages(characterId, threadId, messageIds)` — deletes only embeddings for messages in the deleted thread.
+- `RoleplayViewModel.regenerateMessage()` deletes old assistant message's embedding before streaming the new one, ensuring regenerated responses have a single RAG entry.
 - **System prompt override**: If character has `systemPrompt`, `RoleplayContextBuilder` uses it to replace the standard prompt. `{{original}}` prefix inserts standard prompt before custom text. `postHistoryInstructions` are appended after the full prompt.
 
 ## Reasoning/Thinking Block Feature
@@ -108,11 +110,12 @@ flutter run -d <device>    # devices: linux, macos, windows, <android-id>
 - **Health polling:** 15s timer. Fallback chain: `/health` → `/props` → `/v1/models`. `ServerRepository.fetchModels()` tries `/health` first (llama.cpp), then `/props`, then `/v1/models` (OpenAI), deduplicates by model id.
 - **Android networking:** `127.0.0.1` is device loopback. Use `10.0.2.2` for emulator, LAN IP for physical devices.
 - **SQLite FFI:** `sqfliteFfiInit()` called **once** in `main.dart` via `_initSqliteFfi()`. Guard: `if (_sqfliteFfiInitialized) return;` + platform check (Linux/Windows/macOS only). Both `LocalDatabase._initDB()` and `VectorStoreDatabase._initDB()` rely on this. Calling it again triggers "You are changing sqflite default factory" warning.
-- **SQLite schema v11:** Migrations check column existence before `ALTER TABLE`. Schema evolution: v1→v2 (custom_params), v2→v3 (branch_from_thread_id), v3→v4 (character_id), v4→v5 (is_edited, updated_at), v5→v6 (rag_memory_count), v6→v7 (reasoning_content), v7→v8 (characters + persona_templates tables with SharedPreferences migration), v8→v9 (rag_memory_contents column), v9→v10 (characters persona_name/persona_description columns), v10→v11 (persona_templates persona_name column). Delete `clan_ai.db` if schema errors occur.
+- **SQLite schema v12:** Main DB migrations check column existence before `ALTER TABLE`. Schema evolution: v1→v2 (custom_params), v2→v3 (branch_from_thread_id), v3→v4 (character_id), v4→v5 (is_edited, updated_at), v5→v6 (rag_memory_count), v6→v7 (reasoning_content), v7→v8 (characters + persona_templates tables with SharedPreferences migration), v8→v9 (rag_memory_contents column), v9→v10 (characters persona_name/persona_description columns), v10→v11 (persona_templates persona_name column). VectorStore schema v12 adds `thread_id` column with migration v11→v12. Delete `clan_ai.db` if schema errors occur.
 - **Profile vs config:** Profile stores connection details (`baseUrl`, `apiKey`, `protocol`) and per-profile `reasoning` setting. System prompt, params, model selection are global config shared across profiles.
 - **Thread isolation:** `ChatViewModel.loadThreads()` → `getAssistantThreads()` filters out `characterId != null`. `RoleplayViewModel.loadLastChat()` → `getThreads()` (all threads) then filters by `characterId`, falls back to all-threads for legacy migration. `RoleplayViewModel.startRoleplay()` calls `getThreadsForCharacter(characterId)` to reuse existing threads — never creates duplicates.
 - **Thread search:** `ChatViewModel.searchThreads()` searches both thread titles and message content for matches. `ChatDrawer` uses `setFilteredThreads()` to update the displayed list. `RoleplayDrawer` searches character names and thread titles within expanded characters. `searchThreads()` accepts an optional `query` parameter for use by the keyboard shortcut search delegate.
-- **RAG isolation:** Embeddings stored with `character_id`. Queries: `WHERE character_id = ?` — no cross-character leakage.
+- **RAG isolation:** Embeddings stored with `character_id`. Queries: `WHERE character_id = ?` — no cross-character leakage. Thread-scoped: `searchSimilar` accepts `threadIds` list to limit search to current thread + ancestors.
+- **Thread lineage:** `ChatRepository.getThreadLineageIds()` resolves ancestor thread IDs for branch threads, enabling thread-scoped RAG queries that include memories from parent threads.
 - **Hash embedding:** Pure Dart 256-dim vectors via char trigrams in `HashEmbedding`. <5ms, <1KB per vector. No ML dependencies.
 - **Default API protocol:** `ApiProtocol.openAi` (in `ServerConfig` constructor).
 - **Default params:** `reservedOutputTokensDefault` (512), `minContextSize` (128), `maxContextSize` (1000000), `defaultRagTopK` (3), `defaultRagLimit` (100) — all in `app_constants.dart`.
@@ -127,11 +130,15 @@ flutter run -d <device>    # devices: linux, macos, windows, <android-id>
 - **Character deletion fix:** When deleting a character in `roleplay_drawer.dart`, the callback must `await` the delete, call `roleplayVM.deleteCharacter(id)` to clear the thread cache, then `Navigator.of(ctx).pop()` and `setState(() {})` to trigger a drawer rebuild. Without `setState`, the `FutureBuilder` snapshot is stale.
 - **Thread deletion in roleplay drawer:** `_showThreadDeleteDialog` pops the dialog immediately via `Navigator.of(ctx).pop()` (builder context) before awaiting `deleteThread`. Captures `drawerState` synchronously before dialog shows, uses `drawerState.mounted` guard before `Navigator.of(drawerState!.context).pop()` to avoid accessing unmounted state when deleting active thread triggers navigation back to character list. Closes character expansion via `drawerState._expandedCharacters.remove(characterId)`.
 - **SillyTavern import flow:** Import button in roleplay drawer picks JSON → parses via `ParsedCharacterCard.fromJson()` → extracts `system_prompt`, `post_history_instructions`, `alternate_greetings`, `user_persona`, `persona_name`, `persona_description` → creates `CharacterProfile` → saves via `CharacterRepository.createCharacter()` → auto-opens `_showEditDialog()` → returns updated character → starts roleplay. Use `file_picker` with `allowedExtensions: ['json']`.
+- **Conversation import:** `ConversationExport.fromJson()` (lib/core/utils/conversation_export.dart) parses exported conversation JSON (txt/json format from export). ChatDrawer and RoleplayDrawer both have import buttons that use FilePicker to select JSON files, parse via `ConversationExport.fromJson()`, create a new thread via `ChatViewModel.importThread()` (assistant) or `RoleplayViewModel.importThread()` (roleplay), and navigate to the new thread.
 - **`{{char}}` / `{{user}}` replacement:** Parser in `silly_tavern_card_parser.dart` replaces these tokens in personality, firstMessage, setting, userPersona, systemPrompt, and postHistoryInstructions fields. `{{user}}` falls back to "User" if userPersona is empty. `{{user}}` is also replaced with `personaName` in the roleplay system prompt header section.
 - **`_showEditDialog` returns `Future<CharacterProfile>`:** Must pass `CharacterRepository` as parameter (not use `context.read` inside the dialog). Delegates to `CharacterEditDialog` (proper `StatefulWidget` with `context.watch<PersonaTemplateViewModel>()` and `_applyTemplate()` in `setState`). Returns updated character on Save, original on Cancel. Use `.then((value) => value ?? character)` to handle nullable return.
 - **Async snackbar safety:** Always check `context.mounted` before calling `ScaffoldMessenger.of(context)` in async handlers to avoid "deactivated widget ancestor" errors.
+- **Navigation context guard:** `_RoleplayDrawerState._handleStartChat` checks `context.mounted` after `await roleplayVM.startRoleplay()` before `Navigator.of(context).pop()`, preventing "deactivated widget ancestor" errors when the drawer rebuilds during thread navigation.
 - **Alternate greetings:** `CharacterProfile.alternateGreetings` is a `List<String>`. Displayed as chips via `AlternateGreetingSelector` widget above the prompt input (only visible while all messages are assistant messages — disappears after user replies). Selecting one calls `startRoleplayWithGreeting(selectedGreeting)` which **always creates a new thread** (never reuses existing), starting a fresh conversation branch with that specific greeting as the first message.
 - **Regenerate first message in roleplay:** The regenerate button is disabled on the first assistant message (index 0) in roleplay mode — passed as `null` to `onRegenerate` in `roleplay_screen.dart`. This is because the first message is the character's opening line from the card, defined before any user context exists. It becomes regeneratable once the user has replied.
+- **Regenerate RAG cleanup:** When regenerating a message, `RoleplayViewModel.regenerateMessage()` deletes the old assistant message's RAG embedding via `_characterRepository.deleteEmbeddingsForMessages()` before streaming the new one, ensuring regenerated responses have a single RAG entry and old memories don't persist.
+- **Message variant deduplication:** `ChatRepository.getMessagesForThread()` deduplicates messages by `parentId`, keeping only the latest variant (highest `variantIndex`) for each group. This prevents regenerated messages from appearing as duplicate entries after app reload, while `siblingIds` metadata still supports variant navigation arrows.
 - **Persona templates:** Global reusable user personas managed by `PersonaTemplateViewModel`. Created/edited in Settings → Persona Templates section. Selected via dropdown in character creation wizard, edit dialog, and SillyTavern import dialog. Template's `personaName` is copied into the character's `personaName` field and template's `description` into `personaDescription` when applied.
 
 ## Platform-specific
@@ -145,13 +152,13 @@ flutter run -d <device>    # devices: linux, macos, windows, <android-id>
 - **Bubble width:** Capped at 600px via `LayoutBuilder` to prevent overflow on tablets.
 
 ## Testing
-28 test files, 465 total tests. All tests use fake repositories (no real SQLite or network). ViewModels expose private state via setters for test injection.
+28 test files, 473 total tests. All tests use fake repositories (no real SQLite or network). ViewModels expose private state via setters for test injection.
 
 ### Test structure
-- **Test helpers** (`test/helpers/`) — `FakeChatRepository`, `FakeCharacterRepository`, `FakeVectorStore`, `FakeServerRepository`, `FakePersonaTemplateRepository`, `FakeSystemPromptTemplatesRepository`, `test_model_factories.dart`.
+- **Test helpers** (`test/helpers/`) — `FakeChatRepository`, `FakeCharacterRepository` (thread-scoped embeddings), `FakeVectorStore` (thread_id storage, nested Map structure), `FakeServerRepository`, `FakePersonaTemplateRepository`, `FakeSystemPromptTemplatesRepository`, `test_model_factories.dart`.
  - **Domain** (`test/domain/`) — `generation_params_test.dart` (OpenAI & native payloads, TextSanitizer segment parsing, reasoning flags, configurable RAG params ragTopK/ragMinScore), `models/model_roundtrips_test.dart` (ChatThread, ChatMessage, CharacterProfile, PersonaTemplate, ServerConfig serialization roundtrips).
  - **Network** (`test/network/`) — `sse_client_test.dart` (OpenAI deltas, llama.cpp native chunks, ping comments, multi-line data, multi-field reasoning extraction, `filterReasoning` inline tag processing), `http_client_test.dart` (ContextLimitExceededException, ServerOOMException, AppException error classification, recovery suggestions).
- - **Utils** (`test/utils/`) — `roleplay_prompt_formatter_test.dart`, `roleplay_context_builder_test.dart`, `hash_embedding_test.dart`, `vector_store_test.dart` (save, search, delete, getAllMemories, deleteEmbedding), `silly_tavern_card_parser_test.dart`, `conversation_export_test.dart`, `file_saver_test.dart` (desktop fallback, ConversationExport toTxt/json), `text_sanitizer_test.dart` (segment parsing).
+ - **Utils** (`test/utils/`) — `roleplay_prompt_formatter_test.dart`, `roleplay_context_builder_test.dart`, `hash_embedding_test.dart`, `vector_store_test.dart` (save, search, delete, getAllMemories, getEmbeddingCount, threadIds scoping), `silly_tavern_card_parser_test.dart`, `conversation_export_test.dart` (fromJson parsing, toTxt/json generation), `file_saver_test.dart` (desktop fallback, ConversationExport toTxt/json), `text_sanitizer_test.dart` (segment parsing).
 - **Mixin** (`test/mixin/`) — `stream_mutation_mixin_test.dart` (streaming, undo, stop, switchVariant).
 - **Repositories** (`test/repository/`) — `chat_repository_test.dart`, `character_repository_test.dart` (thread CRUD, message operations, favorites, embeddings).
 - **ViewModels** (`test/view_model/`) — `chat_view_model_test.dart`, `roleplay_view_model_test.dart`, `settings_view_model_test.dart`, `persona_template_view_model_test.dart`.
@@ -190,7 +197,7 @@ lib/
     │   │   ├── views/                 # ChatScreen, MessageBubble, PromptInputBar, _ReasoningBlock
     │   │   └── widgets/               # MarkdownBodyView, CodeBlockView, MathView, TokenSpeedBadge
     │   ├── drawer/
-    │   │   └── views/                 # ChatDrawer
+    │   │   └── views/                 # ChatDrawer (thread search, import), RoleplayDrawer (character management, import, SillyTavern import, thread delete)
     │   ├── roleplay/
     │   │   ├── view_models/           # RoleplayViewModel (mixins StreamMutationMixin), PersonaTemplateViewModel
     │   │   ├── views/                 # RoleplayScreen, RoleplayDrawer

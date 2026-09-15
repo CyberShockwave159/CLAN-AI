@@ -123,7 +123,67 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
       modelContextLength: settingsVM.getSelectedModelContextLength(),
     );
     // ignore: use_build_context_synchronously
+    if (!context.mounted) return;
     Navigator.of(context).pop();
+  }
+
+  Future<void> _handleImportChat(BuildContext context, CharacterProfile character) async {
+    final roleplayVM = context.read<RoleplayViewModel>();
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+        allowMultiple: false,
+      );
+      if (result == null || result.files.isEmpty || result.files.first.path == null) return;
+
+      if (!context.mounted) return;
+      Navigator.of(context).pop();
+
+      final content = await File(result.files.first.path!).readAsString();
+      final json = jsonDecode(content) as Map<String, dynamic>;
+
+      if (!json.containsKey('thread') || !json.containsKey('messages')) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Invalid import file format'),
+              duration: const Duration(seconds: 3),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          );
+        }
+        return;
+      }
+
+      final (thread, messages, _) = ConversationExport.fromJson(json);
+
+      if (context.mounted) {
+        await roleplayVM.importThread(thread, messages, character.id);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Chat imported successfully'),
+              duration: const Duration(seconds: 3),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Import failed: $e'),
+            duration: const Duration(seconds: 3),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -560,8 +620,36 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
                                               ),
                                             ),
                                           ),
-                                        ),
-                                        const Divider(height: 1),
+                                         ),
+                                         // Import chat entry
+                                         Material(
+                                           color: Colors.transparent,
+                                           child: InkWell(
+                                             onTap: () => _handleImportChat(context, character),
+                                             child: Padding(
+                                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                               child: Row(
+                                                 children: [
+                                                   Icon(
+                                                     Icons.import_export_rounded,
+                                                     size: 16,
+                                                     color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                                                   ),
+                                                   const SizedBox(width: 8),
+                                                   Text(
+                                                     'Import Chat',
+                                                     style: TextStyle(
+                                                       fontSize: 12.5,
+                                                       fontStyle: FontStyle.italic,
+                                                       color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                                                     ),
+                                                   ),
+                                                 ],
+                                               ),
+                                             ),
+                                           ),
+                                         ),
+                                         const Divider(height: 1),
                                          // Existing threads
                                          ...threads.map((thread) {
                                            final isActive = thread.id == activeThreadId;

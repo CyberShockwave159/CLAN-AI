@@ -306,6 +306,53 @@ class ChatViewModel extends ChangeNotifier with StreamMutationMixin {
     }
   }
 
+  /// Imports a thread from parsed JSON export data.
+  /// Creates a new thread with the imported data, saves it to the database,
+  /// and sets it as the active thread.
+  Future<void> importThread(ChatThread thread, List<ChatMessage> messages) async {
+    if (_isGenerating) {
+      stopGeneration();
+    }
+
+    // Generate new IDs to avoid conflicts
+    final newThread = thread.copyWith(
+      id: const Uuid().v4(),
+      title: thread.title,
+      createdAt: thread.createdAt,
+      updatedAt: DateTime.now(),
+    );
+
+    // Save thread to database
+    await _chatRepository.createThread(
+      title: newThread.title,
+      systemPrompt: newThread.systemPrompt,
+      modelId: newThread.modelId,
+      customParams: newThread.customParams,
+    );
+
+    // Get the saved thread (will have new ID from DB)
+    final savedThread = await _chatRepository.getThreads().then((threads) => threads.firstWhere(
+          (t) => t.id == newThread.id,
+          orElse: () => newThread,
+        ));
+
+    // Save all messages with new thread ID
+    for (final msg in messages) {
+      final newMsg = msg.copyWith(
+        id: const Uuid().v4(),
+        threadId: savedThread.id,
+      );
+      _messages.add(newMsg);
+      await _chatRepository.saveMessage(newMsg);
+    }
+
+    // Reload threads and set as active
+    _threads = await _chatRepository.getAssistantThreads();
+    _activeThread = savedThread;
+    _messages = await _chatRepository.getMessagesForThread(savedThread.id);
+    notifyListeners();
+  }
+
   /// Sends a user message and streams the assistant response.
   Future<void> sendMessage({
     required String prompt,

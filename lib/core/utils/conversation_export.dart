@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'package:uuid/uuid.dart';
 import 'package:clan_ai/data/models/chat_message.dart';
 import 'package:clan_ai/data/models/chat_thread.dart';
+import 'package:clan_ai/domain/models/generation_params.dart';
 
 enum ExportFormat { txt, json }
 
@@ -94,5 +96,57 @@ class ConversationExport {
       if (msg.generationTimeSec != null) 'generation_time_sec': msg.generationTimeSec,
       if (msg.errorMessage != null) 'error_message': msg.errorMessage,
     };
+  }
+
+  static (ChatThread, List<ChatMessage>, String?) fromJson(Map<String, dynamic> json) {
+    final threadMap = json['thread'] as Map<String, dynamic>;
+    final messagesList = json['messages'] as List<dynamic>;
+
+    GenerationParams? customParams;
+    if (threadMap['custom_params'] != null) {
+      try {
+        customParams = GenerationParams.fromMap(threadMap['custom_params'] as Map<String, dynamic>);
+      } catch (_) {}
+    }
+
+    final thread = ChatThread(
+      id: threadMap['id'] as String? ?? const Uuid().v4(),
+      title: threadMap['title'] as String? ?? 'Imported Chat',
+      systemPrompt: threadMap['system_prompt'] as String?,
+      modelId: threadMap['model_id'] as String?,
+      customParams: customParams,
+      branchFromThreadId: threadMap['branch_from_thread_id'] as String?,
+      characterId: threadMap['character_id'] as String?,
+      createdAt: DateTime.tryParse((threadMap['created_at'] as String?) ?? '') ?? DateTime.now(),
+      updatedAt: DateTime.tryParse((threadMap['updated_at'] as String?) ?? '') ?? DateTime.now(),
+    );
+
+    final messages = messagesList.map((m) {
+      final map = m as Map<String, dynamic>;
+      return ChatMessage(
+        id: map['id'] as String? ?? const Uuid().v4(),
+        threadId: thread.id,
+        parentId: map['parent_id'] as String?,
+        role: MessageRole.fromString(map['role'] as String? ?? 'user'),
+        content: map['content'] as String? ?? '',
+        status: MessageStatus.values.firstWhere(
+          (e) => e.name == (map['status'] as String? ?? 'completed'),
+          orElse: () => MessageStatus.completed,
+        ),
+        tokensPerSecond: (map['tokens_per_second'] as num?)?.toDouble(),
+        totalTokens: (map['total_tokens'] as num?)?.toInt(),
+        timeToFirstTokenMs: (map['time_to_first_token_ms'] as num?)?.toInt(),
+        generationTimeSec: (map['generation_time_sec'] as num?)?.toDouble(),
+        errorMessage: map['error_message'] as String?,
+        variantIndex: (map['variant_index'] as num?)?.toInt() ?? 0,
+        totalVariants: (map['total_variants'] as num?)?.toInt() ?? 1,
+        siblingIds: ((map['sibling_ids'] as List<dynamic>?) ?? []).cast<String>(),
+        createdAt: DateTime.tryParse(map['created_at'] as String? ?? '') ?? DateTime.now(),
+      );
+    }).toList();
+
+    final characterName = threadMap['character_name'] as String?;
+
+    return (thread, messages, characterName);
   }
 }

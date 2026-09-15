@@ -35,8 +35,9 @@ class VectorStoreDatabase {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _createDB,
+      onUpgrade: _upgradeDB,
     );
   }
 
@@ -45,6 +46,7 @@ class VectorStoreDatabase {
       CREATE TABLE embeddings (
         id TEXT PRIMARY KEY,
         character_id TEXT NOT NULL,
+        thread_id TEXT,
         message_id TEXT NOT NULL,
         content TEXT NOT NULL,
         vector TEXT NOT NULL,
@@ -54,17 +56,26 @@ class VectorStoreDatabase {
     ''');
 
     await db.execute('CREATE INDEX idx_embeddings_character ON embeddings (character_id)');
+    await db.execute('CREATE INDEX idx_embeddings_thread ON embeddings (thread_id)');
+  }
+
+  Future<void> _upgradeDB(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute('ALTER TABLE embeddings ADD COLUMN thread_id TEXT');
+    }
   }
 }
 
 /// SQLite-backed vector similarity store for roleplay character memory.
 ///
-/// Each character has its own namespace (character_id). Queries are strictly
-/// scoped to a single character — no cross-character memory leakage.
+/// Each embedding is scoped to both a character and a thread. Queries are
+/// strictly scoped to a single character with optional thread filtering —
+/// no cross-character or cross-thread memory leakage.
 class VectorStore {
-  /// Save a single embedding for a character.
+  /// Save a single embedding for a character and thread.
   Future<void> saveEmbedding({
     required String characterId,
+    required String threadId,
     required String messageId,
     required String content,
     required List<double> vector,
@@ -77,6 +88,7 @@ class VectorStore {
     await db.insert('embeddings', {
       'id': id,
       'character_id': characterId,
+      'thread_id': threadId,
       'message_id': messageId,
       'content': content,
       'vector': vectorJson,
@@ -87,6 +99,7 @@ class VectorStore {
   /// Save multiple embeddings in a single transaction.
   Future<void> batchSave({
     required String characterId,
+    required String threadId,
     required List<Map<String, dynamic>> embeddings,
   }) async {
     final db = await _getDb();
@@ -96,6 +109,7 @@ class VectorStore {
         batch.insert('embeddings', {
           'id': e['id'] as String,
           'character_id': characterId,
+          'thread_id': threadId,
           'message_id': e['message_id'] as String,
           'content': e['content'] as String,
           'vector': HashEmbedding.encodeVector(e['vector'] as List<double>),
@@ -106,25 +120,42 @@ class VectorStore {
     });
   }
 
-  /// Search for the top-K most similar memories for a character.
+  /// Search for the top-K most similar memories across multiple threads.
   ///
   /// Computes cosine similarity on the client side (Dart) for precision.
-  /// SQL handles the character_id filter; Dart computes the similarity scores.
+  /// SQL handles the character_id and thread_id filters; Dart computes the
+  /// similarity scores.
   ///
+  /// [threadIds] limits search to embeddings from these specific threads.
+  /// When empty, searches all threads for the character.
   /// [limit] bounds the number of recent embeddings loaded into memory before
   /// similarity scoring, preventing O(n) degradation for characters with
   /// large conversation histories. Defaults to 100 recent embeddings.
   Future<List<Map<String, dynamic>>> searchSimilar({
     required String characterId,
     required List<double> queryVector,
+    required List<String> threadIds,
     int topK = defaultRagTopK,
     int limit = defaultRagLimit,
   }) async {
     final db = await _getDb();
+
+    String whereClause;
+    List<dynamic> whereArgs;
+
+    if (threadIds.isNotEmpty) {
+      final placeholders = threadIds.map((_) => '?').join(',');
+      whereClause = 'character_id = ? AND thread_id IN ($placeholders)';
+      whereArgs = [characterId, ...threadIds];
+    } else {
+      whereClause = 'character_id = ?';
+      whereArgs = [characterId];
+    }
+
     final results = await db.query(
       'embeddings',
-      where: 'character_id = ?',
-      whereArgs: [characterId],
+      where: whereClause,
+      whereArgs: whereArgs,
       orderBy: 'created_at DESC',
       limit: limit,
     );
@@ -160,9 +191,10 @@ class VectorStore {
     );
   }
 
-  /// Delete specific embeddings by message IDs within a character.
+  /// Delete specific embeddings by message IDs within a character and thread.
   Future<void> deleteEmbeddingsForMessages({
     required String characterId,
+    required String threadId,
     required List<String> messageIds,
   }) async {
     if (messageIds.isEmpty) return;
@@ -170,8 +202,8 @@ class VectorStore {
     final placeholders = messageIds.map((_) => '?').join(',');
     await db.delete(
       'embeddings',
-      where: 'character_id = ? AND message_id IN ($placeholders)',
-      whereArgs: [characterId, ...messageIds],
+      where: 'character_id = ? AND thread_id = ? AND message_id IN ($placeholders)',
+      whereArgs: [characterId, threadId, ...messageIds],
     );
   }
 

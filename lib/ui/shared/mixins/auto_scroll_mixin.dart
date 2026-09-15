@@ -16,7 +16,7 @@ mixin AutoScrollMixin<T extends StatefulWidget> on State<T> {
   void _onScroll() {
     if (_scrollController.hasClients) {
       final isNearBottom =
-          _scrollController.offset >= _scrollController.position.maxScrollExtent - 120;
+           _scrollController.offset >= _scrollController.position.maxScrollExtent - 10;
       if (!isNearBottom && !_showScrollToBottom) {
         setState(() => _showScrollToBottom = true);
       } else if (isNearBottom && _showScrollToBottom) {

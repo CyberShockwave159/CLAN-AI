@@ -3,7 +3,7 @@ import 'package:clan_ai/data/repositories/character_repository.dart';
 
 class FakeCharacterRepository extends CharacterRepository {
   final List<CharacterProfile> _characters = [];
-  final Map<String, Map<String, List<String>>> _embeddings = {};
+  final Map<String, Map<String, Map<String, List<String>>>> _embeddings = {};
   CharacterProfile? _lastUpdated;
 
   CharacterProfile? get lastUpdated => _lastUpdated;
@@ -59,21 +59,31 @@ class FakeCharacterRepository extends CharacterRepository {
   }
 
   @override
-  Future<void> deleteEmbeddingsForMessages(String characterId, List<String> messageIds) async {
+  Future<void> deleteEmbeddingsForMessages({
+    required String characterId,
+    required String threadId,
+    required List<String> messageIds,
+  }) async {
     final charEmbeddings = _embeddings[characterId];
     if (charEmbeddings != null) {
-      for (final messageId in messageIds) {
-        charEmbeddings.remove(messageId);
+      final threadEmbeddings = charEmbeddings[threadId];
+      if (threadEmbeddings != null) {
+        for (final messageId in messageIds) {
+          threadEmbeddings.remove(messageId);
+        }
       }
     }
   }
 
-  void addEmbedding(String characterId, String messageId, String content) {
+  void addEmbedding(String characterId, String threadId, String messageId, String content) {
     _embeddings.putIfAbsent(characterId, () => {});
-    _embeddings[characterId]![messageId] = [content];
+    _embeddings[characterId]!.putIfAbsent(threadId, () => {});
+    _embeddings[characterId]![threadId]![messageId] = [content];
   }
 
   int getEmbeddingCount(String characterId) {
-    return _embeddings[characterId]?.length ?? 0;
+    final charEmbeddings = _embeddings[characterId];
+    if (charEmbeddings == null) return 0;
+    return charEmbeddings.values.fold(0, (sum, thread) => sum + thread.length);
   }
 }

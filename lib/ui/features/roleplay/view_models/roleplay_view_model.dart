@@ -247,7 +247,7 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
     await _chatRepository.saveMessage(firstAssistantMsg);
 
     // Embed the first message for RAG memory
-    _embedMessageAsync(character.id, firstAssistantId, greeting, isFirstMessage: true);
+    _embedMessageAsync(character.id, threadWithCharacter.id, firstAssistantId, greeting, isFirstMessage: true);
 
     notifyListeners();
   }
@@ -288,7 +288,10 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
 
     notifyListeners();
 
-    // 2. Build RAG context (embed + search memories)
+    // 2. Resolve thread lineage for RAG memory scoping
+    final threadIds = await _chatRepository.getThreadLineageIds(threadId);
+
+    // 3. Build RAG context (embed + search memories)
     final contextBuilder = RoleplayContextBuilder();
     final context = await contextBuilder.build(
       characterId: character.id,
@@ -302,9 +305,10 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
       userInput: prompt,
       ragTopK: customParams?.ragTopK ?? 3,
       ragMinScore: customParams?.ragMinScore ?? 0.0,
+      threadIds: threadIds,
     );
 
-    // 3. Update thread system prompt with retrieved memories
+    // 4. Update thread system prompt with retrieved memories
     final updatedThread = _activeThread!.copyWith(
       systemPrompt: context.systemPrompt,
       updatedAt: DateTime.now(),
@@ -389,6 +393,17 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
       customParams: customParams,
       modelContextLength: modelContextLength,
     );
+
+    // Delete old assistant message's RAG embedding (replaced by regenerated response)
+    if (_activeCharacter != null && _activeThread != null) {
+      try {
+        await _characterRepository.deleteEmbeddingsForMessages(
+          characterId: _activeCharacter!.id,
+          threadId: _activeThread!.id,
+          messageIds: [targetMsg.id],
+        );
+      } catch (_) {}
+    }
   }
 
   Future<void> editUserPrompt({
@@ -644,7 +659,7 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
 
     // Re-embed edited content into RAG (replaces old embedding)
     if (_activeCharacter != null) {
-      _embedMessageAsync(_activeCharacter!.id, updated.id, updated.content);
+      _embedMessageAsync(_activeCharacter!.id, _activeThread!.id, updated.id, updated.content);
     }
   }
 
@@ -748,7 +763,7 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
     int? ragMemoryCount,
   }) async {
     Future<void> onEmbed(String _) async {
-      if (_activeCharacter == null) return;
+      if (_activeCharacter == null || _activeThread == null) return;
       final msgIndex = messages.indexWhere((m) => m.id == assistantMessageId);
       if (msgIndex <= 0) return;
       try {
@@ -758,6 +773,7 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
               .firstWhere((m) => m.role == MessageRole.user, orElse: () => messages[0]);
           _embedMessageAsync(
             _activeCharacter!.id,
+            _activeThread!.id,
             userMsg.id,
             '${userMsg.content}\n\n${currentMsg.content}',
           );
@@ -779,10 +795,15 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
     if (_activeCharacter != null) {
       final threadMessages = await _chatRepository.getMessagesForThread(threadId);
       final messageIds = threadMessages.map((m) => m.id).toList();
-      await _characterRepository.deleteEmbeddingsForMessages(_activeCharacter!.id, messageIds);
+      await _characterRepository.deleteEmbeddingsForMessages(
+        characterId: _activeCharacter!.id,
+        threadId: threadId,
+        messageIds: messageIds,
+      );
     }
     await _chatRepository.deleteThread(threadId);
     _activeThread = null;
+    _activeCharacter = null;
     _messages = [];
     notifyListeners();
   }
@@ -793,6 +814,7 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
   /// Shows a subtle snackbar if the first embedding fails (on character start).
   void _embedMessageAsync(
     String characterId,
+    String threadId,
     String messageId,
     String content, {
     bool isFirstMessage = false,
@@ -801,6 +823,7 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
       final vector = HashEmbedding.embed(content);
       await VectorStore().saveEmbedding(
         characterId: characterId,
+        threadId: threadId,
         messageId: messageId,
         content: content,
         vector: vector,
@@ -886,6 +909,51 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
     } catch (_) {
       return null;
     }
+  }
+
+  /// Imports a thread from parsed JSON export data.
+  /// Creates a new thread with the imported data, associates it with the given character,
+  /// saves it to the database, and sets it as the active thread.
+  Future<void> importThread(ChatThread thread, List<ChatMessage> messages, String characterId) async {
+    if (_isGenerating) {
+      stopGeneration();
+    }
+
+    // Generate new IDs to avoid conflicts
+    final newThread = thread.copyWith(
+      id: const Uuid().v4(),
+      characterId: characterId,
+      updatedAt: DateTime.now(),
+    );
+
+    // Save thread to database
+    await _chatRepository.createThread(
+      title: newThread.title,
+      systemPrompt: newThread.systemPrompt,
+      modelId: newThread.modelId,
+      customParams: newThread.customParams,
+      characterId: characterId,
+    );
+
+    // Get the saved thread (will have new ID from DB)
+    final savedThread = await _chatRepository.getThreadsForCharacter(characterId).then((threads) => threads.firstWhere(
+          (t) => t.id == newThread.id,
+          orElse: () => newThread,
+        ));
+
+    // Save all messages with new thread ID
+    for (final msg in messages) {
+      final newMsg = msg.copyWith(
+        id: const Uuid().v4(),
+        threadId: savedThread.id,
+      );
+      _messages.add(newMsg);
+      await _chatRepository.saveMessage(newMsg);
+    }
+
+    // Select the thread as active
+    await selectThread(savedThread);
+    notifyListeners();
   }
 
   @override

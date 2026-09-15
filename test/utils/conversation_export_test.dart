@@ -364,4 +364,210 @@ void main() {
       expect(ts, equals('01/15/2024, 1:00 PM'));
     });
   });
+
+  group('ConversationExport fromJson', () {
+    test('parses assistant thread export correctly', () {
+      final thread = buildThread(title: 'Test Chat', modelId: 'llama-3.2');
+      final messages = [
+        buildMessage(role: MessageRole.user, content: 'Hello'),
+        buildMessage(role: MessageRole.assistant, content: 'Hi there!'),
+      ];
+
+      final json = ConversationExport.toJson(thread, messages);
+      final parsed = jsonDecode(json) as Map<String, dynamic>;
+      final (importedThread, importedMessages, characterName) = ConversationExport.fromJson(parsed);
+
+      expect(importedThread.title, equals('Test Chat'));
+      expect(importedThread.modelId, equals('llama-3.2'));
+      expect(importedThread.characterId, isNull);
+      expect(characterName, isNull);
+      expect(importedMessages.length, equals(2));
+      expect(importedMessages[0].role, equals(MessageRole.user));
+      expect(importedMessages[0].content, equals('Hello'));
+      expect(importedMessages[1].role, equals(MessageRole.assistant));
+      expect(importedMessages[1].content, equals('Hi there!'));
+      expect(importedMessages.every((m) => m.threadId == importedThread.id), isTrue);
+    });
+
+    test('parses roleplay thread export with character info', () {
+      final thread = buildThread(title: 'Aria Chat', characterId: 'char-1');
+      final messages = [
+        buildMessage(role: MessageRole.user, content: 'Hello Aria'),
+      ];
+
+      final json = ConversationExport.toJson(thread, messages, characterName: 'Aria');
+      final parsed = jsonDecode(json) as Map<String, dynamic>;
+      final (importedThread, importedMessages, characterName) = ConversationExport.fromJson(parsed);
+
+      expect(importedThread.title, equals('Aria Chat'));
+      expect(importedThread.characterId, equals('char-1'));
+      expect(characterName, equals('Aria'));
+      expect(importedMessages.length, equals(1));
+    });
+
+    test('parses thread with custom params', () {
+      final thread = buildThread(
+        title: 'Test',
+        customParams: const GenerationParams(temperature: 0.8, topP: 0.95),
+      );
+      final messages = <ChatMessage>[];
+
+      final json = ConversationExport.toJson(thread, messages);
+      final parsed = jsonDecode(json) as Map<String, dynamic>;
+      final (importedThread, importedMessages, _) = ConversationExport.fromJson(parsed);
+
+      expect(importedThread.customParams, isNotNull);
+      expect(importedThread.customParams!.temperature, equals(0.8));
+      expect(importedThread.customParams!.topP, equals(0.95));
+    });
+
+    test('parses thread with branch info', () {
+      final thread = buildThread(
+        title: 'Branch',
+        branchFromThreadId: 'parent-thread-id',
+      );
+      final messages = <ChatMessage>[];
+
+      final json = ConversationExport.toJson(thread, messages);
+      final parsed = jsonDecode(json) as Map<String, dynamic>;
+      final (importedThread, _, __) = ConversationExport.fromJson(parsed);
+
+      expect(importedThread.branchFromThreadId, equals('parent-thread-id'));
+    });
+
+    test('parses messages with metrics', () {
+      final thread = buildThread(title: 'Test');
+      final messages = [
+        buildMessage(
+          role: MessageRole.assistant,
+          content: 'Response',
+          tokensPerSecond: 42.5,
+          totalTokens: 100,
+          timeToFirstTokenMs: 500,
+          generationTimeSec: 2.5,
+        ),
+      ];
+
+      final json = ConversationExport.toJson(thread, messages);
+      final parsed = jsonDecode(json) as Map<String, dynamic>;
+      final (_, importedMessages, _) = ConversationExport.fromJson(parsed);
+
+      expect(importedMessages[0].tokensPerSecond, equals(42.5));
+      expect(importedMessages[0].totalTokens, equals(100));
+      expect(importedMessages[0].timeToFirstTokenMs, equals(500));
+      expect(importedMessages[0].generationTimeSec, equals(2.5));
+    });
+
+    test('parses messages with variant info', () {
+      final thread = buildThread(title: 'Test');
+      final messages = [
+        buildMessage(
+          role: MessageRole.user,
+          content: 'Hello',
+          variantIndex: 1,
+          totalVariants: 2,
+          siblingIds: ['sib-1', 'sib-2'],
+        ),
+      ];
+
+      final json = ConversationExport.toJson(thread, messages);
+      final parsed = jsonDecode(json) as Map<String, dynamic>;
+      final (_, importedMessages, _) = ConversationExport.fromJson(parsed);
+
+      expect(importedMessages[0].variantIndex, equals(1));
+      expect(importedMessages[0].totalVariants, equals(2));
+      expect(importedMessages[0].siblingIds, containsAll(['sib-1', 'sib-2']));
+    });
+
+    test('preserves original IDs in parsed data', () {
+      final thread = buildThread(title: 'Test', id: 'original-thread-id');
+      final messages = [
+        buildMessage(id: 'original-msg-id', threadId: 'old-thread'),
+      ];
+
+      final json = ConversationExport.toJson(thread, messages);
+      final parsed = jsonDecode(json) as Map<String, dynamic>;
+      final (importedThread, importedMessages, _) = ConversationExport.fromJson(parsed);
+
+      expect(importedThread.id, equals('original-thread-id'));
+      expect(importedMessages[0].id, equals('original-msg-id'));
+      // Messages reference the thread's id from the export
+      expect(importedMessages[0].threadId, equals('original-thread-id'));
+    });
+
+    test('handles empty messages list', () {
+      final thread = buildThread(title: 'Empty Chat');
+      final messages = <ChatMessage>[];
+
+      final json = ConversationExport.toJson(thread, messages);
+      final parsed = jsonDecode(json) as Map<String, dynamic>;
+      final (importedThread, importedMessages, _) = ConversationExport.fromJson(parsed);
+
+      expect(importedThread.title, equals('Empty Chat'));
+      expect(importedMessages, isEmpty);
+    });
+
+    test('handles system prompt in thread', () {
+      final thread = buildThread(title: 'Test', systemPrompt: 'You are helpful.');
+      final messages = <ChatMessage>[];
+
+      final json = ConversationExport.toJson(thread, messages);
+      final parsed = jsonDecode(json) as Map<String, dynamic>;
+      final (importedThread, _, __) = ConversationExport.fromJson(parsed);
+
+      expect(importedThread.systemPrompt, equals('You are helpful.'));
+    });
+
+    test('preserves message status and role', () {
+      final thread = buildThread(title: 'Test');
+      final messages = [
+        buildMessage(role: MessageRole.system, content: 'System msg', status: MessageStatus.completed),
+        buildMessage(role: MessageRole.user, content: 'User msg', status: MessageStatus.completed),
+        buildMessage(role: MessageRole.assistant, content: 'Assistant msg', status: MessageStatus.completed),
+      ];
+
+      final json = ConversationExport.toJson(thread, messages);
+      final parsed = jsonDecode(json) as Map<String, dynamic>;
+      final (_, importedMessages, _) = ConversationExport.fromJson(parsed);
+
+      expect(importedMessages[0].role, equals(MessageRole.system));
+      expect(importedMessages[1].role, equals(MessageRole.user));
+      expect(importedMessages[2].role, equals(MessageRole.assistant));
+    });
+
+    test('generates default title when missing', () {
+      final json = '''
+{
+  "thread": {"id": "t1", "created_at": "2024-01-01T00:00:00.000", "updated_at": "2024-01-01T00:00:00.000"},
+  "messages": []
+}
+''';
+      final parsed = jsonDecode(json) as Map<String, dynamic>;
+      final (importedThread, _, _) = ConversationExport.fromJson(parsed);
+
+      expect(importedThread.title, equals('Imported Chat'));
+    });
+
+    test('preserves timestamps from export', () {
+      final thread = buildThread(title: 'Test', createdAt: DateTime(2024, 6, 15));
+      final messages = [
+        buildMessage(
+          role: MessageRole.user,
+          content: 'Hello',
+          createdAt: DateTime(2024, 6, 15, 10, 30),
+        ),
+      ];
+
+      final json = ConversationExport.toJson(thread, messages);
+      final parsed = jsonDecode(json) as Map<String, dynamic>;
+      final (importedThread, importedMessages, _) = ConversationExport.fromJson(parsed);
+
+      expect(importedThread.createdAt.year, equals(2024));
+      expect(importedThread.createdAt.month, equals(6));
+      expect(importedThread.createdAt.day, equals(15));
+      expect(importedMessages[0].createdAt.year, equals(2024));
+      expect(importedMessages[0].createdAt.month, equals(6));
+      expect(importedMessages[0].createdAt.day, equals(15));
+    });
+  });
 }

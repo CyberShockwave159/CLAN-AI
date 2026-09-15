@@ -9,8 +9,8 @@ void main() {
       final builder = RoleplayContextBuilder(vectorStore: vectorStore);
 
       // Add some memories
-      vectorStore.saveEmbedding(characterId: 'char-1', messageId: 'msg-1', content: 'Aria loves swords.', vector: [0.0, ...List<double>.filled(255, 0.0)]);
-      vectorStore.saveEmbedding(characterId: 'char-1', messageId: 'msg-2', content: 'Aria hates dragons.', vector: [0.0, ...List<double>.filled(255, 0.0)]);
+      vectorStore.saveEmbedding(characterId: 'char-1', threadId: 'thread-1', messageId: 'msg-1', content: 'Aria loves swords.', vector: [0.0, ...List<double>.filled(255, 0.0)]);
+      vectorStore.saveEmbedding(characterId: 'char-1', threadId: 'thread-1', messageId: 'msg-2', content: 'Aria hates dragons.', vector: [0.0, ...List<double>.filled(255, 0.0)]);
 
       final context = await builder.build(
         characterId: 'char-1',
@@ -31,8 +31,8 @@ void main() {
       final vectorStore = FakeVectorStore();
       final builder = RoleplayContextBuilder(vectorStore: vectorStore);
 
-      vectorStore.saveEmbedding(characterId: 'char-1', messageId: 'msg-1', content: 'Memory for character 1.', vector: [0.0, ...List<double>.filled(255, 0.0)]);
-      vectorStore.saveEmbedding(characterId: 'char-2', messageId: 'msg-2', content: 'Memory for character 2.', vector: [0.0, ...List<double>.filled(255, 0.0)]);
+      vectorStore.saveEmbedding(characterId: 'char-1', threadId: 'thread-1', messageId: 'msg-1', content: 'Memory for character 1.', vector: [0.0, ...List<double>.filled(255, 0.0)]);
+      vectorStore.saveEmbedding(characterId: 'char-2', threadId: 'thread-2', messageId: 'msg-2', content: 'Memory for character 2.', vector: [0.0, ...List<double>.filled(255, 0.0)]);
 
       final context = await builder.build(
         characterId: 'char-1',
@@ -64,7 +64,7 @@ void main() {
       final vectorStore = FakeVectorStore();
       final builder = RoleplayContextBuilder(vectorStore: vectorStore);
 
-      vectorStore.saveEmbedding(characterId: 'char-1', messageId: 'msg-1', content: 'Aria is brave.', vector: [0.0, ...List<double>.filled(255, 0.0)]);
+      vectorStore.saveEmbedding(characterId: 'char-1', threadId: 'thread-1', messageId: 'msg-1', content: 'Aria is brave.', vector: [0.0, ...List<double>.filled(255, 0.0)]);
 
       final context = await builder.build(
         characterId: 'char-1',
@@ -82,7 +82,7 @@ void main() {
       final vectorStore = FakeVectorStore();
       final builder = RoleplayContextBuilder(vectorStore: vectorStore);
 
-      vectorStore.saveEmbedding(characterId: 'char-1', messageId: 'msg-1', content: 'Aria is brave.', vector: [0.0, ...List<double>.filled(255, 0.0)]);
+      vectorStore.saveEmbedding(characterId: 'char-1', threadId: 'thread-1', messageId: 'msg-1', content: 'Aria is brave.', vector: [0.0, ...List<double>.filled(255, 0.0)]);
 
       final context = await builder.build(
         characterId: 'char-1',
@@ -118,7 +118,7 @@ void main() {
       final builder = RoleplayContextBuilder(vectorStore: vectorStore);
 
       for (int i = 0; i < 10; i++) {
-        vectorStore.saveEmbedding(characterId: 'char-1', messageId: 'msg-$i', content: 'Memory $i.', vector: [0.0, ...List<double>.filled(255, 0.0)]);
+        vectorStore.saveEmbedding(characterId: 'char-1', threadId: 'thread-1', messageId: 'msg-$i', content: 'Memory $i.', vector: [0.0, ...List<double>.filled(255, 0.0)]);
       }
 
       final context = await builder.build(
