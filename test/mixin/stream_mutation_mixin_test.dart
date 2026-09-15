@@ -503,7 +503,7 @@ void main() {
         id: 'msg-2',
         variantIndex: 1,
         totalVariants: 2,
-        siblingIds: ['msg-1'],
+        siblingIds: ['msg-1', 'msg-2'],
       );
       final sib1 = buildMessage(
         threadId: 'thread-1',
@@ -511,7 +511,7 @@ void main() {
         id: 'msg-1',
         variantIndex: 0,
         totalVariants: 2,
-        siblingIds: ['msg-2'],
+        siblingIds: ['msg-1', 'msg-2'],
       );
 
       vm.addMessage(sib2);
@@ -536,7 +536,7 @@ void main() {
         id: 'msg-1',
         variantIndex: 0,
         totalVariants: 2,
-        siblingIds: ['msg-2'],
+        siblingIds: ['msg-1', 'msg-2'],
       );
       final sib2 = buildMessage(
         threadId: 'thread-1',
@@ -544,7 +544,7 @@ void main() {
         id: 'msg-2',
         variantIndex: 1,
         totalVariants: 2,
-        siblingIds: ['msg-1'],
+        siblingIds: ['msg-1', 'msg-2'],
       );
 
       vm.addMessage(sib1);
