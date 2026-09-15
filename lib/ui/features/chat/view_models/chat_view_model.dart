@@ -433,26 +433,25 @@ class ChatViewModel extends ChangeNotifier with StreamMutationMixin {
     final nextVariantIndex = targetMsg.totalVariants;
     final newTotalVariants = targetMsg.totalVariants + 1;
 
-    final allSiblings = List<String>.from(targetMsg.siblingIds);
+    final existingSiblings = await _chatRepository.getAllMessagesForThread(targetMsg.threadId);
+    final variantSiblings = existingSiblings.where((m) => m.role == MessageRole.assistant && m.parentId == targetMsg.parentId);
+    final allSiblingIds = {...variantSiblings.map((m) => m.id), targetMsg.id, newAssistantId};
+    final completeSiblingList = allSiblingIds.toList()..sort();
 
     final updatedOldMsg = targetMsg.copyWith(
       variantIndex: targetMsg.variantIndex,
       totalVariants: newTotalVariants,
-      siblingIds: [...allSiblings, newAssistantId],
+      siblingIds: completeSiblingList,
     );
     _messages[messageIndex] = updatedOldMsg;
     await _chatRepository.saveMessage(updatedOldMsg);
 
-    for (final siblingId in allSiblings) {
-      try {
-        final existingSiblings = await _chatRepository.getAllMessagesForThread(targetMsg.threadId);
-        final siblingMsg = existingSiblings.firstWhere((m) => m.id == siblingId, orElse: () => ChatMessage(threadId: targetMsg.threadId, role: MessageRole.assistant, content: ''));
-        if (siblingMsg.id != targetMsg.id) {
-          await _chatRepository.saveMessage(siblingMsg.copyWith(
-            siblingIds: [...siblingMsg.siblingIds, newAssistantId],
-          ));
-        }
-      } catch (_) {}
+    for (final siblingMsg in existingSiblings) {
+      if (siblingMsg.id != targetMsg.id) {
+        await _chatRepository.saveMessage(siblingMsg.copyWith(
+          siblingIds: completeSiblingList,
+        ));
+      }
     }
 
     final newAssistantMsg = ChatMessage(
@@ -464,7 +463,7 @@ class ChatViewModel extends ChangeNotifier with StreamMutationMixin {
       status: MessageStatus.streaming,
       variantIndex: nextVariantIndex,
       totalVariants: newTotalVariants,
-      siblingIds: [...allSiblings, targetMsg.id],
+      siblingIds: completeSiblingList,
     );
 
     // Replace current visible message with new streaming message

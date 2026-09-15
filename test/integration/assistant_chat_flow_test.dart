@@ -67,7 +67,7 @@ void main() {
     final regeneratedMsg = vm.messages[1];
     expect(regeneratedMsg.variantIndex, equals(1));
     expect(regeneratedMsg.totalVariants, equals(2));
-    expect(regeneratedMsg.siblingIds, hasLength(1));
+    expect(regeneratedMsg.siblingIds, hasLength(2));
 
     // 5. Edit the user prompt (branch conversation)
     final userMsgIndex = 0;
