@@ -91,7 +91,6 @@ class ProfileSection extends StatelessWidget {
                     apiKey: apiKeyController.text.trim().isEmpty ? null : apiKeyController.text.trim(),
                     protocol: selectedProtocol,
                   );
-                  if (!ctx.mounted) return;
                   Navigator.of(ctx).pop();
                 },
                 child: const Text('Create'),
@@ -173,7 +172,6 @@ class ProfileSection extends StatelessWidget {
                     protocol: selectedProtocol,
                   );
                   await settingsVM.updateProfile(updatedProfile);
-                  if (!ctx.mounted) return;
                   Navigator.of(ctx).pop();
                 },
                 child: const Text('Save'),
@@ -201,7 +199,6 @@ class ProfileSection extends StatelessWidget {
             style: FilledButton.styleFrom(backgroundColor: AppTheme.statusError),
             onPressed: () async {
               await settingsVM.deleteProfile(profileId);
-              if (!ctx.mounted) return;
               Navigator.of(ctx).pop();
             },
             child: const Text('Delete'),
