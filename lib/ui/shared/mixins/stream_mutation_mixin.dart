@@ -199,11 +199,11 @@ mixin StreamMutationMixin on ChangeNotifier {
     if (currentMsg.siblingIds.isEmpty) return;
 
     final allSiblings = await chatRepository.getAllMessagesForThread(currentMsg.threadId);
-    final sortedSiblings = currentMsg.siblingIds.map((id) => allSiblings.firstWhere(
+    final mapped = currentMsg.siblingIds.map((id) => allSiblings.firstWhere(
       (m) => m.id == id,
       orElse: () => currentMsg,
-    )).toList()
-      ..sort((a, b) => a.variantIndex.compareTo(b.variantIndex));
+    )).toList();
+    final sortedSiblings = mapped..sort((a, b) => a.variantIndex.compareTo(b.variantIndex));
 
     final siblingIndex = previous ? currentMsg.variantIndex - 1 : currentMsg.variantIndex + 1;
     if (siblingIndex < 0 || siblingIndex >= sortedSiblings.length) return;
