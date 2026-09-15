@@ -77,6 +77,11 @@ class FakeChatRepository extends ChatRepository {
   }
 
   @override
+  Future<List<ChatMessage>> getAllMessagesForThread(String threadId) async {
+    return (_threadMessages[threadId] ?? []).toList();
+  }
+
+  @override
   Future<List<ChatMessage>> getMessagesForThread(String threadId) async {
     return (_threadMessages[threadId] ?? []).toList();
   }

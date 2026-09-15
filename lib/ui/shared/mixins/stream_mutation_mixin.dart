@@ -198,14 +198,17 @@ mixin StreamMutationMixin on ChangeNotifier {
     final currentMsg = messages[messageIndex];
     if (currentMsg.siblingIds.isEmpty) return;
 
+    final allSiblings = await chatRepository.getAllMessagesForThread(currentMsg.threadId);
+    final sortedSiblings = currentMsg.siblingIds.map((id) => allSiblings.firstWhere(
+      (m) => m.id == id,
+      orElse: () => currentMsg,
+    )).toList()
+      ..sort((a, b) => a.variantIndex.compareTo(b.variantIndex));
+
     final siblingIndex = previous ? currentMsg.variantIndex - 1 : currentMsg.variantIndex + 1;
-    if (siblingIndex < 0 || siblingIndex >= currentMsg.siblingIds.length) return;
+    if (siblingIndex < 0 || siblingIndex >= sortedSiblings.length) return;
 
-    final siblingId = currentMsg.siblingIds[siblingIndex];
-    final siblingMsg = await chatRepository.getMessagesForThread(currentMsg.threadId).then(
-      (msgs) => msgs.firstWhere((m) => m.id == siblingId, orElse: () => currentMsg),
-    );
-
+    final siblingMsg = sortedSiblings[siblingIndex];
     if (siblingMsg.id != currentMsg.id) {
       messages[messageIndex] = siblingMsg;
       notifyListeners();
