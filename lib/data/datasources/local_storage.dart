@@ -651,11 +651,24 @@ class LocalDatabase {
     final jsonStr = p.getString(_keyServerProfiles);
     if (jsonStr != null && jsonStr.isNotEmpty) {
       try {
-        final List<dynamic> jsonList = jsonDecode(jsonStr) as List<dynamic>;
-        return jsonList
-            .map((e) => ServerProfile.fromMap(e as Map<String, dynamic>))
-            .toList();
-      } catch (_) {}
+        final dynamic decoded = jsonDecode(jsonStr);
+        if (decoded is Map<String, dynamic> && decoded['v'] != null) {
+          final int version = decoded['v'] as int;
+          if (version == 1) {
+            final List<dynamic> profileData = decoded['data'] as List<dynamic>;
+            return profileData
+                .map((e) => ServerProfile.fromMap(e as Map<String, dynamic>))
+                .toList();
+          }
+        }
+        if (decoded is List<dynamic>) {
+          return decoded
+              .map((e) => ServerProfile.fromMap(e as Map<String, dynamic>))
+              .toList();
+        }
+      } catch (_) {
+        // Silently return empty list on parse errors (corrupted/old format data)
+      }
     }
     return [];
   }
@@ -663,7 +676,7 @@ class LocalDatabase {
   Future<void> saveServerProfiles(List<ServerProfile> profiles) async {
     final p = await prefs;
     await p.setString(
-        _keyServerProfiles, jsonEncode(profiles.map((p) => p.toMap()).toList()));
+        _keyServerProfiles, jsonEncode({'v': 1, 'data': profiles.map((p) => p.toMap()).toList()}));
   }
 
   Future<void> saveProfileApiKey(String profileId, String? apiKey) async {
