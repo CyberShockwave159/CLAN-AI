@@ -5,7 +5,7 @@ Recommended order: `pub get` → `analyze` → `test` → `run`.
 ```
 flutter pub get            # fetch dependencies (required after git pull)
 flutter analyze            # lint + typecheck (uses flutter_lints)
-flutter test               # runs all 28 test files (473 total tests)
+flutter test               # runs all 30 test files (475 total tests)
 flutter run -d <device>    # devices: linux, macos, windows, <android-id>
 ```
 
@@ -161,7 +161,7 @@ flutter run -d <device>    # devices: linux, macos, windows, <android-id>
  - **Utils** (`test/utils/`) — `roleplay_prompt_formatter_test.dart`, `roleplay_context_builder_test.dart`, `hash_embedding_test.dart`, `vector_store_test.dart` (save, search, delete, getAllMemories, getEmbeddingCount, threadIds scoping), `silly_tavern_card_parser_test.dart`, `conversation_export_test.dart` (fromJson parsing, toTxt/json generation), `file_saver_test.dart` (desktop fallback, ConversationExport toTxt/json), `text_sanitizer_test.dart` (segment parsing).
 - **Mixin** (`test/mixin/`) — `stream_mutation_mixin_test.dart` (streaming, undo, stop, switchVariant).
 - **Repositories** (`test/repository/`) — `chat_repository_test.dart`, `character_repository_test.dart` (thread CRUD, message operations, favorites, embeddings).
-- **ViewModels** (`test/view_model/`) — `chat_view_model_test.dart`, `roleplay_view_model_test.dart`, `settings_view_model_test.dart`, `persona_template_view_model_test.dart`.
+- **ViewModels** (`test/view_model/`) — `chat_view_model_test.dart` (includes import thread persistence tests), `roleplay_view_model_test.dart`, `settings_view_model_test.dart`, `persona_template_view_model_test.dart`.
 - **Widgets** (`test/widget/`) — `message_bubble_test.dart`, `message_bubble_reasoning_test.dart`, `character_edit_dialog_test.dart`, `alternate_greeting_selector_test.dart`.
 - **Integration** (`test/integration/`) — `assistant_chat_flow_test.dart`, `roleplay_chat_flow_test.dart`, `character_lifecycle_test.dart`, `persona_defaults_test.dart`, `settings_persistence_test.dart`.
 

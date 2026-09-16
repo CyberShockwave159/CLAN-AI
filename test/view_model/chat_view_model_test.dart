@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'package:clan_ai/core/network/sse_client.dart';
 import 'package:clan_ai/core/utils/conversation_export.dart';
 import 'package:clan_ai/data/models/chat_message.dart';
+import 'package:clan_ai/data/models/chat_thread.dart';
 import 'package:clan_ai/ui/features/chat/view_models/chat_view_model.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -8,6 +10,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import '../helpers/fake_chat_repository.dart';
 import '../helpers/mock_path_provider.dart';
 import '../helpers/test_model_factories.dart';
+import 'package:uuid/uuid.dart';
 
 void main() {
   setUpAll(() {
@@ -895,6 +898,104 @@ void main() {
     test('updates search query', () {
       vm.setSearchQuery('Test');
       expect(vm.searchQuery, equals('Test'));
+    });
+  });
+
+  group('ChatViewModel importThread', () {
+    test('imported thread persists after switching to another thread and back', () async {
+      // Create a thread with messages
+      final thread = await fakeRepo.createThread(title: 'Test Thread');
+      final messages = [
+        buildMessage(id: 'msg-1', threadId: thread.id, role: MessageRole.user, content: 'Hello'),
+        buildMessage(id: 'msg-2', threadId: thread.id, role: MessageRole.assistant, content: 'Hi there!'),
+      ];
+      for (final msg in messages) {
+        await fakeRepo.saveMessage(msg);
+      }
+
+      // Update VM's threads list to include the newly created thread
+      vm.threads = await fakeRepo.getAssistantThreads();
+
+      // Simulate search to populate _filteredThreads
+      vm.setSearchQuery('test');
+      final results = await vm.searchThreads();
+      vm.setFilteredThreads(results);
+      expect(vm.filteredThreads.isNotEmpty, isTrue);
+
+      // Clear search
+      vm.setSearchQuery('');
+
+      // Record count before import
+      final countBefore = vm.filteredThreads.length;
+
+      // Import the thread - importThread creates its own thread and saves messages
+      // The messages passed have threadId='msg-1' parent, they'll be saved with the new thread's ID
+      await vm.importThread(
+        buildThread(title: 'Imported Chat'),
+        messages,
+      );
+
+      // Wait for async operations to settle
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      // Verify imported thread is in the list (count should have increased)
+      expect(vm.filteredThreads.length, greaterThan(countBefore));
+
+      // Get the active thread's ID (this is what importThread sets)
+      final activeThreadId = vm.activeThread?.id;
+      expect(activeThreadId, isNotNull);
+      
+      final activeThreadMsgs = await fakeRepo.getMessagesForThread(activeThreadId!);
+      expect(activeThreadMsgs.length, greaterThan(0), reason: 'Active thread should have messages');
+
+      // Switch to the other thread
+      final otherThread = await fakeRepo.getThreads().then((threads) => threads.where((t) => t.title == 'Test Thread').first);
+      await vm.selectThread(otherThread);
+      await Future.delayed(const Duration(milliseconds: 50));
+
+      // Switch back to the active thread (the one importThread set)
+      await vm.selectThread(vm.threads.firstWhere((t) => t.id == activeThreadId));
+      await Future.delayed(const Duration(milliseconds: 50));
+
+      // Messages should still be loaded (welcome screen should NOT appear)
+      expect(vm.messages.isNotEmpty, isTrue);
+      expect(vm.messages.first.content, 'Hello');
+    });
+
+    test('cleared search does not lose imported threads from filtered list', () async {
+      // Perform a search to populate _filteredThreads
+      vm.setSearchQuery('test');
+      vm.setFilteredThreads([buildThread(id: 'existing-thread', title: 'Existing')]);
+
+      // Clear search (simulates user clearing the search bar)
+      vm.setSearchQuery('');
+
+      // Import a thread - _filteredThreads should be cleared by importThread
+      final thread = buildThread(title: 'Imported');
+      await fakeRepo.createThread(title: thread.title);
+      await vm.importThread(thread, []);
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      // Imported thread should be visible (search is empty, returns all threads)
+      // importThread generates a new ID, so check that threads list has more than before
+      final threadCountBefore = vm.filteredThreads.length;
+      expect(threadCountBefore, greaterThan(0));
+
+      // Perform another search that returns no results
+      vm.setSearchQuery('nonexistent');
+      vm.setFilteredThreads([]);
+
+      // Import another thread
+      final thread2 = buildThread(title: 'Imported 2');
+      await fakeRepo.createThread(title: thread2.title);
+      await vm.importThread(thread2, []);
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      // Clear search again - _filteredThreads should be cleared by setSearchQuery
+      vm.setSearchQuery('');
+
+      // Should have more threads now (both imported threads)
+      expect(vm.filteredThreads.length, greaterThan(threadCountBefore));
     });
   });
 }

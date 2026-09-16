@@ -115,6 +115,7 @@ class ChatViewModel extends ChangeNotifier with StreamMutationMixin {
 
     try {
       _threads = await _chatRepository.getAssistantThreads();
+      _filteredThreads.clear();
       if (_threads.isNotEmpty && _activeThread == null) {
         await selectThread(_threads.first);
       } else if (_threads.isEmpty) {
@@ -156,6 +157,7 @@ class ChatViewModel extends ChangeNotifier with StreamMutationMixin {
       modelId: modelId,
     );
     _threads.insert(0, newThread);
+    _filteredThreads.clear();
     _activeThread = newThread;
     _messages = [];
     notifyListeners();
@@ -167,6 +169,7 @@ class ChatViewModel extends ChangeNotifier with StreamMutationMixin {
     if (index != -1) {
       final updated = _threads[index].copyWith(title: newTitle, updatedAt: DateTime.now());
       _threads[index] = updated;
+      _filteredThreads.clear();
       if (_activeThread?.id == threadId) {
         _activeThread = updated;
       }
@@ -183,6 +186,7 @@ class ChatViewModel extends ChangeNotifier with StreamMutationMixin {
   Future<void> deleteThread(String threadId) async {
     await _chatRepository.deleteThread(threadId);
     _threads.removeWhere((t) => t.id == threadId);
+    _filteredThreads.clear();
     if (_activeThread?.id == threadId) {
       if (_threads.isNotEmpty) {
         await selectThread(_threads.first);
@@ -196,6 +200,9 @@ class ChatViewModel extends ChangeNotifier with StreamMutationMixin {
 
   void setSearchQuery(String query) {
     _searchQuery = query;
+    if (query.trim().isEmpty) {
+      _filteredThreads.clear();
+    }
     notifyListeners();
   }
 
@@ -322,19 +329,14 @@ class ChatViewModel extends ChangeNotifier with StreamMutationMixin {
       updatedAt: DateTime.now(),
     );
 
-    // Save thread to database
-    await _chatRepository.createThread(
+    // Save thread to database and use the returned thread object
+    final savedThread = await _chatRepository.createThread(
       title: newThread.title,
       systemPrompt: newThread.systemPrompt,
       modelId: newThread.modelId,
       customParams: newThread.customParams,
+      characterId: null,
     );
-
-    // Get the saved thread (will have new ID from DB)
-    final savedThread = await _chatRepository.getThreads().then((threads) => threads.firstWhere(
-          (t) => t.id == newThread.id,
-          orElse: () => newThread,
-        ));
 
     // Save all messages with new thread ID
     for (final msg in messages) {
@@ -348,6 +350,7 @@ class ChatViewModel extends ChangeNotifier with StreamMutationMixin {
 
     // Reload threads and set as active
     _threads = await _chatRepository.getAssistantThreads();
+    _filteredThreads.clear();
     _activeThread = savedThread;
     _messages = await _chatRepository.getMessagesForThread(savedThread.id);
     notifyListeners();
