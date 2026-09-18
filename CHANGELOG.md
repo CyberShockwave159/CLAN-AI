@@ -2,6 +2,29 @@
 
 ## [Unreleased]
 
+### 🏗 Hardening & Infrastructure
+
+**Dependency Injection**
+- The shared network stack (`ApiHttpClient` → `LatencyMeter` → `LlamaApiService` → repositories) is created once in `main.dart` and injected through required positional constructor arguments; `??` fallbacks were removed so connection pooling and latency tracking can no longer be silently forked
+- App `navigatorKey` is created in `main()` and injected into `DesktopKeyboardShortcuts` / `ClanAiApp`, replacing the mutable static global
+
+**Database**
+- Foreign-key enforcement enabled via `PRAGMA foreign_keys = ON` (messages→threads `ON DELETE CASCADE` is now live)
+- Thread search is a single assistant-scoped SQL `LIKE` query (`LocalDatabase.searchThreads`) instead of a per-thread N+1 loop
+- Schema v12 adds the variant columns; migrations guard with `PRAGMA table_info`
+
+**HTTP**
+- Real TCP/TLS connect timeout via `HttpClient.connectionTimeout`; resilient error-body reading with bounded extraction from `error`/`message`/`detail` shapes
+
+**Windows Packaging**
+- The NSIS installer now embeds the MSIX payload at build time (`File`), fixing installers that shipped as a small stub without the application
+- `version` in `pubspec.yaml` is the single source of truth for the MSIX version (`msix_version` removed)
+- Removed the unused `msix_config.yaml` (the msix tool reads `msix_config` from `pubspec.yaml` only) and the dead CI certificate-copy step
+- Consolidated to one Windows workflow (`build-windows.yml`); removed the duplicate tag-triggered `release-windows.yml`
+
+**Platform Defaults**
+- Android first-run profile defaults to `http://10.0.2.2:8080` (emulator host alias) instead of loopback
+
 ### ✨ New Features
 
 **Server Offline Warning Banner**
@@ -41,8 +64,8 @@
 - `doStopGeneration()` now always clears `isGenerating` flag (removed `&& currentCancelToken != null` guard)
 
 **Android Network Security**
-- Base config now permits cleartext HTTP for all domains (`cleartextTrafficPermitted="true"` on base-config)
-- Removed hardcoded LAN IP entries (`192.168.0.1`, `192.168.1.1`, `172.16.0.1`) — localhost, 127.0.0.1, and 10.0.2.2 remain in explicit cleartext config
+- Base config permits cleartext HTTP for all hosts (`cleartextTrafficPermitted="true"`), required because LAN LLM server IPs are user-supplied and Android's network security config cannot express private IP ranges
+- Removed the redundant per-domain cleartext entries and the redundant `android:usesCleartextTraffic` manifest attribute (the network security config takes precedence on API 24+)
 
 **Roleplay Screen Spacing**
 - Reduced top margin from 28px to 12px on "Start your roleplay..." empty state text

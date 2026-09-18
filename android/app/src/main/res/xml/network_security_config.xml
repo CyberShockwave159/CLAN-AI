@@ -1,19 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- Base config: allow cleartext for local network LLM servers (llama.cpp, Ollama, LM Studio on LAN) -->
+    <!--
+      Cleartext HTTP is intentionally permitted for all hosts: this app connects
+      to user-supplied local LLM servers (llama.cpp, Ollama, LM Studio) whose LAN
+      IPs are not known ahead of time. Android's network security config has no
+      way to express private IP ranges/CIDR, so per-domain entries cannot cover
+      arbitrary LAN addresses. HTTPS endpoints still use the system trust store.
+    -->
     <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system" />
             <certificates src="user" />
         </trust-anchors>
     </base-config>
-
-    <!-- Cleartext permitted only for local / LAN servers -->
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="true">localhost</domain>
-        <domain includeSubdomains="true">127.0.0.1</domain>
-        <domain includeSubdomains="true">10.0.2.2</domain>
-    </domain-config>
 
     <debug-overrides>
         <trust-anchors>

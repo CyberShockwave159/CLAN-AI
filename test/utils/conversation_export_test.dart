@@ -430,7 +430,7 @@ void main() {
 
       final json = ConversationExport.toJson(thread, messages);
       final parsed = jsonDecode(json) as Map<String, dynamic>;
-      final (importedThread, _, __) = ConversationExport.fromJson(parsed);
+      final (importedThread, _, _) = ConversationExport.fromJson(parsed);
 
       expect(importedThread.branchFromThreadId, equals('parent-thread-id'));
     });
@@ -513,7 +513,7 @@ void main() {
 
       final json = ConversationExport.toJson(thread, messages);
       final parsed = jsonDecode(json) as Map<String, dynamic>;
-      final (importedThread, _, __) = ConversationExport.fromJson(parsed);
+      final (importedThread, _, _) = ConversationExport.fromJson(parsed);
 
       expect(importedThread.systemPrompt, equals('You are helpful.'));
     });

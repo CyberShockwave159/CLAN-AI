@@ -84,17 +84,6 @@ jobs:
           flutter build windows --release
         shell: pwsh
 
-      - name: Copy certificate to project
-        run: |
-          $certPath = "${{ secrets.CERT_PATH }}"
-          if ($certPath) {
-            Copy-Item $certPath -Destination "release\clan_ai_certificate.pfx" -Force
-            echo "Certificate copied from $certPath"
-          } else {
-            echo "No certificate path specified, using existing cert"
-          }
-        shell: pwsh
-
       - name: Build MSIX package
         run: |
           dart run msix:create
@@ -115,7 +104,7 @@ jobs:
       - name: Build NSIS installer
         run: |
           $msixPath = "${{ steps.verify_msix.outputs.msix_path }}"
-          $version = (Get-Content pubspec.yaml | Select-String "version:").ToString().Split('+')[0].Trim()
+          $version = (Select-String -Path pubspec.yaml -Pattern '^version:\s*([0-9]+\.[0-9]+\.[0-9]+)').Matches[0].Groups[1].Value
           $installerName = "CLAN-AI_${version}_Setup.exe"
           New-Item -ItemType Directory -Path "dist" -Force | Out-Null
           New-Item -ItemType Directory -Path "installer" -Force | Out-Null
@@ -149,8 +138,12 @@ jobs:
               0x00,0x00,0x00,0x00
             ))
           }
-          makensis /DMSIX_SOURCE="dist\$(Split-Path $msixPath -Leaf)" /DDIST_DIR="$PWD\installer\dist" installer\nsis_installer.nsi
-          Move-Item "installer\dist\CLAN-AI_Setup.exe" "dist\CLAN-AI_Setup.exe" -Force
+          makensis /DMSIX_SOURCE="dist\$(Split-Path $msixPath -Leaf)" /DDIST_DIR="$PWD\installer\dist" /DAPP_VERSION="$version" installer\nsis_installer.nsi
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "NSIS build failed with exit code $LASTEXITCODE"
+            exit 1
+          }
+          Move-Item "installer\dist\CLAN-AI_Setup.exe" "dist\$installerName" -Force
         shell: pwsh
 
       - name: Generate checksums
@@ -164,7 +157,6 @@ jobs:
           if (Test-Path "$distDir\README.txt") {
             Remove-Item "$distDir\README.txt" -Force
           }
-          $version = (Get-Content pubspec.yaml | Select-String "version:").ToString().Split('+')[0].Trim()
           $date = Get-Date -Format "yyyy-MM-dd"
           $lines = @(
             "CLAN-AI Windows Installer",

@@ -21,9 +21,10 @@ import 'package:clan_ai/ui/shared/mixins/stream_mutation_mixin.dart';
 
 class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
   final ChatRepository _chatRepository;
-  final   CharacterRepository _characterRepository;
+  final CharacterRepository _characterRepository;
 
   CharacterProfile? _activeCharacter;
+  // ignore: unnecessary_getters_setters
   CharacterProfile? get activeCharacter => _activeCharacter;
   set activeCharacter(CharacterProfile? v) => _activeCharacter = v;
 

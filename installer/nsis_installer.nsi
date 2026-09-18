@@ -9,19 +9,25 @@
 !define APP_PUBLISHER "CLAN-AI Organization"
 !define APP_URL "https://github.com/clan-ai/clan_ai"
 
-; Defaults (can be overridden via /D on command line)
+; Defaults (override via /D on the makensis command line)
+; MSIX_SOURCE must point at a real .msix at build time: it is embedded into
+; this installer by the `File` directive below.
 !ifndef MSIX_SOURCE
-  !define MSIX_SOURCE "dist\clan_ai_1.0.0.msix"
+  !define MSIX_SOURCE "dist\clan_ai.msix"
 !endif
 
 !ifndef DIST_DIR
   !define DIST_DIR "dist"
 !endif
 
-!define INSTALLER_OUTPUT "${DIST_DIR}\CLAN-AI_Setup.exe"
+!ifndef INSTALLER_OUTPUT
+  !define INSTALLER_OUTPUT "${DIST_DIR}\CLAN-AI_Setup.exe"
+!endif
 
-; App version
-!define APP_VERSION "1.0.0"
+; App version (override via /DAPP_VERSION=x.y.z)
+!ifndef APP_VERSION
+  !define APP_VERSION "1.0.0"
+!endif
 
 ; Install paths
 !define INSTALL_DIR "C:\Users\%CURRENT_USER%\AppData\Local\Programs\CLAN-AI"
@@ -50,8 +56,13 @@ VIAddVersionKey /LANG=1033 "FileVersion" "${APP_VERSION}"
 ; --- Modern UI Settings ---
 !define MUI_HEADERIMAGE
 !define MUI_HEADERIMAGE_RIGHT
-!define MUI_ICON "icon.ico"
-!define MUI_UNICON "icon.ico"
+; Use a custom icon only if one was generated next to this script (the CI and
+; the .bat/.sh builders create installer/icon.ico); otherwise NSIS falls back
+; to its built-in Modern UI icon.
+!if /FileExists "icon.ico"
+  !define MUI_ICON "icon.ico"
+  !define MUI_UNICON "icon.ico"
+!endif
 !define MUI_ABORTWARNING
 !define MUI_FINISHPAGE_NOAUTOSTART
 
@@ -85,16 +96,12 @@ Section "Install"
         Goto PostInstall
 
     ProceedInstall:
-        ; Ensure MSIX file exists
-        IfFileExists "${MSIX_SOURCE}" 0 NoMsix
-        Goto InstallMsix
-
-        NoMsix:
-            MessageBox MB_ICONSTOP "CLAN-AI package not found.`nPlease build the MSIX package first using: flutter build msix --release`nExpected at: ${MSIX_SOURCE}"
-            Quit
-
-        InstallMsix:
-            CopyFiles /SILENT "${MSIX_SOURCE}" "$INSTDIR\"
+            ; Embed the MSIX at build time (File is a compile-time directive) and
+            ; extract it next to the app. Using a fixed target name keeps the
+            ; Add-AppxPackage path below deterministic regardless of the source
+            ; file name. Previously this used a runtime `CopyFiles`, which meant
+            ; the payload was not shipped inside the installer at all.
+            File /oname=clan_ai.msix "${MSIX_SOURCE}"
             Push "$INSTDIR\clan_ai.msix"
             Pop $R1
             ; Check if running on Windows 10+

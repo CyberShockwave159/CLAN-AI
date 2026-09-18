@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:clan_ai/core/constants/app_constants.dart';
 import 'package:clan_ai/core/constants/app_theme.dart';
+import 'package:clan_ai/core/utils/platform_defaults.dart';
 import 'package:clan_ai/core/constants/clan_theme_colors.dart';
 import 'package:clan_ai/data/models/server_profile.dart';
 import 'package:clan_ai/data/models/server_config.dart';
@@ -16,7 +16,9 @@ class ProfileSection extends StatelessWidget {
     final nameController = TextEditingController(text: 'New Profile');
     final settingsVM = context.read<SettingsViewModel>();
     final conn = settingsVM.connectionDetails;
-    final urlController = TextEditingController(text: conn?.baseUrl ?? defaultBaseUrl);
+    final urlController = TextEditingController(
+      text: conn?.baseUrl ?? defaultBaseUrlForPlatform(),
+    );
     final apiKeyController = TextEditingController(text: conn?.apiKey ?? '');
     ApiProtocol selectedProtocol = conn?.protocol ?? ApiProtocol.openAi;
 
@@ -91,7 +93,7 @@ class ProfileSection extends StatelessWidget {
                     apiKey: apiKeyController.text.trim().isEmpty ? null : apiKeyController.text.trim(),
                     protocol: selectedProtocol,
                   );
-                  Navigator.of(ctx).pop();
+                  if (ctx.mounted) Navigator.of(ctx).pop();
                 },
                 child: const Text('Create'),
               ),
@@ -172,7 +174,7 @@ class ProfileSection extends StatelessWidget {
                     protocol: selectedProtocol,
                   );
                   await settingsVM.updateProfile(updatedProfile);
-                  Navigator.of(ctx).pop();
+                  if (ctx.mounted) Navigator.of(ctx).pop();
                 },
                 child: const Text('Save'),
               ),
@@ -199,7 +201,7 @@ class ProfileSection extends StatelessWidget {
             style: FilledButton.styleFrom(backgroundColor: AppTheme.statusError),
             onPressed: () async {
               await settingsVM.deleteProfile(profileId);
-              Navigator.of(ctx).pop();
+              if (ctx.mounted) Navigator.of(ctx).pop();
             },
             child: const Text('Delete'),
           ),

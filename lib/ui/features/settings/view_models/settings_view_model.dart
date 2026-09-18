@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:clan_ai/core/utils/latency_meter.dart';
+import 'package:clan_ai/core/utils/platform_defaults.dart';
 import 'package:clan_ai/data/datasources/local_storage.dart';
 import 'package:clan_ai/data/models/app_mode.dart';
 import 'package:clan_ai/data/models/model_info.dart';
@@ -88,9 +89,14 @@ class SettingsViewModel extends ChangeNotifier {
     if (_profiles.isEmpty) {
       final legacyConfig = await _serverRepository.loadActiveConfig();
       if (legacyConfig.baseUrl.isNotEmpty) {
+        // A brand-new install inherits the loopback default, which is
+        // unreachable from Android. Swap in the platform-appropriate host.
+        final seedUrl = legacyConfig.baseUrl == defaultBaseUrl
+            ? defaultBaseUrlForPlatform()
+            : legacyConfig.baseUrl;
         final profile = await _serverRepository.createProfile(
           'Default',
-          baseUrl: legacyConfig.baseUrl,
+          baseUrl: seedUrl,
           apiKey: legacyConfig.apiKey,
           protocol: legacyConfig.protocol,
           reasoning: legacyConfig.reasoning,

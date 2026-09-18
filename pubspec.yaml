@@ -1,7 +1,7 @@
 name: clan_ai
 description: "Frontier-class cross-platform llama.cpp client"
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.1.8+1
 
 environment:
   sdk: ^3.13.0
@@ -39,7 +39,8 @@ msix_config:
   publisher_display_name: CLAN-AI Organization
   identity_name: clan-ai.clanai
   publisher: CN=CLANAIOrg
-  msix_version: 1.0.0.0
+  # msix_version is intentionally omitted — the msix tool derives it from the
+  # top-level `version:` above (single source of truth). Do not re-add it.
   logo_path: msix/assets/icon100x100.png
   protocol_activation: clanai
   capabilities: internetClient, privateNetworkServerClient, removableStorage

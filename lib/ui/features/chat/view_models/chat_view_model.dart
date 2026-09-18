@@ -17,6 +17,7 @@ class ChatViewModel extends ChangeNotifier with StreamMutationMixin {
   final ChatRepository _chatRepository;
 
   List<ChatThread> _threads = [];
+  // ignore: unnecessary_getters_setters
   List<ChatThread> get threads => _threads;
   set threads(List<ChatThread> v) => _threads = v;
 

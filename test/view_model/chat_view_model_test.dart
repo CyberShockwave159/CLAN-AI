@@ -1,8 +1,6 @@
-import 'dart:convert';
 import 'package:clan_ai/core/network/sse_client.dart';
 import 'package:clan_ai/core/utils/conversation_export.dart';
 import 'package:clan_ai/data/models/chat_message.dart';
-import 'package:clan_ai/data/models/chat_thread.dart';
 import 'package:clan_ai/ui/features/chat/view_models/chat_view_model.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -10,7 +8,6 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import '../helpers/fake_chat_repository.dart';
 import '../helpers/mock_path_provider.dart';
 import '../helpers/test_model_factories.dart';
-import 'package:uuid/uuid.dart';
 
 void main() {
   setUpAll(() {

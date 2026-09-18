@@ -11,7 +11,7 @@ flutter test test/domain/generation_params_test.dart   # single file
 flutter test test/integration/   # suite subset
 flutter run -d linux     # linux | macos | windows | <android-id>
 ```
-Windows release: pushes/PRs to `main` trigger `.github/workflows/build-windows.yml` (build → MSIX via `dart run msix:create` → NSIS). `scripts/build-windows-installer.{bat,sh}` produce `dist/` locally. `msix_config` is in `pubspec.yaml`.
+Windows packaging: `.github/workflows/build-windows.yml` is the *only* Windows workflow — it builds on pushes/PRs to `main` and publishes a GitHub Release on `v*` tags (build → MSIX via `dart run msix:create` → NSIS). The NSIS script must **embed** the MSIX with `File`; a runtime `CopyFiles` produces a tiny installer with no payload that fails on user machines. `version` in `pubspec.yaml` is the single source of truth for the MSIX version (`msix_version` intentionally omitted); `msix_config.yaml` is **not** read by the msix tool (it only reads `pubspec.yaml`). `scripts/build-windows-installer.{bat,sh}` produce `dist/` locally.
 
 ## Architecture (what's non-standard)
 - **Hybrid MVVM with `Provider` + `ChangeNotifier`; no codegen.** All JSON serialization is manual `toMap()`/`fromMap()`. No domain-layer interfaces — `lib/domain/models/` has only `generation_params.dart` (payloads, RAG params, TextSanitizer).
