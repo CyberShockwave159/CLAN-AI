@@ -165,6 +165,35 @@ void main() {
       expect(vm.messages.where((m) => m.content == 'Hello').length, greaterThanOrEqualTo(1));
     });
 
+    test('batches user message, rename and placeholder into one notification', () async {
+      final thread = await fakeRepo.createThread(title: 'New Chat');
+      vm.activeThread = thread;
+      vm.messages = [];
+      fakeRepo.setStreamFragments(thread.id, [
+        const StreamChunk(text: 'Hi', isDone: true),
+      ]);
+
+      final messageCountsAtNotify = <int>[];
+      void listener() => messageCountsAtNotify.add(vm.messages.length);
+      vm.addListener(listener);
+
+      await vm.sendMessage(
+        prompt: 'Hello',
+        serverConfig: buildServerConfig(),
+        connection: null,
+        customParams: null,
+        modelContextLength: null,
+      );
+
+      vm.removeListener(listener);
+
+      // The first notification must already contain both the user message and
+      // the assistant placeholder, proving the intermediate rename notification
+      // was batched rather than emitted separately.
+      expect(messageCountsAtNotify, isNotEmpty);
+      expect(messageCountsAtNotify.first, greaterThanOrEqualTo(2));
+    });
+
     test('creates new thread if no active thread', () async {
       fakeRepo.setStreamFragments('new', [
         const StreamChunk(text: 'Hi', isDone: true),
@@ -898,6 +927,68 @@ void main() {
     test('updates search query', () {
       vm.setSearchQuery('Test');
       expect(vm.searchQuery, equals('Test'));
+    });
+  });
+
+  group('ChatViewModel searchThreads', () {
+    test('matches titles and message content in a single pass', () async {
+      final titleMatch = await fakeRepo.createThread(title: 'Flutter Notes');
+      final contentMatch = await fakeRepo.createThread(title: 'Recipes');
+      final noMatch = await fakeRepo.createThread(title: 'Work');
+      await fakeRepo.saveMessage(buildMessage(
+        threadId: titleMatch.id,
+        content: 'How does the stream mutation mixin work?',
+      ));
+      await fakeRepo.saveMessage(buildMessage(
+        threadId: contentMatch.id,
+        content: 'Bake sourdough bread',
+      ));
+      await fakeRepo.saveMessage(buildMessage(
+        threadId: noMatch.id,
+        content: 'Unrelated content',
+      ));
+
+      vm.threads = await fakeRepo.getAssistantThreads();
+
+      // Title match
+      var ids = (await vm.searchThreads(query: 'flutter')).map((t) => t.id).toList();
+      expect(ids, contains(titleMatch.id));
+      expect(ids, isNot(contains(contentMatch.id)));
+
+      // Content-only match
+      ids = (await vm.searchThreads(query: 'sourdough')).map((t) => t.id).toList();
+      expect(ids, contains(contentMatch.id));
+      expect(ids, isNot(contains(titleMatch.id)));
+
+      // No matches
+      expect(await vm.searchThreads(query: 'nonexistent-phrase'), isEmpty);
+    });
+
+    test('treats LIKE wildcards in the query literally', () async {
+      final thread = await fakeRepo.createThread(title: '100% Done');
+      await fakeRepo.saveMessage(buildMessage(threadId: thread.id, content: 'Progress report'));
+      vm.threads = await fakeRepo.getAssistantThreads();
+
+      final ids = (await vm.searchThreads(query: '100%')).map((t) => t.id).toList();
+      expect(ids, contains(thread.id));
+    });
+
+    test('excludes roleplay threads from assistant-mode search', () async {
+      await fakeRepo.createThread(title: 'Assistant Chat');
+      final rpThread = await fakeRepo.createThread(
+        title: 'Roleplay Chat',
+        characterId: 'char-1',
+      );
+      await fakeRepo.saveMessage(buildMessage(
+        threadId: rpThread.id,
+        content: 'Wandering the forest at dusk',
+      ));
+
+      vm.threads = await fakeRepo.getAssistantThreads();
+
+      final ids = (await vm.searchThreads(query: 'wandering')).map((t) => t.id).toList();
+      expect(ids, isNot(contains(rpThread.id)));
+      expect(ids, isEmpty);
     });
   });
 

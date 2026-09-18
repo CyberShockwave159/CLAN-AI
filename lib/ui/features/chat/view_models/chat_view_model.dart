@@ -88,25 +88,12 @@ class ChatViewModel extends ChangeNotifier with StreamMutationMixin {
   }
 
   Future<List<ChatThread>> searchThreads({String? query}) async {
-    final effectiveQuery = query ?? _searchQuery;
-    if (effectiveQuery.trim().isEmpty) return _threads;
-    final q = effectiveQuery.toLowerCase();
-
-    final matches = <ChatThread>[];
-    for (final thread in _threads) {
-      if (thread.title.toLowerCase().contains(q)) {
-        matches.add(thread);
-        continue;
-      }
-      final messages = await _chatRepository.getMessagesForThread(thread.id);
-      for (final msg in messages) {
-        if (msg.content.toLowerCase().contains(q)) {
-          matches.add(thread);
-          break;
-        }
-      }
-    }
-    return matches;
+    final effectiveQuery = (query ?? _searchQuery).trim();
+    if (effectiveQuery.isEmpty) return _threads;
+    // Single SQL query in the database layer. The old implementation looped
+    // every thread and loaded its full message list (N+1 queries on the UI
+    // isolate) just to test a substring match.
+    return await _chatRepository.searchThreads(effectiveQuery);
   }
 
   Future<void> loadThreads() async {
@@ -164,22 +151,28 @@ class ChatViewModel extends ChangeNotifier with StreamMutationMixin {
     return newThread;
   }
 
-  Future<void> renameThread(String threadId, String newTitle) async {
+  Future<void> renameThread(String threadId, String newTitle, {bool notify = true}) async {
     final index = _threads.indexWhere((t) => t.id == threadId);
+    final ChatThread? base =
+        index != -1 ? _threads[index] : (_activeThread?.id == threadId ? _activeThread : null);
+    if (base == null) return;
+
+    final updated = base.copyWith(title: newTitle, updatedAt: DateTime.now());
+    _updateThreadInState(updated);
+    await _chatRepository.updateThread(updated);
+    if (notify) notifyListeners();
+  }
+
+  /// Applies [updated] to the in-memory thread list and active thread.
+  /// The caller decides when to notify (see [renameThread]).
+  void _updateThreadInState(ChatThread updated) {
+    final index = _threads.indexWhere((t) => t.id == updated.id);
     if (index != -1) {
-      final updated = _threads[index].copyWith(title: newTitle, updatedAt: DateTime.now());
       _threads[index] = updated;
       _filteredThreads.clear();
-      if (_activeThread?.id == threadId) {
-        _activeThread = updated;
-      }
-      await _chatRepository.updateThread(updated);
-      notifyListeners();
-    } else if (_activeThread?.id == threadId) {
-      final updated = _activeThread!.copyWith(title: newTitle, updatedAt: DateTime.now());
+    }
+    if (_activeThread?.id == updated.id) {
       _activeThread = updated;
-      await _chatRepository.updateThread(updated);
-      notifyListeners();
     }
   }
 
@@ -388,10 +381,9 @@ class ChatViewModel extends ChangeNotifier with StreamMutationMixin {
       final autoTitle = prompt.trim().length > autoTitleMaxLen
           ? '${prompt.trim().substring(0, autoTitleMaxLen)}...'
           : prompt.trim();
-      await renameThread(threadId, autoTitle);
+      // Batched: the single notifyListeners() below reflects the rename too.
+      await renameThread(threadId, autoTitle, notify: false);
     }
-
-    notifyListeners();
 
     // 2. Prepare Assistant Message Placeholder
     final assistantMessageId = const Uuid().v4();
@@ -404,6 +396,7 @@ class ChatViewModel extends ChangeNotifier with StreamMutationMixin {
       status: MessageStatus.streaming,
     );
 
+    // One notification for user message + title rename + placeholder.
     _messages.add(assistantPlaceholder);
     notifyListeners();
 

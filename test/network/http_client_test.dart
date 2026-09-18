@@ -147,6 +147,64 @@ void main() {
       });
     });
 
+    group('Error body parsing', () {
+      test('extracts top-level message key', () {
+        try {
+          client.throwForStatusCode(403, '{"message": "Forbidden by policy"}', Uri.parse('/test'));
+          fail('Should have thrown');
+        } on AppException catch (e) {
+          expect(e.message, contains('Forbidden by policy'));
+        }
+      });
+
+      test('extracts detail key (FastAPI/vLLM shape)', () {
+        try {
+          client.throwForStatusCode(422, '{"detail": "Invalid request payload"}', Uri.parse('/test'));
+          fail('Should have thrown');
+        } on AppException catch (e) {
+          expect(e.message, contains('Invalid request payload'));
+        }
+      });
+
+      test('extracts from a string error key', () {
+        try {
+          client.throwForStatusCode(500, '{"error": "Model failed to load"}', Uri.parse('/test'));
+          fail('Should have thrown');
+        } on AppException catch (e) {
+          expect(e.message, contains('Model failed to load'));
+        }
+      });
+
+      test('extracts a deeply nested error message', () {
+        try {
+          client.throwForStatusCode(
+              400, '{"error": {"error": {"message": "Nested failure"}}}', Uri.parse('/test'));
+          fail('Should have thrown');
+        } on AppException catch (e) {
+          expect(e.message, contains('Nested failure'));
+        }
+      });
+
+      test('does not dump raw JSON when no message key is present', () {
+        try {
+          client.throwForStatusCode(
+              400, '{"error": {"code": 400, "type": "invalid_request"}}', Uri.parse('/test'));
+          fail('Should have thrown');
+        } on AppException catch (e) {
+          expect(e.message, isNot(contains('{')));
+          expect(e.message, contains('HTTP 400'));
+        }
+      });
+
+      test('classifies context errors reported via detail key', () {
+        expect(
+          () => client.throwForStatusCode(
+              400, '{"detail": "This model context length exceeded"}', Uri.parse('/test')),
+          throwsA(isA<ContextLimitExceededException>()),
+        );
+      });
+    });
+
     group('Exception details', () {
       test('ContextLimitExceededException includes endpoint details', () {
         try {

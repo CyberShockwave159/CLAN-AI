@@ -71,6 +71,12 @@ class ChatRepository {
     await _localDb.deleteThread(threadId);
   }
 
+  /// Searches assistant-mode threads (character_id IS NULL) by title or
+  /// message content in a single SQL query — no per-thread message loads.
+  Future<List<ChatThread>> searchThreads(String query) async {
+    return await _localDb.searchThreads(query);
+  }
+
   /// Returns a list of thread IDs representing the current thread and all
   /// its ancestor threads (up the branch chain). Used for RAG memory scoping.
   Future<List<String>> getThreadLineageIds(String threadId) async {

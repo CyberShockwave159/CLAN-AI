@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart';
 import 'package:clan_ai/core/errors/app_exception.dart';
 
 /// Network HTTP client configured with timeouts, error mapping, and streaming support.
@@ -14,7 +15,20 @@ class ApiHttpClient {
     http.Client? client,
     this.connectTimeout = const Duration(seconds: 10),
     this.receiveTimeout = const Duration(seconds: 60),
-  }) : _client = client ?? http.Client();
+  }) : _client = client ?? _createDefaultClient(connectTimeout);
+
+  /// Builds a client with a *real* TCP/TLS connect timeout.
+  ///
+  /// `Future.timeout` bounds a whole request, so it cannot tell a stalled TCP
+  /// connect apart from slow response data. [HttpClient.connectionTimeout]
+  /// covers the connect/TLS phase; the per-request `.timeout(...)` guards below
+  /// continue to bound the receive phase. (`HttpClient.idleTimeout` is not used
+  /// here — it governs how long pooled keep-alive sockets stay idle, not how
+  /// long a response may stall.)
+  static http.Client _createDefaultClient(Duration connectTimeout) {
+    final httpClient = HttpClient()..connectionTimeout = connectTimeout;
+    return IOClient(httpClient);
+  }
 
   Map<String, String> _buildHeaders({String? apiKey, Map<String, String>? extraHeaders}) {
     final headers = <String, String>{
@@ -103,7 +117,14 @@ class ApiHttpClient {
       final streamedResponse = await _client.send(request).timeout(connectTimeout);
 
       if (streamedResponse.statusCode >= 400) {
-        final errBody = await streamedResponse.stream.bytesToString();
+        // bytesToString() already drains the response stream to completion
+        // (releasing the connection) before we throw. Guard the read anyway:
+        // if it fails, still surface the HTTP status instead of masking it
+        // with a body-read error.
+        String errBody = '';
+        try {
+          errBody = await streamedResponse.stream.bytesToString();
+        } catch (_) {}
         throwForStatusCode(streamedResponse.statusCode, errBody, uri);
       }
 
@@ -136,16 +157,20 @@ class ApiHttpClient {
 
   void throwForStatusCode(int statusCode, String body, Uri uri) {
     String errorMsg = 'HTTP $statusCode error from ${uri.host}';
-    try {
-      final decoded = jsonDecode(body);
-      if (decoded is Map && decoded.containsKey('error')) {
-        final err = decoded['error'];
-        errorMsg = err is Map ? err['message'] ?? err.toString() : err.toString();
+    final trimmed = body.trim();
+    if (trimmed.isNotEmpty) {
+      String? extracted;
+      try {
+        extracted = _extractErrorMessage(jsonDecode(trimmed));
+      } catch (_) {
+        // Not JSON — a plain-text body is already human-readable.
+        extracted = trimmed;
       }
-    } catch (_) {
-      if (body.isNotEmpty) {
-        errorMsg = body;
+      if (extracted != null && extracted.isNotEmpty) {
+        errorMsg = extracted;
       }
+      // Recognized JSON without a usable message keeps the generic HTTP text
+      // rather than dumping a raw JSON blob at the user.
     }
 
     if (statusCode == 400 &&
@@ -163,6 +188,38 @@ class ApiHttpClient {
       details: 'Endpoint: ${uri.path}',
     );
   }
+
+  /// Extracts a human-readable message from the common API error shapes:
+  /// `{"error": "..."}`, `{"error": {"message": "..."}}`, `{"message": ...}`,
+  /// `{"detail": ...}` (FastAPI/vLLM), nested variants, and lists of errors.
+  ///
+  /// Returns null when the shape is recognized as JSON but contains no message.
+  static String? _extractErrorMessage(dynamic decoded, [int depth = 0]) {
+    if (depth > 4) return null;
+    if (decoded is String) {
+      final text = decoded.trim();
+      return text.isEmpty ? null : text;
+    }
+    if (decoded is Map) {
+      for (final key in _messageKeys) {
+        if (decoded.containsKey(key)) {
+          final extracted = _extractErrorMessage(decoded[key], depth + 1);
+          if (extracted != null) return extracted;
+        }
+      }
+      return null;
+    }
+    if (decoded is List) {
+      for (final item in decoded) {
+        final extracted = _extractErrorMessage(item, depth + 1);
+        if (extracted != null) return extracted;
+      }
+      return null;
+    }
+    return null;
+  }
+
+  static const List<String> _messageKeys = ['message', 'detail', 'error', 'msg', 'reason'];
 
   void close() {
     _client.close();

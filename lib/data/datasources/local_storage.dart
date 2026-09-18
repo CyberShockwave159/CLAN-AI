@@ -52,6 +52,12 @@ class LocalDatabase {
       version: 12,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
+      onConfigure: (db) async {
+        // SQLite ignores FOREIGN KEY declarations unless enforcement is
+        // enabled per connection. The messages->threads ON DELETE CASCADE is
+        // only honored with this pragma set on every open.
+        await db.execute('PRAGMA foreign_keys = ON;');
+      },
     );
   }
 
@@ -351,6 +357,9 @@ class LocalDatabase {
   Future<void> deleteThread(String threadId) async {
     final db = await database;
     await db.transaction((txn) async {
+      // Explicit message cleanup: deliberately does not rely on the
+      // messages->threads ON DELETE CASCADE (FK enforcement is per-connection
+      // and optional; the transaction keeps this atomic either way).
       await txn.delete('messages', where: 'thread_id = ?', whereArgs: [threadId]);
       await txn.delete('threads', where: 'id = ?', whereArgs: [threadId]);
     });
@@ -463,6 +472,42 @@ class LocalDatabase {
     final result = await db.query('threads', where: 'branch_from_thread_id = ?', whereArgs: [threadId]);
     return result.map((json) => ChatThread.fromMap(json)).toList();
   }
+
+  /// Searches threads by title OR message content in a single SQL query.
+  ///
+  /// Replaces the N+1 pattern of looping over threads and loading each
+  /// thread's full message list just to test a substring match. LIKE
+  /// wildcards in the query are escaped, so `%`/`_` are matched literally.
+  ///
+  /// When [characterId] is null the search is restricted to assistant-mode
+  /// threads (`character_id IS NULL`) so roleplay threads never leak into
+  /// assistant-mode search results.
+  Future<List<ChatThread>> searchThreads(String query, {String? characterId}) async {
+    final db = await database;
+    final pattern = '%${_escapeLike(query)}%';
+    final where = StringBuffer(
+      "(title LIKE ? ESCAPE '!' OR EXISTS "
+      "(SELECT 1 FROM messages WHERE thread_id = threads.id AND content LIKE ? ESCAPE '!'))",
+    );
+    final List<Object> args = [pattern, pattern];
+    if (characterId != null) {
+      where.write(' AND character_id = ?');
+      args.add(characterId);
+    } else {
+      where.write(' AND character_id IS NULL');
+    }
+    final result = await db.rawQuery(
+      'SELECT * FROM threads WHERE $where ORDER BY is_pinned DESC, updated_at DESC',
+      args,
+    );
+    return result.map((json) => ChatThread.fromMap(json)).toList();
+  }
+
+  /// Escapes SQLite LIKE wildcards so a user query is treated literally.
+  static String _escapeLike(String input) => input
+      .replaceAll('!', '!!')
+      .replaceAll('%', '!%')
+      .replaceAll('_', '!_');
 
   // --- Server Profile & Settings Persistence ---
 
@@ -645,11 +690,18 @@ class LocalDatabase {
 
   Future<List<ServerProfile>> loadServerProfiles() async {
     final profiles = await _loadServerProfilesFromPrefs();
+    // Fetch each profile's API key independently: a single secure-storage
+    // failure (locked keychain, keystore error) must not abort loading every
+    // profile. The affected profile is returned without its key instead.
     return await Future.wait(
       profiles.map((profile) async {
-        final secureKey = await SecureStorageService.instance.getApiKey(profile.id);
-        if (secureKey != null && secureKey.isNotEmpty) {
-          return profile.copyWith(apiKey: secureKey);
+        try {
+          final secureKey = await SecureStorageService.instance.getApiKey(profile.id);
+          if (secureKey != null && secureKey.isNotEmpty) {
+            return profile.copyWith(apiKey: secureKey);
+          }
+        } catch (_) {
+          // Keep the profile (without a key) rather than failing the whole load.
         }
         return profile;
       }),

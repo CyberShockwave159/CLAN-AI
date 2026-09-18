@@ -158,24 +158,33 @@ class _ClanAiAppState extends State<ClanAiApp> with WidgetsBindingObserver {
   }
 }
 
-class _HomeScreen extends StatelessWidget {
+class _HomeScreen extends StatefulWidget {
   final VoidCallback themeRefresh;
 
   const _HomeScreen({required this.themeRefresh});
 
   @override
+  State<_HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<_HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Register the theme-refresh callback exactly once. Doing this in build()
+    // (via addPostFrameCallback) is a side effect in build and re-registers on
+    // every rebuild.
+    context.read<SettingsViewModel>().setOnThemeChanged(widget.themeRefresh);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final appMode = context.watch<SettingsViewModel>().appMode;
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final settingsVM = context.read<SettingsViewModel>();
-      settingsVM.setOnThemeChanged(themeRefresh);
-    });
-
     if (appMode == AppMode.roleplay) {
-      return RoleplayScreen(themeRefresh: themeRefresh);
+      return RoleplayScreen(themeRefresh: widget.themeRefresh);
     }
 
-    return ChatScreen(themeRefresh: themeRefresh);
+    return ChatScreen(themeRefresh: widget.themeRefresh);
   }
 }

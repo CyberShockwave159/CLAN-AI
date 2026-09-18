@@ -87,6 +87,28 @@ class FakeChatRepository extends ChatRepository {
   }
 
   @override
+  Future<List<ChatThread>> searchThreads(String query, {String? characterId}) async {
+    final q = query.toLowerCase();
+    final results = <ChatThread>[];
+    for (final thread in _threads) {
+      if (characterId != null) {
+        if (thread.characterId != characterId) continue;
+      } else if (thread.characterId != null) {
+        continue; // Assistant-mode search: exclude roleplay threads.
+      }
+      if (thread.title.toLowerCase().contains(q)) {
+        results.add(thread);
+        continue;
+      }
+      final messages = _threadMessages[thread.id] ?? const <ChatMessage>[];
+      if (messages.any((m) => m.content.toLowerCase().contains(q))) {
+        results.add(thread);
+      }
+    }
+    return results;
+  }
+
+  @override
   Future<void> saveMessage(ChatMessage message) async {
     _lastSavedMessage = message;
     _threadMessages.putIfAbsent(message.threadId, () => []);
