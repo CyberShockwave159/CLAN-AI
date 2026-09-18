@@ -29,10 +29,7 @@ void main() {
     chatRepo = FakeChatRepository();
     charRepo = FakeCharacterRepository();
     vectorStore = FakeVectorStore();
-    vm = RoleplayViewModel(
-      chatRepository: chatRepo,
-      characterRepository: charRepo,
-    );
+    vm = RoleplayViewModel(chatRepo, charRepo);
   });
 
   tearDown(() {

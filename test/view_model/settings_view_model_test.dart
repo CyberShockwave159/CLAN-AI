@@ -21,7 +21,7 @@ void main() {
     fakeTemplateRepo = FakeSystemPromptTemplatesRepository();
     fakeServerRepo.activeConfig = const ServerConfig();
     vm = SettingsViewModel(
-      serverRepository: fakeServerRepo,
+      fakeServerRepo,
       templateRepository: fakeTemplateRepo,
     );
     // Wait for async _init() to complete (includes testConnection which sets selectedModel)

@@ -6,7 +6,7 @@ import 'package:clan_ai/data/repositories/chat_repository.dart';
 import 'package:clan_ai/core/network/sse_client.dart';
 import 'package:clan_ai/domain/models/generation_params.dart';
 
-class FakeChatRepository extends ChatRepository {
+class FakeChatRepository implements ChatRepository {
   final List<ChatThread> _threads = [];
   List<ChatThread> get allThreads => _threads;
   final Map<String, List<ChatMessage>> _threadMessages = {};
@@ -38,6 +38,24 @@ class FakeChatRepository extends ChatRepository {
   Future<List<ChatThread>> getThreadsForCharacter(String characterId) async =>
       _threads.where((t) => t.characterId == characterId).toList()
         ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+
+  @override
+  Future<List<String>> getThreadLineageIds(String threadId) async {
+    final lineageIds = <String>[threadId];
+    var currentId = threadId;
+    var depth = 0;
+    const maxDepth = 20;
+    while (depth < maxDepth) {
+      final matches = _threads.where((t) => t.id == currentId);
+      if (matches.isEmpty) break;
+      final branchFrom = matches.first.branchFromThreadId;
+      if (branchFrom == null) break;
+      lineageIds.add(branchFrom);
+      currentId = branchFrom;
+      depth++;
+    }
+    return lineageIds;
+  }
 
   @override
   Future<ChatThread> createThread({

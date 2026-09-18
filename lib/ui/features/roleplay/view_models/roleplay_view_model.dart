@@ -74,11 +74,7 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
   @override
   set messages(List<ChatMessage> v) => _messages = v;
 
-  RoleplayViewModel({
-    ChatRepository? chatRepository,
-    CharacterRepository? characterRepository,
-  })  : _chatRepository = chatRepository ?? ChatRepository(),
-        _characterRepository = characterRepository ?? CharacterRepository() {
+  RoleplayViewModel(this._chatRepository, this._characterRepository) {
     _init();
   }
 

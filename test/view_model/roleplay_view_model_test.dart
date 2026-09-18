@@ -29,10 +29,7 @@ void main() {
     fakeChatRepo = FakeChatRepository();
     fakeCharRepo = FakeCharacterRepository();
     fakeVectorStore = FakeVectorStore();
-    vm = RoleplayViewModel(
-      chatRepository: fakeChatRepo,
-      characterRepository: fakeCharRepo,
-    );
+    vm = RoleplayViewModel(fakeChatRepo, fakeCharRepo);
     // Wait for async loadThreads / loadLastChat to complete
     await Future.delayed(const Duration(milliseconds: 300));
   });

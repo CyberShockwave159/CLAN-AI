@@ -77,7 +77,7 @@ class PingResult {
 class LatencyMeter {
   final ApiHttpClient _httpClient;
 
-  LatencyMeter({ApiHttpClient? httpClient}) : _httpClient = httpClient ?? ApiHttpClient();
+  LatencyMeter(this._httpClient);
 
   /// Pings the server using `/health`, `/props`, or `/v1/models` and returns the round-trip latency.
   Future<PingResult> ping(String baseUrl, {String? apiKey}) async {

@@ -12,11 +12,8 @@ class ChatRepository {
   final LocalDatabase _localDb;
   final LlamaApiService _apiService;
 
-  ChatRepository({
-    LocalDatabase? localDb,
-    LlamaApiService? apiService,
-  })  : _localDb = localDb ?? LocalDatabase.instance,
-        _apiService = apiService ?? LlamaApiService();
+  ChatRepository(this._apiService, {LocalDatabase? localDb})
+      : _localDb = localDb ?? LocalDatabase.instance;
 
   // --- Thread Methods ---
 

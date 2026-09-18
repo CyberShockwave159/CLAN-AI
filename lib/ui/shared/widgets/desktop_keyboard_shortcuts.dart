@@ -16,17 +16,27 @@ import 'package:clan_ai/ui/features/settings/views/settings_screen.dart';
 class DesktopKeyboardShortcuts extends StatefulWidget {
   final Widget child;
 
-  const DesktopKeyboardShortcuts({required this.child, super.key});
+  /// Navigator key owned by the app. This widget sits above the MaterialApp in
+  /// the tree, so shortcuts need this key to reach a context below the
+  /// Navigator (e.g. for showDialog / showSearch).
+  final GlobalKey<NavigatorState> navigatorKey;
 
-  /// Navigator key set by the app for use in showDialog.
-  static GlobalKey<NavigatorState>? navigatorKey;
+  const DesktopKeyboardShortcuts({
+    required this.child,
+    required this.navigatorKey,
+    super.key,
+  });
 
-  /// Returns the current context from the navigator key, if available.
-  static BuildContext? get navigatorContext => navigatorKey?.currentContext;
+  @override
+  State<DesktopKeyboardShortcuts> createState() => _DesktopKeyboardShortcutsState();
+}
 
-  /// Shows the shortcuts help dialog using the navigator key's current context.
-  static void showShortcutsHelpDialog() {
-    final context = navigatorContext;
+class _DesktopKeyboardShortcutsState extends State<DesktopKeyboardShortcuts> {
+  BuildContext? get _navigatorContext => widget.navigatorKey.currentContext;
+
+  /// Shows the shortcuts help dialog using a context below the navigator.
+  void _showShortcutsHelpDialog() {
+    final context = _navigatorContext;
     if (context != null) {
       showDialog(
         context: context,
@@ -35,11 +45,6 @@ class DesktopKeyboardShortcuts extends StatefulWidget {
     }
   }
 
-  @override
-  State<DesktopKeyboardShortcuts> createState() => _DesktopKeyboardShortcutsState();
-}
-
-class _DesktopKeyboardShortcutsState extends State<DesktopKeyboardShortcuts> {
   void _handleNewChat() {
     final settingsVM = context.read<SettingsViewModel>();
     final appMode = settingsVM.appMode;
@@ -64,7 +69,7 @@ class _DesktopKeyboardShortcutsState extends State<DesktopKeyboardShortcuts> {
     final chatVM = context.read<ChatViewModel>();
     if (chatVM.threads.isEmpty) return;
 
-    final searchContext = DesktopKeyboardShortcuts.navigatorContext ?? context;
+    final searchContext = _navigatorContext ?? context;
     showSearch<ChatThread>(
       context: searchContext,
       delegate: _ThreadSearchDelegate(chatVM),
@@ -72,14 +77,14 @@ class _DesktopKeyboardShortcutsState extends State<DesktopKeyboardShortcuts> {
   }
 
   void _handleSettings() {
-    final settingsContext = DesktopKeyboardShortcuts.navigatorContext ?? context;
+    final settingsContext = _navigatorContext ?? context;
     Navigator.of(settingsContext).push(
       MaterialPageRoute(builder: (_) => const SettingsScreen()),
     );
   }
 
   void _handleShortcutsHelp() {
-    DesktopKeyboardShortcuts.showShortcutsHelpDialog();
+    _showShortcutsHelpDialog();
   }
 
   void _handleStopGeneration() {

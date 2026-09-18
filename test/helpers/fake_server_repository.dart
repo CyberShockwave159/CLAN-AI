@@ -4,7 +4,7 @@ import 'package:clan_ai/data/models/model_info.dart';
 import 'package:clan_ai/data/repositories/server_repository.dart';
 import 'package:clan_ai/core/utils/latency_meter.dart';
 
-class FakeServerRepository extends ServerRepository {
+class FakeServerRepository implements ServerRepository {
   final List<ServerProfile> _profiles = [];
   String? _activeProfileId;
    ServerConfig? activeConfig;
@@ -17,6 +17,13 @@ class FakeServerRepository extends ServerRepository {
   Future<List<ServerProfile>> loadProfiles() async => _profiles.toList();
 
   @override
+  Future<void> saveProfiles(List<ServerProfile> profiles) async {
+    _profiles
+      ..clear()
+      ..addAll(profiles);
+  }
+
+  @override
   Future<String?> getActiveProfileId() async => _activeProfileId;
 
   @override
@@ -24,6 +31,17 @@ class FakeServerRepository extends ServerRepository {
     if (_activeProfileId == null) return null;
     return _profiles.where((p) => p.id == _activeProfileId).firstOrNull;
   }
+
+  @override
+  Future<ServerProfile?> getActiveConnection() => getActiveProfile();
+
+  @override
+  Future<PingResult> ping(String baseUrl, {String? apiKey}) =>
+      testConnection(baseUrl, apiKey: apiKey);
+
+  @override
+  Future<PingResult> testConnectionAtUrl(String url, {String? apiKey}) =>
+      testConnection(url, apiKey: apiKey);
 
   @override
   Future<ServerProfile> createProfile(

@@ -45,37 +45,36 @@ void main() async {
 
   // Create shared HTTP client and latency meter
   final sharedHttpClient = ApiHttpClient();
-  final latencyMeter = LatencyMeter(httpClient: sharedHttpClient);
-  final apiService = LlamaApiService(
-    httpClient: sharedHttpClient,
-    latencyMeter: latencyMeter,
-  );
-  final serverRepository = ServerRepository(apiService: apiService);
-  final chatRepository = ChatRepository(apiService: apiService);
+  final latencyMeter = LatencyMeter(sharedHttpClient);
+  final apiService = LlamaApiService(sharedHttpClient, latencyMeter);
+  final serverRepository = ServerRepository(apiService);
+  final chatRepository = ChatRepository(apiService);
   final characterRepository = CharacterRepository();
+  final navigatorKey = GlobalKey<NavigatorState>();
 
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(
-          create: (_) => SettingsViewModel(serverRepository: serverRepository),
+          create: (_) => SettingsViewModel(serverRepository),
         ),
         ChangeNotifierProvider(
-          create: (_) => ChatViewModel(chatRepository: chatRepository),
+          create: (_) => ChatViewModel(chatRepository),
         ),
         ChangeNotifierProvider(
           create: (_) => PersonaTemplateViewModel(),
         ),
         ChangeNotifierProvider(
-          create: (_) => RoleplayViewModel(
-            chatRepository: chatRepository,
-            characterRepository: characterRepository,
-          ),
+          create: (_) => RoleplayViewModel(chatRepository, characterRepository),
         ),
         Provider<CharacterRepository>.value(value: characterRepository),
       ],
       child: DesktopKeyboardShortcuts(
-        child: ClanAiApp(httpClient: sharedHttpClient),
+        navigatorKey: navigatorKey,
+        child: ClanAiApp(
+          httpClient: sharedHttpClient,
+          navigatorKey: navigatorKey,
+        ),
       ),
     ),
   );
@@ -83,21 +82,24 @@ void main() async {
 
 class ClanAiApp extends StatefulWidget {
   final ApiHttpClient httpClient;
+  final GlobalKey<NavigatorState> navigatorKey;
 
-  const ClanAiApp({required this.httpClient, super.key});
+  const ClanAiApp({
+    required this.httpClient,
+    required this.navigatorKey,
+    super.key,
+  });
 
   @override
   State<ClanAiApp> createState() => _ClanAiAppState();
 }
 
 class _ClanAiAppState extends State<ClanAiApp> with WidgetsBindingObserver {
-  final navigatorKey = GlobalKey<NavigatorState>();
   ThemeData _currentTheme = AppTheme.darkTheme;
 
   @override
   void initState() {
     super.initState();
-    DesktopKeyboardShortcuts.navigatorKey = navigatorKey;
     WidgetsBinding.instance.addObserver(this);
     _loadAppThemeMode();
   }
@@ -116,8 +118,9 @@ class _ClanAiAppState extends State<ClanAiApp> with WidgetsBindingObserver {
           _currentTheme = _buildTheme(mode, colors);
         });
       }
-    } catch (_) {
-      // Keep default dark theme
+    } catch (e, st) {
+      // Keep the default dark theme, but surface the failure for debugging.
+      debugPrint('Failed to load app theme mode: $e\n$st');
     }
   }
 
@@ -149,7 +152,7 @@ class _ClanAiAppState extends State<ClanAiApp> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      navigatorKey: navigatorKey,
+      navigatorKey: widget.navigatorKey,
       title: 'CLAN AI',
       debugShowCheckedModeBanner: false,
       theme: _currentTheme,

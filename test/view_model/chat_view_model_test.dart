@@ -26,7 +26,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     setupMockPathProvider();
     fakeRepo = FakeChatRepository();
-    vm = ChatViewModel(chatRepository: fakeRepo);
+    vm = ChatViewModel(fakeRepo);
     // Wait for async loadThreads() to complete and settle
     await Future.delayed(const Duration(milliseconds: 300));
   });

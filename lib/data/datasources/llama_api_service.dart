@@ -14,11 +14,7 @@ class LlamaApiService {
   final ApiHttpClient _httpClient;
   final LatencyMeter _latencyMeter;
 
-  LlamaApiService({
-    ApiHttpClient? httpClient,
-    LatencyMeter? latencyMeter,
-  })  : _httpClient = httpClient ?? ApiHttpClient(),
-        _latencyMeter = latencyMeter ?? LatencyMeter(httpClient: httpClient);
+  LlamaApiService(this._httpClient, this._latencyMeter);
 
   /// Pings the server to check connectivity and roundtrip latency in ms.
   Future<PingResult> ping(String baseUrl, {String? apiKey}) async {

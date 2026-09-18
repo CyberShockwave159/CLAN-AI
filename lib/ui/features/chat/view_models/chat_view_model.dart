@@ -73,8 +73,7 @@ class ChatViewModel extends ChangeNotifier with StreamMutationMixin {
   @override
   set messages(List<ChatMessage> v) => _messages = v;
 
-  ChatViewModel({ChatRepository? chatRepository})
-      : _chatRepository = chatRepository ?? ChatRepository() {
+  ChatViewModel(this._chatRepository) {
     loadThreads();
   }
 

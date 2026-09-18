@@ -12,11 +12,8 @@ class ServerRepository {
   final LocalDatabase _localDb;
   static final _mutex = Mutex();
 
-  ServerRepository({
-    LlamaApiService? apiService,
-    LocalDatabase? localDb,
-  })  : _apiService = apiService ?? LlamaApiService(),
-        _localDb = localDb ?? LocalDatabase.instance;
+  ServerRepository(this._apiService, {LocalDatabase? localDb})
+      : _localDb = localDb ?? LocalDatabase.instance;
 
   // --- Profile Management ---
 

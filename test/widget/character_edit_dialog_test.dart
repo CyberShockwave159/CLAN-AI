@@ -10,6 +10,7 @@ import 'package:clan_ai/ui/features/roleplay/view_models/persona_template_view_m
 import 'package:clan_ai/ui/features/roleplay/widgets/character_edit_dialog.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import '../helpers/fake_chat_repository.dart';
 import '../helpers/mock_path_provider.dart';
 
 class FakePersonaTemplateRepository extends PersonaTemplateRepository {
@@ -128,7 +129,10 @@ void main() {
       firstMessage: 'What would you like to eat?',
     );
 
-    final roleplayVM = RoleplayViewModel();
+    final roleplayVM = RoleplayViewModel(
+      FakeChatRepository(),
+      FakeCharacterRepository(),
+    );
     // Wait for init
     await Future.delayed(const Duration(milliseconds: 50));
 

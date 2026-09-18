@@ -18,7 +18,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     setupMockPathProvider();
     repo = FakeChatRepository();
-    vm = ChatViewModel(chatRepository: repo);
+    vm = ChatViewModel(repo);
     // Allow unawaited constructor loadThreads() to complete
     await Future.delayed(const Duration(milliseconds: 20));
     repo.allThreads.clear();

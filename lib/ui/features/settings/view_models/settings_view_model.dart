@@ -71,12 +71,11 @@ class SettingsViewModel extends ChangeNotifier {
 
   Timer? _healthPollTimer;
 
-  SettingsViewModel({
-    ServerRepository? serverRepository,
+  SettingsViewModel(
+    this._serverRepository, {
     SystemPromptTemplatesRepository? templateRepository,
     VoidCallback? onThemeChanged,
-  })  : _serverRepository = serverRepository ?? ServerRepository(),
-        _templateRepository = templateRepository ?? SystemPromptTemplatesRepository() {
+  })  : _templateRepository = templateRepository ?? SystemPromptTemplatesRepository() {
     _onThemeChanged = onThemeChanged;
     _init();
   }

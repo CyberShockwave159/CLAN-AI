@@ -246,7 +246,12 @@ class _RoleplayScreenState extends State<RoleplayScreen> with AutoScrollMixin {
             IconButton(
               icon: const Icon(Icons.keyboard_outlined, size: 20),
               onPressed: () {
-                DesktopKeyboardShortcuts.showShortcutsHelpDialog();
+                // This screen already sits below the MaterialApp, so the local
+                // context has a Navigator ancestor.
+                showDialog(
+                  context: context,
+                  builder: (_) => const ShortcutsHelpDialog(),
+                );
               },
               tooltip: 'Keyboard Shortcuts (Ctrl+/)',
             ),
