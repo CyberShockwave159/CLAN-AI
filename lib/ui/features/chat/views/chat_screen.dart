@@ -236,9 +236,10 @@ class _ChatScreenState extends State<ChatScreen> with AutoScrollMixin {
           // Bottom Prompt Input Bar
           PromptInputBar(
             isGenerating: chatVM.isGenerating,
-            onSend: (prompt) {
+            onSend: (prompt, imagePath) {
               chatVM.sendMessage(
                 prompt: prompt,
+                imagePath: imagePath,
                 serverConfig: settingsVM.config,
                 connection: settingsVM.connectionDetails,
                 modelContextLength: settingsVM.getSelectedModelContextLength(),

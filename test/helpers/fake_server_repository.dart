@@ -48,14 +48,12 @@ class FakeServerRepository implements ServerRepository {
     String name, {
     required String baseUrl,
     String? apiKey,
-    ApiProtocol protocol = ApiProtocol.openAi,
     bool reasoning = false,
   }) async {
     final profile = ServerProfile(
       name: name,
       baseUrl: baseUrl,
       apiKey: apiKey,
-      protocol: protocol,
       reasoning: reasoning,
     );
     _profiles.add(profile);

@@ -49,6 +49,7 @@ class ChatMessage {
   final int? ragMemoryCount;
   final String? ragMemoryContents;
   final String reasoningContent;
+  final String? imagePath;
 
   ChatMessage({
     String? id,
@@ -71,6 +72,7 @@ class ChatMessage {
     this.ragMemoryCount,
     this.ragMemoryContents,
     this.reasoningContent = '',
+    this.imagePath,
   })  : id = id ?? const Uuid().v4(),
         createdAt = createdAt ?? DateTime.now();
 
@@ -95,6 +97,7 @@ class ChatMessage {
     int? ragMemoryCount,
     String? ragMemoryContents,
     String? reasoningContent,
+    String? imagePath,
   }) {
     return ChatMessage(
       id: id ?? this.id,
@@ -117,6 +120,7 @@ class ChatMessage {
       ragMemoryCount: ragMemoryCount ?? this.ragMemoryCount,
       ragMemoryContents: ragMemoryContents ?? this.ragMemoryContents,
       reasoningContent: reasoningContent ?? this.reasoningContent,
+      imagePath: imagePath ?? this.imagePath,
     );
   }
 
@@ -142,6 +146,7 @@ class ChatMessage {
       'rag_memory_count': ragMemoryCount,
       'rag_memory_contents': ragMemoryContents,
       'reasoning_content': reasoningContent,
+      'image_path': imagePath,
     };
   }
 
@@ -177,6 +182,7 @@ class ChatMessage {
       ragMemoryCount: (map['rag_memory_count'] as num?)?.toInt(),
       ragMemoryContents: map['rag_memory_contents'] as String?,
       reasoningContent: (map['reasoning_content'] as String?) ?? '',
+      imagePath: map['image_path'] as String?,
     );
   }
 }

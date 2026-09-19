@@ -123,7 +123,7 @@ Supported build targets: `linux`, `macos`, `windows`, `apk` (Android), `ios`.
 
 ## Features
 
-- Real-time streaming chat with both OpenAI-compatible and native llama.cpp endpoints
+- Real-time streaming chat over OpenAI-compatible endpoints
 - **Server Health Status** — Chat and roleplay screens display a red warning banner when server is unreachable, with quick link to Settings
 - **Reasoning/Thinking Block View** — Toggle in Settings to request and display model reasoning/thinking as a collapsible block. Supports dedicated reasoning fields (`delta.reasoning`), inline tags (```xml, `<thought>`), and multiple field name conventions across models
 - **AI Roleplay Mode** — Toggle from Settings; mirrors assistant mode UI with per-character isolated sessions and client-side RAG memory
@@ -135,7 +135,8 @@ Supported build targets: `linux`, `macos`, `windows`, `apk` (Android), `ios`.
 - **Post History Instructions** — Additional text appended after each AI response for style reminders or state tracking
 - Client-Side RAG — Pure Dart feature hashing embeddings (256-dim, char trigrams) with SQLite cosine similarity; zero ML dependencies. Configurable Top-K (1-10) and minimum relevance threshold (0.0-1.0) in Generation Parameters sheet
 - **Conversation branching** — Regenerate and edit responses create sibling variants. All variants share a complete `siblingIds` array. Navigation loads siblings from DB, sorts by `variantIndex`, and indexes into the sorted list via `ChatRepository.getAllMessagesForThread()` (bypasses message deduplication).
-- SQLite local persistence with full thread/message history (schema v12)
+- **Image attachments** — Attach one image per user message (chat & roleplay). Images are stored on disk with only the absolute path in SQLite, sent as base64 `image_url` content parts over the OpenAI-compatible API (works with any vision-capable backend), tap to view in a full-screen lightbox, and auto-cleaned when messages/threads are deleted. Magic-byte sniffing detects the true format even when the file extension lies.
+- SQLite local persistence with full thread/message history (schema v13)
 - Automatic server health polling with fallback endpoints (`/health` → `/props` → `/v1/models`)
 - Dark mode by default (OLED-optimized), configurable light and custom themes
 - Custom theme presets (Warm, Cool, Pastel) with persisted user color selections
@@ -173,9 +174,8 @@ On first launch, open Settings from the side drawer and configure your llama.cpp
    - Android emulator: `http://10.0.2.2:8080`
    - Android physical device: `http://<host-lan-ip>:8080`
    - iOS simulator: `http://localhost:8080`
-2. **API Protocol** — Choose "OpenAI Compatible" or "llama.cpp Native"
-3. **Model** — Select a model from the auto-discovered list
-4. Test the connection, then start chatting
+2. **Model** — Select a model from the auto-discovered list
+3. Test the connection, then start chatting
 
 ### Roleplay Mode
 
@@ -214,12 +214,12 @@ Characters can have multiple opening messages:
 - **ServerProfile consolidation:** `ServerConnectionDetails` removed; `ServerProfile` serves as connection details throughout
 - **Dependency wiring** in `lib/main.dart` via constructor injection
 - **Four root providers**: `SettingsViewModel`, `ChatViewModel`, `RoleplayViewModel`, `PersonaTemplateViewModel`
-- **SQLite** via `sqflite` (desktop uses `sqflite_common_ffi`, mobile uses native), schema version 12 (`threads`, `messages` with `variant_index`/`total_variants`/`sibling_ids` for conversation branching, `characters`, `persona_templates` tables)
+- **SQLite** via `sqflite` (desktop uses `sqflite_common_ffi`, mobile uses native), schema version 13 (`threads`, `messages` with `variant_index`/`total_variants`/`sibling_ids` for conversation branching and `image_path` for image attachments, `characters`, `persona_templates` tables)
 - **Secure API keys** stored in OS Keychain/KeyStore via `SecureStorageService` (`flutter_secure_storage`)
 - **Single `CharacterRepository`** instance injected via constructor throughout the app
 - **Streaming** via Server-Sent Events with 20ms UI throttling to prevent frame drops
 - **Theme system**: `AppThemeMode` enum (dark/light/custom) with `CustomThemeColors` presets (Warm, Cool, Pastel). `ClanThemeColors` ThemeExtension on all `ThemeData` instances enables theme-aware color lookups (`context.clanTextPrimary`, `context.clanSurfaceVariant`, etc.). Custom theme colors persist to SharedPreferences. Settings → Theme section at bottom of settings screen.
-- **Reasoning pipeline**: `SseClient.parseStream()` extracts reasoning from multiple field names (`reasoning`, `reasoning_content`, `thought`) across OpenAI and native formats. `SseClient.filterReasoning()` processes inline thinking tags and forwards dedicated reasoning fields through a stream pipeline. Both OpenAI and llama.cpp native protocols support the `reasoning` parameter.
+- **Reasoning pipeline**: `SseClient.parseStream()` extracts reasoning from multiple field names (`reasoning`, `reasoning_content`, `thought`). `SseClient.filterReasoning()` processes inline thinking tags and forwards dedicated reasoning fields through a stream pipeline. The OpenAI-compatible protocol supports the `reasoning` parameter.
 - **Thread isolation**: `ChatThread.characterId` distinguishes assistant vs roleplay threads
 - **FileSaver**: Native mobile save dialogs via platform channels (Android SAF, iOS UIDocumentPicker); desktop falls back to app documents directory
 - **SillyTavern Import**: `lib/core/utils/silly_tavern_card_parser.dart` parses `chara_card_v2` JSON; extracts `system_prompt`, `post_history_instructions`, and `alternate_greetings` in addition to core fields. `lib/core/utils/st_avatar_downloader.dart` fetches avatars; auto-edit dialog for imported characters via `CharacterEditDialog` (proper StatefulWidget)
@@ -260,17 +260,17 @@ This produces files in the `dist/` directory:
 
 ```bash
 flutter analyze        # lint + typecheck
-flutter test           # runs all 28 test files (465 total tests)
+flutter test           # runs all 28 test files (503 total tests)
 flutter run            # launch app
 ```
 
 ### Testing
 
-28 test files, 473 total tests. All tests use fake repositories (no real SQLite or network). ViewModels expose private state via setters for test injection.
+28 test files, 503 total tests. All tests use fake repositories (no real SQLite or network). ViewModels expose private state via setters for test injection.
 
 **Coverage by layer:**
-- **Domain** — `GenerationParams` serialization (OpenAI & native payloads, TextSanitizer segment parsing, reasoning flags), model roundtrip serialization (ChatThread, ChatMessage, CharacterProfile, PersonaTemplate, ServerConfig)
-- **Network** — `SseClient` parsing (OpenAI deltas, llama.cpp native chunks, ping comments, multi-line data, multi-field reasoning extraction, `filterReasoning` inline tag processing)
+- **Domain** — `GenerationParams` serialization (OpenAI payloads, TextSanitizer segment parsing, reasoning flags), model roundtrip serialization (ChatThread, ChatMessage, CharacterProfile, PersonaTemplate, ServerConfig)
+- **Network** — `SseClient` parsing (OpenAI deltas, ping comments, multi-line data, multi-field reasoning extraction, `filterReasoning` inline tag processing)
 - **Utilities** — Roleplay prompt formatter, context builder, hash embedding, vector store, SillyTavern card parser, conversation export
 - **Mixins** — StreamMutationMixin (streaming, undo, stop, switchVariant with complete siblingIds propagation and DB sorting)
 - **Repositories** — ChatRepository, CharacterRepository (thread/message CRUD, favorites, embeddings, `getAllMessagesForThread` for variant navigation)
@@ -283,7 +283,7 @@ flutter run            # launch app
 - **Conversation branching**: Regenerate and edit operations truncate at the parent message and create new sibling branches. Navigation between variants uses `variantIndex` + `siblingIds`. All variants in a regeneration group share a complete `siblingIds` array. `doSwitchVariant` loads all siblings from DB, sorts by `variantIndex`, and indexes into the sorted list. Regenerate builds a complete `allSiblingIds` set (filtered by `role == assistant` and shared `parentId`) and assigns it to every variant. Branches are linked via `branchFromThreadId` on `ChatThread`. In roleplay mode, the first assistant message (character's greeting) has the regenerate button disabled until the user has replied.
 - **Android networking**: `127.0.0.1` refers to the Android device's loopback, not your host machine. Use `10.0.2.2` for the Android emulator or your host's LAN IP for physical devices.
 - **SQLite desktop FFI**: On Linux/Windows/macOS, `sqflite_common_ffi` is initialized **once** in `main.dart` (`_initSqliteFfi()`). Do not call `sqfliteFfiInit()` again — it will trigger a warning.
-- **Database migration**: DB schema is version 12 (added `variant_index`, `total_variants`, `sibling_ids` columns to messages table for conversation branching in v12, `persona_name` to `persona_templates` in v11, `persona_name`/`persona_description` to `characters` in v10). If you encounter schema errors, clear the app's local storage or delete `clan_ai.db`.
+- **Database migration**: DB schema is version 13 (added `image_path` to messages in v13, `variant_index`, `total_variants`, `sibling_ids` columns to messages table for conversation branching in v12, `persona_name` to `persona_templates` in v11, `persona_name`/`persona_description` to `characters` in v10). If you encounter schema errors, clear the app's local storage or delete `clan_ai.db`.
 - **Reasoning block streaming**: The `ReasoningBlock` widget displays thinking/reasoning content when the "View Thinking" toggle is enabled in Settings. Models can provide reasoning via dedicated fields (`delta.reasoning`, `delta.reasoning_content`, `delta.thought`) or inline tags (```xml, `<thought>`, `<reasoning>`). The `filterReasoning` stream pipeline handles both formats. Older llama.cpp versions may not return reasoning content.
 - **Roleplay thread separation**: `ChatViewModel.loadThreads()` filters out threads with `characterId != null` (roleplay threads). `RoleplayViewModel.loadLastChat()` loads threads with `characterId != null` (or falls back for legacy threads).
 - **RAG isolation**: Each character's embeddings are stored with `character_id` in the vector store. Queries are strictly `WHERE character_id = ?` — no cross-character memory leakage.

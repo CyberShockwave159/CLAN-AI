@@ -3,18 +3,10 @@ import 'package:clan_ai/core/constants/app_constants.dart';
 import 'package:clan_ai/core/utils/latency_meter.dart';
 import 'package:clan_ai/domain/models/generation_params.dart';
 
-enum ApiProtocol {
-  openAi,
-  llamaNative;
-
-  String get displayName => this == openAi ? 'OpenAI Compatible' : 'llama.cpp Native';
-}
-
 class ServerConfig {
   final String name;
   final String baseUrl;
   final String? apiKey;
-  final ApiProtocol protocol;
   final String? selectedModel;
   final GenerationParams defaultParams;
   final ServerHealthStatus healthStatus;
@@ -27,7 +19,6 @@ class ServerConfig {
     this.name = defaultServerName,
     this.baseUrl = defaultBaseUrl,
     this.apiKey,
-    this.protocol = ApiProtocol.openAi,
     this.selectedModel,
     this.defaultParams = const GenerationParams(),
     this.healthStatus = ServerHealthStatus.offline,
@@ -41,7 +32,6 @@ class ServerConfig {
     String? name,
     String? baseUrl,
     String? apiKey,
-    ApiProtocol? protocol,
     String? selectedModel,
     GenerationParams? defaultParams,
     ServerHealthStatus? healthStatus,
@@ -54,7 +44,6 @@ class ServerConfig {
       name: name ?? this.name,
       baseUrl: baseUrl ?? this.baseUrl,
       apiKey: apiKey ?? this.apiKey,
-      protocol: protocol ?? this.protocol,
       selectedModel: selectedModel ?? this.selectedModel,
       defaultParams: defaultParams ?? this.defaultParams,
       healthStatus: healthStatus ?? this.healthStatus,
@@ -70,7 +59,6 @@ class ServerConfig {
       'name': name,
       'base_url': baseUrl,
       'api_key': apiKey,
-      'protocol': protocol.name,
       'selected_model': selectedModel,
       'default_params': jsonEncode(defaultParams.toMap()),
       'system_prompt': systemPrompt,
@@ -90,19 +78,10 @@ class ServerConfig {
       } catch (_) {}
     }
 
-    final protocolStr = map['protocol'] as String?;
-    final savedProtocol = protocolStr != null
-        ? ApiProtocol.values.firstWhere(
-            (e) => e.name == protocolStr,
-            orElse: () => ApiProtocol.openAi,
-          )
-        : ApiProtocol.openAi;
-
     return ServerConfig(
       name: map['name'] as String? ?? defaultServerName,
       baseUrl: map['base_url'] as String? ?? defaultBaseUrl,
       apiKey: map['api_key'] as String?,
-      protocol: savedProtocol,
       selectedModel: map['selected_model'] as String?,
       defaultParams: defaultParams,
       systemPrompt: map['system_prompt'] as String? ?? defaultSystemPrompt,

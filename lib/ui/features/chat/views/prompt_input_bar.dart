@@ -1,10 +1,14 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:clan_ai/core/constants/app_theme.dart';
+import 'package:clan_ai/core/utils/message_attachment_store.dart';
 
 class PromptInputBar extends StatefulWidget {
   final bool isGenerating;
-  final Function(String text) onSend;
+  final Function(String text, String? imagePath) onSend;
   final VoidCallback onStop;
   final VoidCallback onOpenParams;
   final bool isRoleplay;
@@ -27,7 +31,9 @@ class PromptInputBar extends StatefulWidget {
 class _PromptInputBarState extends State<PromptInputBar> {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
+  final ImagePicker _imagePicker = ImagePicker();
   bool _hasText = false;
+  String? _imagePath;
 
   @override
   void initState() {
@@ -40,11 +46,68 @@ class _PromptInputBarState extends State<PromptInputBar> {
     });
   }
 
+  Future<void> _pickImage() async {
+    if (widget.isGenerating) return;
+
+    try {
+      final XFile? image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        // Bound dimensions/quality so base64 payloads stay reasonable on
+        // large phone camera images.
+        maxWidth: 2048,
+        maxHeight: 2048,
+        imageQuality: 85,
+      );
+      if (image == null || !mounted) return;
+
+      final bytes = await image.readAsBytes();
+      final fileId = '${DateTime.now().millisecondsSinceEpoch}_${image.name
+          .split('.')
+          .first}';
+      final savedPath = await MessageAttachmentStore.instance.saveImage(
+        fileId: fileId,
+        data: bytes,
+        extension: MessageAttachmentStore.extensionOf(image.path),
+      );
+
+      // Remove a previously selected (unsent) image to avoid orphans.
+      if (_imagePath != null) {
+        await MessageAttachmentStore.instance.deleteIfExists(_imagePath);
+      }
+
+      if (mounted) {
+        setState(() => _imagePath = savedPath);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to attach image'),
+            duration: Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(10))),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _removeImage() async {
+    if (_imagePath == null) return;
+    final path = _imagePath;
+    setState(() => _imagePath = null);
+    await MessageAttachmentStore.instance.deleteIfExists(path);
+  }
+
   void _handleSend() {
     final text = _controller.text.trim();
-    if (text.isNotEmpty && !widget.isGenerating) {
-      widget.onSend(text);
+    final imagePath = _imagePath;
+    if ((text.isNotEmpty || imagePath != null) && !widget.isGenerating) {
+      widget.onSend(text, imagePath);
       _controller.clear();
+      // The message now owns the file — keep it on disk, just clear the
+      // pending selection.
+      setState(() => _imagePath = null);
     }
   }
 
@@ -78,6 +141,23 @@ class _PromptInputBarState extends State<PromptInputBar> {
 
             const SizedBox(width: 4),
 
+            // Image Attach Button
+            IconButton(
+              icon: Icon(
+                _imagePath != null
+                    ? Icons.image_rounded
+                    : Icons.add_photo_alternate_outlined,
+                size: 22,
+              ),
+              color: _imagePath != null
+                  ? AppTheme.accentPrimary
+                  : (isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary),
+              onPressed: widget.isGenerating ? null : _pickImage,
+              tooltip: 'Attach image',
+            ),
+
+            const SizedBox(width: 4),
+
             // Input Text Field
             Expanded(
               child: Container(
@@ -91,40 +171,46 @@ class _PromptInputBarState extends State<PromptInputBar> {
                     width: 1,
                   ),
                 ),
-                child: TextField(
-                  controller: _controller,
-                  focusNode: _focusNode,
-                  maxLines: 5,
-                  minLines: 1,
-                  textInputAction: TextInputAction.send,
-                  keyboardType: TextInputType.multiline,
-                  style: TextStyle(
-                    fontSize: 14.5,
-                    color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: widget.isRoleplay
-                        ? 'Reply as ${widget.personaName ?? 'you'}...'
-                        : 'Ask anything...',
-                    hintStyle: TextStyle(
-                      fontSize: 14.5,
-                      color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_imagePath != null) _buildImagePreview(isDark),
+                    TextField(
+                      controller: _controller,
+                      focusNode: _focusNode,
+                      maxLines: 5,
+                      minLines: 1,
+                      textInputAction: TextInputAction.send,
+                      keyboardType: TextInputType.multiline,
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: widget.isRoleplay
+                            ? 'Reply as ${widget.personaName ?? 'you'}...'
+                            : 'Ask anything...',
+                        hintStyle: TextStyle(
+                          fontSize: 14.5,
+                          color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        fillColor: Colors.transparent,
+                        filled: true,
+                      ),
+                      onSubmitted: (_) {
+                        if (HardwareKeyboard.instance.isLogicalKeyPressed(LogicalKeyboardKey.shiftLeft) ||
+                            HardwareKeyboard.instance.isLogicalKeyPressed(LogicalKeyboardKey.shiftRight)) {
+                          // Shift+Enter creates a new line
+                        } else {
+                          _handleSend();
+                        }
+                      },
                     ),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                    fillColor: Colors.transparent,
-                    filled: true,
-                  ),
-                  onSubmitted: (_) {
-                    if (HardwareKeyboard.instance.isLogicalKeyPressed(LogicalKeyboardKey.shiftLeft) ||
-                        HardwareKeyboard.instance.isLogicalKeyPressed(LogicalKeyboardKey.shiftRight)) {
-                      // Shift+Enter creates a new line
-                    } else {
-                      _handleSend();
-                    }
-                  },
+                  ],
                 ),
               ),
             ),
@@ -154,24 +240,80 @@ class _PromptInputBarState extends State<PromptInputBar> {
                       width: 42,
                       height: 42,
                       decoration: BoxDecoration(
-                        color: _hasText ? AppTheme.accentPrimary : (isDark ? AppTheme.darkSurfaceVariant : AppTheme.lightSurfaceVariant),
+                        color: _hasText || _imagePath != null
+                            ? AppTheme.accentPrimary
+                            : (isDark ? AppTheme.darkSurfaceVariant : AppTheme.lightSurfaceVariant),
                         shape: BoxShape.circle,
                       ),
                       child: IconButton(
                         icon: Icon(
                           Icons.arrow_upward_rounded,
-                          color: _hasText
+                          color: (_hasText || _imagePath != null)
                               ? Colors.white
                               : (isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted),
                           size: 20,
                         ),
-                        onPressed: _hasText ? _handleSend : null,
+                        onPressed: (_hasText || _imagePath != null) ? _handleSend : null,
                         tooltip: 'Send message',
                       ),
                     ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Preview of the pending image attachment with a remove (X) overlay.
+  Widget _buildImagePreview(bool isDark) {
+    final imagePath = _imagePath!;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image.file(
+              File(imagePath),
+              height: 110,
+              width: 110,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => Container(
+                height: 110,
+                width: 110,
+                color: isDark ? AppTheme.darkSurfaceVariant : AppTheme.lightSurfaceVariant,
+                child: Icon(
+                  Icons.broken_image_outlined,
+                  color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: -8,
+            right: -8,
+            child: GestureDetector(
+              onTap: _removeImage,
+              child: Container(
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  color: isDark ? AppTheme.darkSurface : Colors.white,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder,
+                  ),
+                ),
+                child: Icon(
+                  Icons.close_rounded,
+                  size: 14,
+                  color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

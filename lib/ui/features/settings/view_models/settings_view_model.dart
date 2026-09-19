@@ -98,7 +98,6 @@ class SettingsViewModel extends ChangeNotifier {
           'Default',
           baseUrl: seedUrl,
           apiKey: legacyConfig.apiKey,
-          protocol: legacyConfig.protocol,
           reasoning: legacyConfig.reasoning,
         );
         _profiles = await _serverRepository.loadProfiles();
@@ -195,18 +194,6 @@ class SettingsViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> updateProtocol(ApiProtocol protocol) async {
-    final profile = await _serverRepository.getActiveProfile();
-    if (profile != null) {
-      final updated = profile.copyWith(protocol: protocol);
-      await _serverRepository.updateProfile(updated);
-      _profiles = await _serverRepository.loadProfiles();
-      config = config.copyWith(protocol: protocol);
-      await _saveConfig();
-    }
-    notifyListeners();
-  }
-
   Future<void> updateSelectedModel(String modelId) async {
     config = config.copyWith(selectedModel: modelId);
     await _saveConfig();
@@ -278,13 +265,11 @@ class SettingsViewModel extends ChangeNotifier {
     required String name,
     required String baseUrl,
     String? apiKey,
-    required ApiProtocol protocol,
   }) async {
     await _serverRepository.createProfile(
       name,
       baseUrl: baseUrl,
       apiKey: apiKey,
-      protocol: protocol,
     );
     _profiles = await _serverRepository.loadProfiles();
     _activeProfileId = await _serverRepository.getActiveProfileId();

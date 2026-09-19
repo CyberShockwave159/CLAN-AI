@@ -76,7 +76,6 @@ void main() {
       await vm.createProfile(
         name: 'My Server',
         baseUrl: 'http://localhost:8080',
-        protocol: ApiProtocol.openAi,
       );
 
       expect(vm.profiles, isNotEmpty);
@@ -88,7 +87,6 @@ void main() {
       await vm.createProfile(
         name: 'Test',
         baseUrl: 'http://localhost:8080',
-        protocol: ApiProtocol.openAi,
       );
 
       final updatedProfile = vm.profiles.first.copyWith(name: 'Updated');
@@ -101,7 +99,6 @@ void main() {
       await vm.createProfile(
         name: 'Delete Me',
         baseUrl: 'http://localhost:8080',
-        protocol: ApiProtocol.openAi,
       );
 
       final profileId = vm.profiles.first.id;
@@ -124,7 +121,6 @@ void main() {
       await vm.createProfile(
         name: 'Old Name',
         baseUrl: 'http://localhost:8080',
-        protocol: ApiProtocol.openAi,
       );
 
       final profileId = vm.profiles.first.id;
@@ -164,7 +160,6 @@ void main() {
       await vm.createProfile(
         name: 'Test',
         baseUrl: 'http://localhost:8080',
-        protocol: ApiProtocol.openAi,
       );
 
       await vm.testConnection();
@@ -176,7 +171,6 @@ void main() {
       await vm.createProfile(
         name: 'Test',
         baseUrl: 'http://localhost:8080',
-        protocol: ApiProtocol.openAi,
       );
 
       await vm.testConnection();
@@ -197,7 +191,6 @@ void main() {
       await vm.createProfile(
         name: 'My Server',
         baseUrl: 'http://localhost:8080',
-        protocol: ApiProtocol.openAi,
       );
 
       expect(vm.activeProfileName, equals('My Server'));
@@ -241,7 +234,6 @@ void main() {
       await vm.createProfile(
         name: 'Test',
         baseUrl: 'http://localhost:8080',
-        protocol: ApiProtocol.openAi,
       );
 
       expect(vm.connectionDetails, isNotNull);

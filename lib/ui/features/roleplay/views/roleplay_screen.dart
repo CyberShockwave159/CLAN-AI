@@ -381,9 +381,10 @@ class _RoleplayScreenState extends State<RoleplayScreen> with AutoScrollMixin {
             isGenerating: roleplayVM.isGenerating,
             isRoleplay: true,
             personaName: roleplayVM.activeCharacter?.personaName ?? 'you',
-            onSend: (prompt) {
+            onSend: (prompt, imagePath) {
               roleplayVM.sendMessage(
                 prompt: prompt,
+                imagePath: imagePath,
                 serverConfig: settingsVM.config,
                 connection: settingsVM.connectionDetails,
                 modelContextLength: settingsVM.getSelectedModelContextLength(),

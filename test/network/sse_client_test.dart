@@ -27,28 +27,6 @@ void main() {
       expect(chunks.last.isDone, isTrue);
     });
 
-    test('Correctly parses llama.cpp native /completion stream chunks with timings', () async {
-      final sseData = [
-        'data: {"content":"Testing","stop":false}\n\n',
-        'data: {"content":" 123","stop":true,"timings":{"prompt_n":5,"predicted_n":10,"prompt_ms":100.0,"predicted_ms":200.0,"predicted_per_second":50.0}}\n\n',
-      ];
-
-      final controller = StreamController<List<int>>();
-      for (final chunk in sseData) {
-        controller.add(utf8.encode(chunk));
-      }
-      controller.close();
-
-      final chunks = await SseClient.parseStream(controller.stream).toList();
-
-      expect(chunks.length, equals(2));
-      expect(chunks[0].text, equals('Testing'));
-      expect(chunks[1].text, equals(' 123'));
-      expect(chunks[1].isDone, isTrue);
-      expect(chunks[1].metrics?.tokensPerSecond, equals(50.0));
-      expect(chunks[1].metrics?.completionTokens, equals(10));
-    });
-
     test('Ignores SSE ping comments and handles multi-line chunks', () async {
       final sseData = [
         ': ping\n\n',

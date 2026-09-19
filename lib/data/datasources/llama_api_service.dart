@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import 'package:clan_ai/core/constants/app_constants.dart';
 import 'package:clan_ai/core/constants/api_endpoints.dart';
 import 'package:clan_ai/core/network/http_client.dart';
 import 'package:clan_ai/core/network/sse_client.dart';
 import 'package:clan_ai/core/utils/latency_meter.dart';
+import 'package:clan_ai/core/utils/message_attachment_store.dart';
 import 'package:clan_ai/data/models/chat_message.dart';
 import 'package:clan_ai/data/models/model_info.dart';
 import 'package:clan_ai/data/models/server_config.dart';
@@ -91,32 +94,21 @@ class LlamaApiService {
 
     final adjustedParams = effectiveParams.copyWith(contextSize: adjustedContextSize);
 
-    final connDetails = connection ?? ServerProfile(name: 'Default', baseUrl: defaultBaseUrl, protocol: ApiProtocol.openAi);
+    final connDetails = connection ?? ServerProfile(name: 'Default', baseUrl: defaultBaseUrl);
     final cleanBase = ApiEndpoints.normalizeBaseUrl(connDetails.baseUrl);
 
-    if (connDetails.protocol == ApiProtocol.llamaNative) {
-      // llama.cpp native /completion endpoint with raw prompt
-      yield* _streamLlamaNative(
-        cleanBase: cleanBase,
-        serverConfig: serverConfig,
-        connection: connDetails,
-        history: history,
-        systemPrompt: systemPrompt,
-        params: adjustedParams,
-        cancelToken: cancelToken,
-      );
-    } else {
-      // OpenAI compatible /v1/chat/completions endpoint
-      yield* _streamOpenAi(
-        cleanBase: cleanBase,
-        serverConfig: serverConfig,
-        connection: connDetails,
-        history: history,
-        systemPrompt: systemPrompt,
-        params: adjustedParams,
-        cancelToken: cancelToken,
-      );
-    }
+    // OpenAI-compatible /v1/chat/completions endpoint. This is the only
+    // transport: llama.cpp llama-server and every other supported backend
+    // expose it, and it supports multimodal base64 `image_url` content parts.
+    yield* _streamOpenAi(
+      cleanBase: cleanBase,
+      serverConfig: serverConfig,
+      connection: connDetails,
+      history: history,
+      systemPrompt: systemPrompt,
+      params: adjustedParams,
+      cancelToken: cancelToken,
+    );
   }
 
   Stream<StreamChunk> _streamOpenAi({
@@ -139,7 +131,7 @@ class LlamaApiService {
       if (msg.role == MessageRole.user || msg.role == MessageRole.assistant) {
         final Map<String, dynamic> openAiMsg = {
           'role': msg.role.value,
-          'content': msg.content,
+          'content': await _serializeOpenAiContent(msg),
         };
         if (msg.reasoningContent.isNotEmpty) {
           openAiMsg['reasoning'] = msg.reasoningContent;
@@ -171,50 +163,40 @@ class LlamaApiService {
     );
   }
 
-  Stream<StreamChunk> _streamLlamaNative({
-    required String cleanBase,
-    required ServerConfig serverConfig,
-    required ServerProfile connection,
-    required List<ChatMessage> history,
-    required String? systemPrompt,
-    required GenerationParams params,
-    CancelToken? cancelToken,
-  }) async* {
-    final uri = ApiEndpoints.buildUri(cleanBase, ApiEndpoints.llamaCompletion);
-
-    final buffer = StringBuffer();
-    if (systemPrompt != null && systemPrompt.trim().isNotEmpty) {
-      buffer.writeln('### System:\n${systemPrompt.trim()}\n');
+  /// Serializes a message's content for the OpenAI-compatible chat format.
+  ///
+  /// Returns the plain text string when the message carries no image, or an
+  /// array of typed content parts (`text` + `image_url`) when a user message
+  /// has an image attachment. The image bytes are read from disk and encoded
+  /// as a base64 data URI — the format accepted by llama.cpp llama-server,
+  /// Ollama, LM Studio, vLLM, and OpenAI. A missing/unreadable file falls
+  /// back to the plain text so a broken attachment never breaks the request.
+  Future<dynamic> _serializeOpenAiContent(ChatMessage msg) async {
+    final imagePath = msg.imagePath;
+    if (msg.role != MessageRole.user ||
+        imagePath == null ||
+        imagePath.trim().isEmpty) {
+      return msg.content;
     }
 
-    for (final msg in history) {
-      if (msg.role == MessageRole.user) {
-        buffer.writeln('### User:\n${msg.content}\n');
-      } else if (msg.role == MessageRole.assistant) {
-        buffer.writeln('### Assistant:\n${msg.content}\n');
-      }
+    try {
+      final bytes = await File(imagePath).readAsBytes();
+      // Trust the file's magic bytes over the filename extension: a `png`-named
+      // JPEG (or an extension-less path) would otherwise be declared with the
+      // wrong mime, and some servers use the declared mime to pick a decoder.
+      final mime = MessageAttachmentStore.mimeTypeFromBytes(bytes) ??
+          MessageAttachmentStore.mimeTypeFor(
+            MessageAttachmentStore.extensionOf(imagePath),
+          );
+      return [
+        {'type': 'text', 'text': msg.content},
+        {
+          'type': 'image_url',
+          'image_url': {'url': 'data:$mime;base64,${base64Encode(bytes)}'},
+        },
+      ];
+    } catch (_) {
+      return msg.content;
     }
-    buffer.write('### Assistant:\n');
-
-    final payload = params.toLlamaNativePayload(
-      prompt: buffer.toString(),
-      stream: true,
-    );
-
-    final streamedResponse = await _httpClient.postStream(
-      uri,
-      body: payload,
-      apiKey: connection.apiKey,
-    );
-
-    final rawStream = SseClient.parseStream(
-      streamedResponse.stream,
-      cancelToken: cancelToken,
-    );
-
-    yield* SseClient.filterReasoning(
-      rawStream,
-      enableReasoning: serverConfig.reasoning,
-    );
   }
 }

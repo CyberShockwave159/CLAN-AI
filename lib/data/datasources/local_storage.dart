@@ -49,7 +49,7 @@ class LocalDatabase {
 
     return await openDatabase(
       path,
-      version: 12,
+      version: 13,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
       onConfigure: (db) async {
@@ -198,6 +198,14 @@ class LocalDatabase {
         await db.execute('ALTER TABLE messages ADD COLUMN sibling_ids TEXT');
       }
     }
+    if (oldVersion < 13) {
+      final columns = await db.rawQuery("PRAGMA table_info(messages)");
+      final hasImagePath = (columns as List<dynamic>)
+          .any((col) => (col as Map<String, dynamic>)['name'] == 'image_path');
+      if (!hasImagePath) {
+        await db.execute('ALTER TABLE messages ADD COLUMN image_path TEXT');
+      }
+    }
   }
 
   Future<void> _createDB(Database db, int version) async {
@@ -240,6 +248,7 @@ class LocalDatabase {
         rag_memory_count INTEGER DEFAULT NULL,
         rag_memory_contents TEXT DEFAULT NULL,
         reasoning_content TEXT NOT NULL DEFAULT "",
+        image_path TEXT,
         FOREIGN KEY (thread_id) REFERENCES threads (id) ON DELETE CASCADE
       )
     ''');

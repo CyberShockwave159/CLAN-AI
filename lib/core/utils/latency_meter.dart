@@ -55,7 +55,7 @@ class PingResult {
 
     // HTTP 404
     if (lower.contains('404')) {
-      return 'Endpoint not found. Check if the server protocol (OpenAI vs native llama.cpp) is correct.';
+      return 'Endpoint not found. Check the server URL and ensure it exposes the OpenAI-compatible /v1/chat/completions endpoint.';
     }
 
     // Context limit errors from the API

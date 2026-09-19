@@ -96,40 +96,6 @@ class GenerationParams {
     return payload;
   }
 
-  Map<String, dynamic> toLlamaNativePayload({
-    required String prompt,
-    bool stream = true,
-  }) {
-    final payload = <String, dynamic>{
-      'prompt': prompt,
-      'stream': stream,
-      'temperature': temperature,
-      'top_p': topP,
-      'top_k': topK,
-      'min_p': minP,
-      'repeat_penalty': repeatPenalty,
-      'n_ctx': contextSize,
-    };
-
-    // n_predict: 0 means unlimited in llama.cpp.
-    // Only include when > 0 (omitted for 0/unlimited, matching OpenAI branch).
-    if (maxTokens > 0) {
-      payload['n_predict'] = maxTokens;
-    }
-
-    if (stopSequences.isNotEmpty) {
-      payload['stop'] = stopSequences;
-    }
-    if (grammar != null && grammar!.isNotEmpty) {
-      payload['grammar'] = grammar;
-    }
-    if (reasoning) {
-      payload['reasoning'] = true;
-      payload['include_reasoning'] = true;
-    }
-    return payload;
-  }
-
   Map<String, dynamic> toMap() {
     return {
       'temperature': temperature,

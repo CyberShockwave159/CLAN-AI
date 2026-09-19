@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:clan_ai/data/models/server_config.dart';
 import 'package:uuid/uuid.dart';
 
 class ServerProfile {
@@ -7,7 +6,6 @@ class ServerProfile {
   final String name;
   final String baseUrl;
   final String? apiKey;
-  final ApiProtocol protocol;
   final bool reasoning;
 
   ServerProfile({
@@ -15,7 +13,6 @@ class ServerProfile {
     required this.name,
     required this.baseUrl,
     this.apiKey,
-    required this.protocol,
     this.reasoning = false,
   }) : id = id ?? const Uuid().v4();
 
@@ -24,7 +21,6 @@ class ServerProfile {
     String? name,
     String? baseUrl,
     String? apiKey,
-    ApiProtocol? protocol,
     bool? reasoning,
   }) {
     return ServerProfile(
@@ -32,7 +28,6 @@ class ServerProfile {
       name: name ?? this.name,
       baseUrl: baseUrl ?? this.baseUrl,
       apiKey: apiKey ?? this.apiKey,
-      protocol: protocol ?? this.protocol,
       reasoning: reasoning ?? this.reasoning,
     );
   }
@@ -43,7 +38,6 @@ class ServerProfile {
       'name': name,
       'baseUrl': baseUrl,
       'apiKey': apiKey,
-      'protocol': protocol.name,
       'reasoning': reasoning ? 1 : 0,
     };
   }
@@ -54,10 +48,6 @@ class ServerProfile {
       name: map['name'] as String? ?? 'Unnamed',
       baseUrl: map['baseUrl'] as String? ?? '',
       apiKey: map['apiKey'] as String?,
-      protocol: ApiProtocol.values.firstWhere(
-        (p) => p.name == (map['protocol'] as String?),
-        orElse: () => ApiProtocol.openAi,
-      ),
       reasoning: (map['reasoning'] as int?) == 1,
     );
   }

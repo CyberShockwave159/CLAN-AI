@@ -162,6 +162,32 @@ void main() {
       expect(vm.messages.where((m) => m.content == 'Hello').length, greaterThanOrEqualTo(1));
     });
 
+    test('persists imagePath on the user message', () async {
+      final thread = await fakeRepo.createThread(title: 'Chat');
+      vm.activeThread = thread;
+      vm.messages = [];
+      fakeRepo.setStreamFragments(thread.id, [
+        const StreamChunk(text: 'Hi', isDone: true),
+      ]);
+
+      await vm.sendMessage(
+        prompt: 'Describe this',
+        imagePath: '/app/documents/attachments/img.png',
+        serverConfig: buildServerConfig(),
+        connection: null,
+        customParams: null,
+        modelContextLength: null,
+      );
+
+      final userMsg = vm.messages.firstWhere((m) => m.role == MessageRole.user);
+      expect(userMsg.imagePath, equals('/app/documents/attachments/img.png'));
+
+      // Persisted to the repository as well.
+      final savedMessages = await fakeRepo.getMessagesForThread(thread.id);
+      final savedUserMsg = savedMessages.firstWhere((m) => m.role == MessageRole.user);
+      expect(savedUserMsg.imagePath, equals('/app/documents/attachments/img.png'));
+    });
+
     test('batches user message, rename and placeholder into one notification', () async {
       final thread = await fakeRepo.createThread(title: 'New Chat');
       vm.activeThread = thread;

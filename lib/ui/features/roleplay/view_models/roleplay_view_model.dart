@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 import 'package:clan_ai/core/network/sse_client.dart';
 import 'package:clan_ai/core/utils/conversation_export.dart';
 import 'package:clan_ai/core/utils/file_saver.dart';
+import 'package:clan_ai/core/utils/message_attachment_store.dart';
 import 'package:clan_ai/core/utils/roleplay_context_builder.dart';
 import 'package:clan_ai/core/utils/hash_embedding.dart';
 import 'package:clan_ai/data/datasources/vector_store.dart';
@@ -252,6 +253,7 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
   /// Send a user message and stream the character's response.
   Future<void> sendMessage({
     required String prompt,
+    String? imagePath,
     required ServerConfig serverConfig,
     required ServerProfile? connection,
     GenerationParams? customParams,
@@ -268,6 +270,7 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
       role: MessageRole.user,
       content: prompt.trim(),
       status: MessageStatus.completed,
+      imagePath: imagePath,
     );
 
     _messages.add(userMessage);
@@ -690,6 +693,7 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
 
     for (final msg in messagesToDelete) {
       await _chatRepository.deleteMessage(msg.id);
+      await MessageAttachmentStore.instance.deleteIfExists(msg.imagePath);
     }
 
     if (isFirstMessage) {
@@ -810,6 +814,9 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
         threadId: threadId,
         messageIds: messageIds,
       );
+      for (final msg in threadMessages) {
+        await MessageAttachmentStore.instance.deleteIfExists(msg.imagePath);
+      }
     }
     await _chatRepository.deleteThread(threadId);
     _activeThread = null;

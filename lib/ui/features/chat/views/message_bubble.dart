@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -314,6 +315,43 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
+  /// Opens a fullscreen, zoomable view of an attached image.
+  void _showImageFullscreen(BuildContext context, String path) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.black87,
+        insetPadding: const EdgeInsets.all(16),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: InteractiveViewer(
+            maxScale: 6,
+            child: Center(
+              child: Image.file(
+                File(path),
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) => Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.broken_image_outlined, color: Colors.white70, size: 48),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Image file no longer exists',
+                        style: TextStyle(color: Colors.white70, fontSize: 14),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isUser = message.role == MessageRole.user;
@@ -413,6 +451,46 @@ class MessageBubble extends StatelessWidget {
                         reasoningContent: message.reasoningContent,
                         status: message.status,
                         isUser: isUser,
+                      ),
+
+                    // Image attachment (user messages only)
+                    if (message.imagePath != null && message.imagePath!.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: GestureDetector(
+                          onTap: () => _showImageFullscreen(context, message.imagePath!),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Image.file(
+                              File(message.imagePath!),
+                              width: 220,
+                              height: 220,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) => Container(
+                                width: 220,
+                                height: 120,
+                                color: context.clanSurfaceVariant,
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.broken_image_outlined,
+                                      color: context.clanTextMuted,
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Image unavailable',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: context.clanTextMuted,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
 
                     if (message.content.isNotEmpty)

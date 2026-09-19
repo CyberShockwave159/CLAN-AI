@@ -81,7 +81,7 @@ class CancelToken {
   }
 }
 
-/// High-performance Server-Sent Events parser for OpenAI & llama.cpp streaming responses.
+/// High-performance Server-Sent Events parser for OpenAI-compatible streaming responses.
 class SseClient {
   /// Transforms a raw byte stream into a stream of [StreamChunk]s.
   static Stream<StreamChunk> parseStream(
@@ -342,7 +342,7 @@ class SseClient {
         return null;
       }
 
-      // 1. Check for llama.cpp native error responses in stream
+      // 1. Check for error responses in stream
       if (decoded.containsKey('error')) {
         final err = decoded['error'];
         final errMsg = err is Map ? err['message'] ?? err.toString() : err.toString();
@@ -397,30 +397,6 @@ class SseClient {
             reasoning: reasoning,
           );
         }
-      }
-
-      // 3. llama.cpp native /completion format: content, stop, timings, reasoning
-      if (decoded.containsKey('content')) {
-        final text = decoded['content'] as String? ?? '';
-        final stop = decoded['stop'] as bool? ?? false;
-        final reasoning = decoded['reasoning_content'] as String? ??
-            decoded['reasoning'] as String? ??
-            decoded['thought'] as String?;
-
-        StreamMetrics? metrics;
-        if (decoded.containsKey('timings') && decoded['timings'] is Map<String, dynamic>) {
-          metrics = StreamMetrics.fromLlamaTimings(
-            decoded['timings'] as Map<String, dynamic>,
-            ttftMs ?? stopwatch.elapsedMilliseconds,
-          );
-        }
-
-        return StreamChunk(
-          text: text,
-          isDone: stop,
-          metrics: metrics,
-          reasoning: reasoning,
-        );
       }
 
       return null;

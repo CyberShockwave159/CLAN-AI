@@ -1,17 +1,13 @@
-/// API Endpoints for OpenAI-compatible and native llama.cpp servers.
+/// API Endpoints for OpenAI-compatible servers.
 class ApiEndpoints {
   // OpenAI compatible endpoints
   static const String chatCompletions = '/v1/chat/completions';
   static const String completions = '/v1/completions';
   static const String models = '/v1/models';
 
-  // Native llama.cpp server endpoints
+  // llama.cpp health/props endpoints — used only for connectivity probing
   static const String llamaHealth = '/health';
   static const String llamaProps = '/props';
-  static const String llamaCompletion = '/completion';
-  static const String llamaSlots = '/slots';
-  static const String llamaDetokenize = '/detokenize';
-  static const String llamaTokenize = '/tokenize';
 
   /// Normalizes and cleans a base URL string.
   /// Removes trailing slashes and ensures standard protocol.

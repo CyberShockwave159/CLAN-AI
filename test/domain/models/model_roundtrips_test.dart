@@ -283,6 +283,52 @@ void main() {
       final map = msg.toMap();
       expect(map['reasoning_content'], equals('Thinking process...'));
     });
+
+    test('toMap/fromMap preserves imagePath', () {
+      final msg = ChatMessage(
+        threadId: 't1',
+        role: MessageRole.user,
+        content: 'What is this?',
+        imagePath: '/app/documents/attachments/abc123.png',
+      );
+
+      final map = msg.toMap();
+      expect(map['image_path'], equals('/app/documents/attachments/abc123.png'));
+
+      final restored = ChatMessage.fromMap(map);
+      expect(restored.imagePath, equals('/app/documents/attachments/abc123.png'));
+    });
+
+    test('imagePath defaults to null', () {
+      final msg = ChatMessage(threadId: 't1', role: MessageRole.user, content: 'Hi');
+      expect(msg.imagePath, isNull);
+      expect(msg.toMap()['image_path'], isNull);
+    });
+
+    test('fromMap handles missing image_path', () {
+      final map = <String, dynamic>{
+        'id': 'm1',
+        'thread_id': 't1',
+        'role': 'user',
+        'content': 'Hi',
+        'status': 'completed',
+        'created_at': DateTime.now().toIso8601String(),
+      };
+      final msg = ChatMessage.fromMap(map);
+      expect(msg.imagePath, isNull);
+    });
+
+    test('copyWith preserves imagePath', () {
+      final original = ChatMessage(
+        threadId: 't1',
+        role: MessageRole.user,
+        content: 'Hi',
+        imagePath: '/path/to/image.jpg',
+      );
+      final copied = original.copyWith(content: 'Hello');
+      expect(copied.imagePath, equals('/path/to/image.jpg'));
+      expect(copied.content, equals('Hello'));
+    });
   });
 
   group('CharacterProfile model roundtrip', () {
@@ -584,13 +630,11 @@ void main() {
       final config = ServerConfig(
         baseUrl: 'http://localhost:8080',
         apiKey: 'secret',
-        protocol: ApiProtocol.llamaNative,
       );
       final copied = config.copyWith(name: 'New Name');
 
       expect(copied.baseUrl, equals('http://localhost:8080'));
       expect(copied.apiKey, equals('secret'));
-      expect(copied.protocol, equals(ApiProtocol.llamaNative));
       expect(copied.name, equals('New Name'));
     });
 
@@ -606,24 +650,7 @@ void main() {
       expect(updated.confirmDeleteMessage, isFalse);
     });
 
-    test('fromMap parses protocol', () {
-      final map = <String, dynamic>{
-        'name': 'Test',
-        'protocol': 'llamaNative',
-      };
-      final config = ServerConfig.fromMap(map);
-      expect(config.protocol, equals(ApiProtocol.llamaNative));
     });
-
-    test('fromMap falls back to openAi for unknown protocol', () {
-      final map = <String, dynamic>{
-        'name': 'Test',
-        'protocol': 'unknown',
-      };
-      final config = ServerConfig.fromMap(map);
-      expect(config.protocol, equals(ApiProtocol.openAi));
-    });
-  });
 
   group('ServerProfile model roundtrip', () {
     test('toMap/fromMap preserves all fields', () {
@@ -632,7 +659,6 @@ void main() {
         name: 'My Server',
         baseUrl: 'http://localhost:8080',
         apiKey: 'secret-key',
-        protocol: ApiProtocol.llamaNative,
       );
 
       final map = original.toMap();
@@ -642,14 +668,12 @@ void main() {
       expect(restored.name, equals(original.name));
       expect(restored.baseUrl, equals(original.baseUrl));
       expect(restored.apiKey, equals(original.apiKey));
-      expect(restored.protocol, equals(original.protocol));
     });
 
     test('copyWith updates individual fields', () {
       final original = ServerProfile(
         name: 'Old',
         baseUrl: 'http://old',
-        protocol: ApiProtocol.openAi,
       );
       final updated = original.copyWith(
         name: 'New',
@@ -658,7 +682,6 @@ void main() {
 
       expect(updated.name, equals('New'));
       expect(updated.baseUrl, equals('http://new'));
-      expect(updated.protocol, equals(ApiProtocol.openAi));
       expect(updated.id, equals(original.id));
     });
 
@@ -674,13 +697,5 @@ void main() {
       expect(tpl.id, equals('tpl-1'));
     });
 
-    test('fromMap handles missing protocol as openAi', () {
-      final map = <String, dynamic>{
-        'id': 'profile-1',
-        'name': 'Test',
-      };
-      final profile = ServerProfile.fromMap(map);
-      expect(profile.protocol, equals(ApiProtocol.openAi));
     });
-  });
 }

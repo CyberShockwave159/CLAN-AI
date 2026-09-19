@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 import 'package:clan_ai/core/network/sse_client.dart';
 import 'package:clan_ai/core/utils/conversation_export.dart';
 import 'package:clan_ai/core/utils/file_saver.dart';
+import 'package:clan_ai/core/utils/message_attachment_store.dart';
 import 'package:clan_ai/data/models/chat_message.dart';
 import 'package:clan_ai/data/models/chat_thread.dart';
 import 'package:clan_ai/data/models/server_config.dart';
@@ -177,6 +178,11 @@ class ChatViewModel extends ChangeNotifier with StreamMutationMixin {
   }
 
   Future<void> deleteThread(String threadId) async {
+    // Clean up image attachment files before the thread's message rows vanish.
+    final threadMessages = await _chatRepository.getAllMessagesForThread(threadId);
+    for (final msg in threadMessages) {
+      await MessageAttachmentStore.instance.deleteIfExists(msg.imagePath);
+    }
     await _chatRepository.deleteThread(threadId);
     _threads.removeWhere((t) => t.id == threadId);
     _filteredThreads.clear();
@@ -223,9 +229,10 @@ class ChatViewModel extends ChangeNotifier with StreamMutationMixin {
     // Determine which messages to delete: this one and all after it
     final messagesToDelete = _messages.sublist(messageIndex);
 
-    // Delete from database
+    // Delete from database (and remove any image attachment files from disk)
     for (final msg in messagesToDelete) {
       await _chatRepository.deleteMessage(msg.id);
+      await MessageAttachmentStore.instance.deleteIfExists(msg.imagePath);
     }
 
     // If this was the only message (or first message) in the thread, delete the whole thread
@@ -352,6 +359,7 @@ class ChatViewModel extends ChangeNotifier with StreamMutationMixin {
   /// Sends a user message and streams the assistant response.
   Future<void> sendMessage({
     required String prompt,
+    String? imagePath,
     required ServerConfig serverConfig,
     required ServerProfile? connection,
     GenerationParams? customParams,
@@ -371,6 +379,7 @@ class ChatViewModel extends ChangeNotifier with StreamMutationMixin {
       role: MessageRole.user,
       content: prompt.trim(),
       status: MessageStatus.completed,
+      imagePath: imagePath,
     );
 
     _messages.add(userMessage);

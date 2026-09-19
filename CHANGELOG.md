@@ -11,7 +11,7 @@
 **Database**
 - Foreign-key enforcement enabled via `PRAGMA foreign_keys = ON` (messages→threads `ON DELETE CASCADE` is now live)
 - Thread search is a single assistant-scoped SQL `LIKE` query (`LocalDatabase.searchThreads`) instead of a per-thread N+1 loop
-- Schema v12 adds the variant columns; migrations guard with `PRAGMA table_info`
+- Schema v12 adds the variant columns; schema v13 adds the `image_path` column for image attachments; migrations guard with `PRAGMA table_info`
 
 **HTTP**
 - Real TCP/TLS connect timeout via `HttpClient.connectionTimeout`; resilient error-body reading with bounded extraction from `error`/`message`/`detail` shapes
@@ -41,6 +41,13 @@
 - `lib/core/utils/avatar_storage_service.dart` — stores large character avatars as files on disk instead of inline in SQLite
 - Avatars under 500KB stay inline in the database; larger avatars are written to an `avatars/` directory in the app documents folder
 - `saveAvatar()`, `getAvatarBytes()`, `deleteAvatar()`, `clearAllAvatars()` methods
+
+**Image Attachments**
+- Attach one image per user message (chat and roleplay modes) via the attach button in the prompt input bar, with an inline preview chip before sending
+- Tap an attached image in a message bubble to open a full-screen lightbox viewer
+- `lib/core/utils/message_attachment_store.dart` — images are stored as files on disk with only the absolute path in `messages.image_path` (mirrors `AvatarStorageService`); files are cleaned up automatically when their message or thread is deleted
+- The OpenAI payload embeds the attachment as a base64 `image_url` content part, so it works with any OpenAI-compatible vision-capable backend (e.g. llama.cpp llama-server with a multimodal model)
+- Magic-byte MIME sniffing (`mimeTypeFromBytes`) detects the true image format (PNG/JPEG/GIF/WebP) even when the file extension lies
 
 ### 🔧 Changes
 
@@ -73,12 +80,19 @@
 **Chat Repository**
 - `createThread()` now accepts optional `branchFromThreadId` parameter for conversation branching links
 
+**OpenAI-Only Protocol**
+- Removed the "OpenAI Compatible vs llama.cpp Native" protocol choice — all requests now use the OpenAI-compatible `/v1/chat/completions` endpoint exclusively
+- Deleted the `ApiProtocol` enum and `protocol` fields on `ServerProfile`/`ServerConfig`, the native `/completion` transport (`_streamLlamaNative`, `toLlamaNativePayload`), the native endpoints (`/completion`, `/slots`, `/detokenize`, `/tokenize`), and the native SSE `{content, stop}` parse branch
+- Existing saved profiles/configs with `"protocol":"llamaNative"` degrade silently to OpenAI — no migration required
+- `/health` → `/props` → `/v1/models` connectivity probing retained (detection only, not message transport); images previously required the OpenAI endpoint, which is now unconditional
+
 ### 🧹 Test Cleanups
 - Removed unused imports across test files (`model_roundtrips_test.dart`, `stream_mutation_mixin_test.dart`, `http_client_test.dart`, `roleplay_context_builder_test.dart`, `vector_store_test.dart`, `persona_template_view_model_test.dart`)
 - Added unique IDs to messages in `chat_repository_test.dart` to avoid ID collisions
 - Added `SharedPreferences.setMockInitialValues({})` and delays in `settings_view_model_test.dart`
 - Added `mock_path_provider.dart` to all tests using `path_provider` platform channel
 - Updated `stream_mutation_mixin_test.dart` — "no-op when no cancel token" test now expects `isGenerating` to be false
+- Removed protocol/native tests after the OpenAI-only switch: native `/completion` service and SSE parsing tests, native payload serialization, protocol round-trip tests, and `protocol` args across test factories and `settings_view_model_test.dart`
 
 ## [v1.0.1] - SillyTavern Character Import
 

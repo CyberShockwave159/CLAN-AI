@@ -11,7 +11,6 @@ import 'package:clan_ai/data/datasources/vector_store.dart';
 import 'package:clan_ai/data/models/app_mode.dart';
 import 'package:clan_ai/data/models/character_profile.dart';
 import 'package:clan_ai/data/models/persona_template.dart';
-import 'package:clan_ai/data/models/server_config.dart';
 import 'package:clan_ai/data/models/system_prompt_template.dart';
 import 'package:clan_ai/data/repositories/character_repository.dart';
 import 'package:clan_ai/ui/features/chat/view_models/chat_view_model.dart';
@@ -261,33 +260,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
             onChanged: (val) => settingsVM.updateApiKey(val.trim().isEmpty ? null : val.trim()),
-          ),
-
-          const SizedBox(height: 12),
-
-          Row(
-            children: [
-              Expanded(
-                child: SegmentedButton<ApiProtocol>(
-                  segments: const [
-                    ButtonSegment(
-                      value: ApiProtocol.openAi,
-                      label: Text('OpenAI API'),
-                      icon: Icon(Icons.api_rounded, size: 16),
-                    ),
-                    ButtonSegment(
-                      value: ApiProtocol.llamaNative,
-                      label: Text('llama.cpp Native'),
-                      icon: Icon(Icons.memory_rounded, size: 16),
-                    ),
-                  ],
-                  selected: {settingsVM.config.protocol},
-                  onSelectionChanged: (selected) {
-                    settingsVM.updateProtocol(selected.first);
-                  },
-                ),
-              ),
-            ],
           ),
 
           const SizedBox(height: 14),

@@ -80,12 +80,10 @@ ChangeNotifier.notifyListeners() ──▶ UI rebuild
 4. Resolves effective system prompt: thread.systemPrompt ?? config.systemPrompt
 5. Repository → ApiService:
    a. Context-fit: contextSize = modelCapacity - reservedOutputTokens (if maxTokens=0)
-   b. OpenAI: POST /v1/chat/completions (with reasoning flags if enabled)
-   c. Native: POST /completion with ### User / ### Assistant template
+   b. OpenAI-compatible: POST /v1/chat/completions (with reasoning flags if enabled)
 6. SseClient.parseStream() receives chunks:
    a. OpenAI: delta.content format
-   b. Native: {content, stop} format
-   c. Reasoning: delta.reasoning, delta.reasoning_content, delta.thought
+   b. Reasoning: delta.reasoning, delta.reasoning_content, delta.thought
 7. SseClient.filterReasoning() processes inline tags (```xml, <thought>, <reasoning>)
 8. StreamMutationMixin throttle (20ms interval):
    a. Accumulates _pendingStreamBuffer → content
@@ -201,7 +199,7 @@ Assistant messages include a memory chip when `ragMemoryCount > 0`:
 
 ## SQLite Schema
 
-### Version 12 (Latest)
+### Version 13 (Latest)
 
 ```sql
 -- Thread table: conversation containers
@@ -239,6 +237,7 @@ CREATE TABLE messages (
   updated_at TEXT,
   rag_memory_count INTEGER DEFAULT NULL, -- count of RAG memories injected
   reasoning_content TEXT NOT NULL DEFAULT "",  -- thinking block storage
+  image_path TEXT,                       -- absolute path to image attachment file (user msgs)
   FOREIGN KEY (thread_id) REFERENCES threads (id) ON DELETE CASCADE
 );
 
@@ -287,6 +286,7 @@ CREATE TABLE persona_templates (
 | v9 → v10 | Added `persona_name` and `persona_description` columns to characters |
 | v10 → v11 | Added `persona_name` column to persona_templates; auto-derives from `persona_text` for existing templates |
 | v11 → v12 | Added `variant_index`, `total_variants`, `sibling_ids` columns to messages for conversation branching |
+| v12 → v13 | Added `image_path` column to messages (absolute path to attached image file, user messages only) |
 
 ---
 
@@ -307,8 +307,8 @@ ApiHttpClient
 ```
 Server stream → SseClient.parseStream()
     │
-    ├── OpenAI format: {"delta": {"content": "..."}}
-    ├── Native format: {"content": "...", "stop": true}
+    ├── OpenAI format: {"choices": [{"delta": {"content": "..."}}]}
+    ├── reasoning delta fields: reasoning / reasoning_content / thought
     └── Comments: ": ping" (ignored)
     │
     ▼

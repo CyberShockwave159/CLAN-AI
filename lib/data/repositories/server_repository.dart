@@ -36,7 +36,6 @@ class ServerRepository {
   Future<ServerProfile> createProfile(String name, {
     required String baseUrl,
     String? apiKey,
-    required ApiProtocol protocol,
     bool reasoning = false,
   }) async {
     ServerProfile? result;
@@ -47,7 +46,6 @@ class ServerRepository {
           name: name,
           baseUrl: baseUrl,
           apiKey: null,
-          protocol: protocol,
           reasoning: reasoning,
         );
         profiles.add(profile);
@@ -61,12 +59,11 @@ class ServerRepository {
           name: profile.name,
           baseUrl: profile.baseUrl,
           apiKey: apiKey,
-          protocol: profile.protocol,
           reasoning: profile.reasoning,
         );
       });
     } catch (_) {}
-    return result ?? ServerProfile(name: name, baseUrl: baseUrl, protocol: protocol);
+    return result ?? ServerProfile(name: name, baseUrl: baseUrl);
   }
 
   Future<ServerProfile> updateProfile(ServerProfile profile) async {
@@ -79,7 +76,6 @@ class ServerRepository {
           final updatedProfile = profiles[index].copyWith(
             name: profile.name,
             baseUrl: profile.baseUrl,
-            protocol: profile.protocol,
           );
           profiles[index] = updatedProfile;
           await saveProfiles(profiles);
@@ -91,7 +87,6 @@ class ServerRepository {
             name: profiles[index].name,
             baseUrl: profiles[index].baseUrl,
             apiKey: profile.apiKey,
-            protocol: profiles[index].protocol,
           );
         } else {
           result = profile;
@@ -146,7 +141,6 @@ class ServerRepository {
       name: profile?.name ?? globalConfig.name,
       baseUrl: profile?.baseUrl ?? globalConfig.baseUrl,
       apiKey: apiKey,
-      protocol: profile?.protocol ?? globalConfig.protocol,
       reasoning: profile?.reasoning ?? globalConfig.reasoning,
     );
     return globalConfig;
@@ -161,7 +155,6 @@ class ServerRepository {
         profiles[index] = profiles[index].copyWith(
           name: config.name,
           baseUrl: config.baseUrl,
-          protocol: config.protocol,
           reasoning: config.reasoning,
         );
         await saveProfiles(profiles);

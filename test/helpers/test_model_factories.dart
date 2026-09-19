@@ -57,6 +57,7 @@ ChatMessage buildMessage({
   DateTime? updatedAt,
   int? ragMemoryCount,
   String reasoningContent = '',
+  String? imagePath,
 }) {
   return ChatMessage(
     id: id ?? 'msg-${DateTime.now().millisecondsSinceEpoch}',
@@ -78,6 +79,7 @@ ChatMessage buildMessage({
     updatedAt: updatedAt,
     ragMemoryCount: ragMemoryCount,
     reasoningContent: reasoningContent,
+    imagePath: imagePath,
   );
 }
 
@@ -135,7 +137,6 @@ ServerConfig buildServerConfig({
   String name = 'Test Server',
   String baseUrl = 'http://127.0.0.1:8080',
   String? apiKey,
-  ApiProtocol protocol = ApiProtocol.openAi,
   String? selectedModel,
   GenerationParams? defaultParams,
   ServerHealthStatus healthStatus = ServerHealthStatus.offline,
@@ -148,7 +149,6 @@ ServerConfig buildServerConfig({
     name: name,
     baseUrl: baseUrl,
     apiKey: apiKey,
-    protocol: protocol,
     selectedModel: selectedModel,
     defaultParams: defaultParams ?? const GenerationParams(),
     healthStatus: healthStatus,
@@ -166,13 +166,11 @@ ServerProfile buildServerProfile({
   String name = 'Test Profile',
   String? baseUrl,
   String? apiKey,
-  ApiProtocol protocol = ApiProtocol.openAi,
 }) {
   return ServerProfile(
     id: id ?? 'profile-${DateTime.now().millisecondsSinceEpoch}',
     name: name,
     baseUrl: baseUrl ?? 'http://localhost:8080',
     apiKey: apiKey,
-    protocol: protocol,
   );
 }

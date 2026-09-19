@@ -56,23 +56,6 @@ Final conclusion.
       expect(payload['stream'], isTrue);
     });
 
-    test('Serializes llama.cpp native payload correctly', () {
-      const params = GenerationParams(
-        temperature: 0.5,
-        topK: 50,
-        repeatPenalty: 1.15,
-        contextSize: 8192,
-      );
-
-      final payload = params.toLlamaNativePayload(prompt: '### User:\nHi\n### Assistant:\n');
-
-      expect(payload['temperature'], equals(0.5));
-      expect(payload['top_k'], equals(50));
-      expect(payload['repeat_penalty'], equals(1.15));
-      expect(payload['n_ctx'], equals(8192));
-      expect(payload['prompt'], contains('### User:\nHi'));
-    });
-
     test('Includes reasoning flags when reasoning is enabled', () {
       const params = GenerationParams(
         reasoning: true,
@@ -87,9 +70,6 @@ Final conclusion.
 
       expect(openAiPayload['reasoning'], isTrue);
       expect(openAiPayload['include_reasoning'], isTrue);
-
-      final nativePayload = params.toLlamaNativePayload(prompt: 'Hi');
-      expect(nativePayload['reasoning'], isTrue);
     });
   });
 }

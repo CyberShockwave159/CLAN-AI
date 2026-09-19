@@ -4,7 +4,6 @@ import 'package:clan_ai/core/constants/app_theme.dart';
 import 'package:clan_ai/core/utils/platform_defaults.dart';
 import 'package:clan_ai/core/constants/clan_theme_colors.dart';
 import 'package:clan_ai/data/models/server_profile.dart';
-import 'package:clan_ai/data/models/server_config.dart';
 import 'package:clan_ai/ui/features/settings/view_models/settings_view_model.dart';
 
 /// Profile section widget for SettingsScreen.
@@ -20,7 +19,6 @@ class ProfileSection extends StatelessWidget {
       text: conn?.baseUrl ?? defaultBaseUrlForPlatform(),
     );
     final apiKeyController = TextEditingController(text: conn?.apiKey ?? '');
-    ApiProtocol selectedProtocol = conn?.protocol ?? ApiProtocol.openAi;
 
     showDialog(
       context: context,
@@ -63,17 +61,6 @@ class ProfileSection extends StatelessWidget {
                       hintText: 'sk-...',
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  SegmentedButton<ApiProtocol>(
-                    segments: const [
-                      ButtonSegment(value: ApiProtocol.openAi, label: Text('OpenAI')),
-                      ButtonSegment(value: ApiProtocol.llamaNative, label: Text('llama.cpp')),
-                    ],
-                    selected: {selectedProtocol},
-                    onSelectionChanged: (selected) {
-                      setState(() => selectedProtocol = selected.first);
-                    },
-                  ),
                 ],
               ),
             ),
@@ -91,7 +78,6 @@ class ProfileSection extends StatelessWidget {
                     name: name,
                     baseUrl: baseUrl,
                     apiKey: apiKeyController.text.trim().isEmpty ? null : apiKeyController.text.trim(),
-                    protocol: selectedProtocol,
                   );
                   if (ctx.mounted) Navigator.of(ctx).pop();
                 },
@@ -109,7 +95,6 @@ class ProfileSection extends StatelessWidget {
     final urlController = TextEditingController(text: profile.baseUrl);
     final apiKeyController = TextEditingController(text: profile.apiKey ?? '');
     final settingsVM = context.read<SettingsViewModel>();
-    ApiProtocol selectedProtocol = profile.protocol;
 
     showDialog(
       context: context,
@@ -143,17 +128,6 @@ class ProfileSection extends StatelessWidget {
                     obscureText: true,
                     decoration: const InputDecoration(labelText: 'API Key (Optional)'),
                   ),
-                  const SizedBox(height: 12),
-                  SegmentedButton<ApiProtocol>(
-                    segments: const [
-                      ButtonSegment(value: ApiProtocol.openAi, label: Text('OpenAI')),
-                      ButtonSegment(value: ApiProtocol.llamaNative, label: Text('llama.cpp')),
-                    ],
-                    selected: {selectedProtocol},
-                    onSelectionChanged: (selected) {
-                      setState(() => selectedProtocol = selected.first);
-                    },
-                  ),
                 ],
               ),
             ),
@@ -171,7 +145,6 @@ class ProfileSection extends StatelessWidget {
                     name: name,
                     baseUrl: baseUrl,
                     apiKey: apiKeyController.text.trim().isEmpty ? null : apiKeyController.text.trim(),
-                    protocol: selectedProtocol,
                   );
                   await settingsVM.updateProfile(updatedProfile);
                   if (ctx.mounted) Navigator.of(ctx).pop();
