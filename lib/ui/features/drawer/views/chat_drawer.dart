@@ -307,21 +307,20 @@ class _ChatDrawerState extends State<ChatDrawer> {
                                         chatVM.selectThread(thread);
                                         Navigator.of(context).pop();
                                       },
-                                      trailing: isActive
-                                          ? PopupMenuButton<String>(
-                                              icon: Icon(
-                                                Icons.more_vert_rounded,
-                                                size: 18,
-                                                color: context.clanTextMuted,
-                                              ),
-                                              onSelected: (action) {
-                                                if (action == 'rename') {
-                                                  _showRenameDialog(context, thread, chatVM);
-                                                } else if (action == 'delete') {
-                                                  _showDeleteDialog(context, thread, chatVM);
-                                                } else if (action == 'export_txt' || action == 'export_json') {
-                                                  final format = action == 'export_txt' ? ExportFormat.txt : ExportFormat.json;
-                                                  chatVM.exportThread(format).then((p) {
+                                      trailing: PopupMenuButton<String>(
+                                          icon: Icon(
+                                            Icons.more_vert_rounded,
+                                            size: 18,
+                                            color: context.clanTextMuted,
+                                          ),
+                                          onSelected: (action) {
+                                            if (action == 'rename') {
+                                              _showRenameDialog(context, thread, chatVM);
+                                            } else if (action == 'delete') {
+                                              _showDeleteDialog(context, thread, chatVM);
+                                            } else if (action == 'export_txt' || action == 'export_json') {
+                                              final format = action == 'export_txt' ? ExportFormat.txt : ExportFormat.json;
+                                              chatVM.exportThread(format, thread: thread).then((p) {
                                                     if (p != null && context.mounted) {
                                                       // ignore: use_build_context_synchronously
                                                       ScaffoldMessenger.of(context).showSnackBar(
@@ -378,8 +377,7 @@ class _ChatDrawerState extends State<ChatDrawer> {
                                                   ),
                                                 ),
                                               ],
-                                            )
-                                          : null,
+                                            ),
                                     ),
                                     if (_expandedLineage.contains(thread.id) && thread.branchFromThreadId != null)
                                       _buildLineageChain(context, thread),

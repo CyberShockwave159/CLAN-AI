@@ -49,6 +49,10 @@
 - The OpenAI payload embeds the attachment as a base64 `image_url` content part, so it works with any OpenAI-compatible vision-capable backend (e.g. llama.cpp llama-server with a multimodal model)
 - Magic-byte MIME sniffing (`mimeTypeFromBytes`) detects the true image format (PNG/JPEG/GIF/WebP) even when the file extension lies
 
+**Thread Menus in Drawers**
+- The "Show menu" (⋮) button now appears on every chat/thread row in both the assistant-mode drawer and the roleplay drawer, not just the active conversation
+- Export/rename/delete menu actions operate on the tapped thread directly — exporting a non-active thread loads that thread's messages from the database instead of exporting the active conversation (it no longer needs to be selected first)
+
 ### 🔧 Changes
 
 **Windows CI/CD Pipeline**

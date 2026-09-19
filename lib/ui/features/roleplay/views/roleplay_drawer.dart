@@ -712,7 +712,7 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
                                                          ],
                                                        ),
                                                      ),
-                                                    if (isActive) ...[
+                                                    if (isActive)
                                                       Icon(
                                                         Icons.check_rounded,
                                                         size: 14,
@@ -730,7 +730,7 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
                                                              _showThreadDeleteDialog(context, thread, roleplayVM, character.id);
                                                           } else if (action == 'export_txt' || action == 'export_json') {
                                                             final format = action == 'export_txt' ? ExportFormat.txt : ExportFormat.json;
-                                                            final path = roleplayVM.exportThread(format);
+                                                            final path = roleplayVM.exportThread(format, thread: thread, characterName: character.name);
                                                             path.then((p) {
                                                               if (p != null && context.mounted) {
                                                                 // ignore: use_build_context_synchronously
@@ -780,7 +780,6 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
                                                           ),
                                                         ],
                                                       ),
-                                                    ],
                                                   ],
                                                 ),
                                               ),

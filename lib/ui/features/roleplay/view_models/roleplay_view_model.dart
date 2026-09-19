@@ -897,23 +897,29 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
     }
   }
 
-  Future<String?> exportThread(ExportFormat format) async {
-    if (_activeThread == null) return null;
+  Future<String?> exportThread(ExportFormat format, {ChatThread? thread, String? characterName}) async {
+    final target = thread ?? _activeThread;
+    if (target == null) return null;
 
     try {
+      final messageList = target.id == _activeThread?.id
+          ? _messages
+          : await _chatRepository.getMessagesForThread(target.id);
+
+      final resolvedCharacterName = characterName ?? _activeCharacter?.name;
       final content = format == ExportFormat.txt
           ? ConversationExport.toTxt(
-              _activeThread!,
-              _messages,
-              characterName: _activeCharacter?.name,
+              target,
+              messageList,
+              characterName: resolvedCharacterName,
             )
           : ConversationExport.toJson(
-              _activeThread!,
-              _messages,
-              characterName: _activeCharacter?.name,
+              target,
+              messageList,
+              characterName: resolvedCharacterName,
             );
 
-      final sanitizedTitle = _activeThread!.title.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+      final sanitizedTitle = target.title.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
       final extension = format == ExportFormat.txt ? 'txt' : 'json';
       final filename = 'clan_ai_$sanitizedTitle.$extension';
       final mimeType = format == ExportFormat.json ? 'application/json' : 'text/plain';

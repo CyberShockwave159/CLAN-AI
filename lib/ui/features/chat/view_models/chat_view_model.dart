@@ -288,17 +288,24 @@ class ChatViewModel extends ChangeNotifier with StreamMutationMixin {
   /// Undo the last user message deletion.
   Future<void> undoDelete() => doUndoDelete();
 
-  /// Exports the active thread to a file in the given format.
+  /// Exports a thread to a file in the given format.
+  /// Defaults to the active thread when no [thread] is given, so conversations
+  /// can be exported from the drawer without selecting them first.
   /// Returns the path to the exported file, or null on error/cancel.
-  Future<String?> exportThread(ExportFormat format) async {
-    if (_activeThread == null) return null;
+  Future<String?> exportThread(ExportFormat format, {ChatThread? thread}) async {
+    final target = thread ?? _activeThread;
+    if (target == null) return null;
 
     try {
-      final content = format == ExportFormat.txt
-          ? ConversationExport.toTxt(_activeThread!, _messages)
-          : ConversationExport.toJson(_activeThread!, _messages);
+      final messageList = target.id == _activeThread?.id
+          ? _messages
+          : await _chatRepository.getMessagesForThread(target.id);
 
-      final sanitizedTitle = _activeThread!.title.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+      final content = format == ExportFormat.txt
+          ? ConversationExport.toTxt(target, messageList)
+          : ConversationExport.toJson(target, messageList);
+
+      final sanitizedTitle = target.title.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
       final extension = format == ExportFormat.txt ? 'txt' : 'json';
       final filename = 'clan_ai_$sanitizedTitle.$extension';
       final mimeType = format == ExportFormat.json ? 'application/json' : 'text/plain';
