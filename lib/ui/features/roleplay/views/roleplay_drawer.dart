@@ -17,6 +17,9 @@ import 'package:clan_ai/ui/features/roleplay/view_models/roleplay_view_model.dar
 import 'package:clan_ai/ui/features/settings/view_models/settings_view_model.dart';
 import 'package:clan_ai/ui/features/settings/views/settings_screen.dart';
 import 'package:clan_ai/ui/shared/avatar_utils.dart';
+import 'package:clan_ai/ui/shared/conversation_import.dart';
+import 'package:clan_ai/ui/shared/widgets/confirm_delete_dialog.dart';
+import 'package:clan_ai/ui/shared/widgets/drawer_export_menu.dart';
 
 /// Sidebar for roleplay mode — shows a list of characters.
 /// Mirrors ChatDrawer structure but displays characters instead of threads.
@@ -50,68 +53,38 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
   }
 
   void _showDeleteDialog(BuildContext context, CharacterProfile character) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Character?'),
-        content: Text('Are you sure you want to delete "${character.name}"? All associated memories will be lost.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppTheme.statusError),
-            onPressed: () async {
-              context.read<CharacterRepository>().deleteCharacter(character.id);
-              context.read<RoleplayViewModel>().deleteCharacter(character.id);
-              Navigator.of(ctx).pop();
-              if (mounted) {
-                setState(() {});
-              }
-            },
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+    showConfirmDeleteDialog(
+      context,
+      title: 'Delete Character?',
+      content: Text('Are you sure you want to delete "${character.name}"? All associated memories will be lost.'),
+      onConfirm: () async {
+        context.read<CharacterRepository>().deleteCharacter(character.id);
+        context.read<RoleplayViewModel>().deleteCharacter(character.id);
+        if (mounted) {
+          setState(() {});
+        }
+      },
     );
   }
 
   void _showThreadDeleteDialog(BuildContext context, ChatThread thread, RoleplayViewModel roleplayVM, String characterId) {
     final drawerState = context.findAncestorStateOfType<_RoleplayDrawerState>();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Conversation?'),
-        content: Text('Are you sure you want to delete "${thread.title}"? This cannot be undone.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppTheme.statusError),
-            onPressed: () async {
-              final wasActive = roleplayVM.activeThread?.id == thread.id;
-              Navigator.of(ctx).pop();
-              await roleplayVM.deleteThread(thread.id);
-              if (drawerState != null) {
-                drawerState._expandedCharacters.remove(characterId);
-              }
-              if (wasActive && drawerState?.mounted == true) {
-                Navigator.of(drawerState!.context).pop();
-              }
-            },
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+    showConfirmDeleteDialog(
+      context,
+      title: 'Delete Conversation?',
+      content: Text('Are you sure you want to delete "${thread.title}"? This cannot be undone.'),
+      onConfirm: () async {
+        final wasActive = roleplayVM.activeThread?.id == thread.id;
+        await roleplayVM.deleteThread(thread.id);
+        if (drawerState != null) {
+          drawerState._expandedCharacters.remove(characterId);
+        }
+        if (wasActive && drawerState?.mounted == true) {
+          Navigator.of(drawerState!.context).pop();
+        }
+      },
     );
   }
-
-  Color _getAvatarColor(String name) => AvatarUtils.getColor(name);
-
-  String _getInitials(String name) => AvatarUtils.getInitials(name);
 
   Future<void> _handleStartChat(BuildContext context, CharacterProfile character) async {
     final settingsVM = context.read<SettingsViewModel>();
@@ -127,63 +100,12 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
     Navigator.of(context).pop();
   }
 
-  Future<void> _handleImportChat(BuildContext context, CharacterProfile character) async {
-    final roleplayVM = context.read<RoleplayViewModel>();
-    try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['json'],
-        allowMultiple: false,
-      );
-      if (result == null || result.files.isEmpty || result.files.first.path == null) return;
-
-      if (!context.mounted) return;
-      Navigator.of(context).pop();
-
-      final content = await File(result.files.first.path!).readAsString();
-      final json = jsonDecode(content) as Map<String, dynamic>;
-
-      if (!json.containsKey('thread') || !json.containsKey('messages')) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('Invalid import file format'),
-              duration: const Duration(seconds: 3),
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-          );
-        }
-        return;
-      }
-
-      final (thread, messages, _) = ConversationExport.fromJson(json);
-
-      if (context.mounted) {
-        await roleplayVM.importThread(thread, messages, character.id);
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Chat imported successfully'),
-              duration: const Duration(seconds: 3),
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Import failed: $e'),
-            duration: const Duration(seconds: 3),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        );
-      }
-    }
+  Future<void> _handleImportChat(BuildContext context, CharacterProfile character) {
+    return importConversationFromJsonFile(
+      context,
+      onImport: (thread, messages) =>
+          context.read<RoleplayViewModel>().importThread(thread, messages, character.id),
+    );
   }
 
   @override
@@ -425,7 +347,7 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
                                               height: 42,
                                               decoration: BoxDecoration(
                                                 shape: BoxShape.circle,
-                                                color: _getAvatarColor(character.name),
+                                                color: AvatarUtils.getColor(character.name),
                                               ),
                                               child: character.avatarData != null
                                                   ? ClipOval(
@@ -437,7 +359,7 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
                                                       ),
                                                     )
                                                   : Text(
-                                                      _getInitials(character.name),
+                                                      AvatarUtils.getInitials(character.name),
                                                       style: const TextStyle(
                                                         fontSize: 16,
                                                         fontWeight: FontWeight.w700,
@@ -535,16 +457,7 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
                                           Navigator.of(context).pop();
                                           final roleplayVM = context.read<RoleplayViewModel>();
                                           final path = await roleplayVM.exportCharacterWithRAG(character);
-                                          if (path != null && context.mounted) {
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              SnackBar(
-                                                content: Text('Exported to $path'),
-                                                duration: const Duration(seconds: 3),
-                                                behavior: SnackBarBehavior.floating,
-                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                              ),
-                                            );
-                                          }
+                                          if (path != null && context.mounted) showExportSuccess(context, path);
                                         }
                                       },
                                       itemBuilder: (ctx) => [
@@ -733,40 +646,13 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
                                                             final path = roleplayVM.exportThread(format, thread: thread, characterName: character.name);
                                                             path.then((p) {
                                                               if (p != null && context.mounted) {
-                                                                // ignore: use_build_context_synchronously
-                                                                ScaffoldMessenger.of(context).showSnackBar(
-                                                                  SnackBar(
-                                                                    content: Text('Exported to $p'),
-                                                                    duration: const Duration(seconds: 3),
-                                                                    behavior: SnackBarBehavior.floating,
-                                                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                                                  ),
-                                                                );
+                                                                showExportSuccess(context, p);
                                                               }
                                                             });
                                                           }
                                                         },
                                                         itemBuilder: (ctx) => [
-                                                          const PopupMenuItem(
-                                                            value: 'export_txt',
-                                                            child: Row(
-                                                              children: [
-                                                                Icon(Icons.file_copy_outlined, size: 18),
-                                                                SizedBox(width: 8),
-                                                                Text('Export as TXT'),
-                                                              ],
-                                                            ),
-                                                          ),
-                                                          const PopupMenuItem(
-                                                            value: 'export_json',
-                                                            child: Row(
-                                                              children: [
-                                                                Icon(Icons.code_outlined, size: 18),
-                                                                SizedBox(width: 8),
-                                                                Text('Export as JSON'),
-                                                              ],
-                                                            ),
-                                                          ),
+                                                          ...buildExportMenuItems(),
                                                           const PopupMenuDivider(),
                                                           const PopupMenuItem(
                                                             value: 'delete',

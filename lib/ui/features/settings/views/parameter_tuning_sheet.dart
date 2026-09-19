@@ -165,21 +165,27 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
                 title: 'Max Generation Tokens',
                 subtitle: 'Max tokens per response (0 = unlimited)',
                 controller: _maxTokensController,
-                value: _maxTokens,
                 min: 0,
                 max: 8192,
                 onChanged: (v) => setState(() => _maxTokens = v),
               ),
 
               // Context Window Size with custom input
-              _buildContextSizeInput(
+              _buildNumberInput(
                 title: 'Context Window (n_ctx)',
                 subtitle: _modelContextLength != null
                     ? 'Model max: ${(_modelContextLength / 1000).toStringAsFixed(0)}k tokens. Adjust if you need shorter context.'
                     : 'Max tokens the model can process (up to 1,000,000). Defaults to model max if available.',
-                value: _contextSize,
                 controller: _contextSizeController,
-                maxContext: _modelContextLength,
+                min: 128,
+                max: _modelContextLength != null && _modelContextLength > 0
+                    ? _modelContextLength
+                    : 1000000,
+                hintText: _modelContextLength != null
+                    ? '${(_modelContextLength / 1000).toStringAsFixed(0)}k'
+                    : '1000000',
+                suffixText: 'tokens',
+                inputWidth: 140,
                 onChanged: (v) => setState(() => _contextSize = v),
               ),
 
@@ -359,10 +365,12 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
     required String title,
     required String subtitle,
     required TextEditingController controller,
-    required int value,
     required int min,
     required int max,
-    required     ValueChanged<int> onChanged,
+    required ValueChanged<int> onChanged,
+    String? hintText,
+    String? suffixText,
+    double inputWidth = 100,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
@@ -381,7 +389,7 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
                 ),
               ),
               SizedBox(
-                width: 100,
+                width: inputWidth,
                 child: TextField(
                   controller: controller,
                   keyboardType: TextInputType.number,
@@ -392,6 +400,7 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
                     fontFamily: 'monospace',
                   ),
                   decoration: InputDecoration(
+                    hintText: hintText,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(6),
@@ -406,91 +415,17 @@ class _ParameterTuningSheetState extends State<ParameterTuningSheet> {
                       borderSide: const BorderSide(color: AppTheme.accentPrimary),
                     ),
                     isDense: true,
+                    suffixText: suffixText,
+                    suffixStyle: suffixText != null
+                        ? TextStyle(
+                            fontSize: 10,
+                            color: context.clanTextMuted,
+                          )
+                        : null,
                   ),
                   onChanged: (val) {
                     final parsed = int.tryParse(val);
                     if (parsed != null && parsed >= min && parsed <= max) {
-                      onChanged(parsed);
-                    }
-                  },
-                ),
-              ),
-            ],
-          ),
-          Text(
-            subtitle,
-            style: TextStyle(
-              fontSize: 11,
-              color: context.clanTextMuted,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildContextSizeInput({
-    required String title,
-    required String subtitle,
-    required int value,
-    required TextEditingController controller,
-    required ValueChanged<int> onChanged,
-    int? maxContext,
-  }) {
-    final effectiveMax = maxContext != null && maxContext > 0 ? maxContext : 1000000;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w600,
-                  color: context.clanTextPrimary,
-                ),
-              ),
-              SizedBox(
-                width: 140,
-                child: TextField(
-                  controller: controller,
-                  keyboardType: TextInputType.number,
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                    fontFamily: 'monospace',
-                  ),
-                  decoration: InputDecoration(
-                    hintText: maxContext != null ? '${(maxContext / 1000).toStringAsFixed(0)}k' : '1000000',
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(6),
-                      borderSide: BorderSide(color: context.clanBorder),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(6),
-                      borderSide: BorderSide(color: context.clanBorder),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(6),
-                      borderSide: const BorderSide(color: AppTheme.accentPrimary),
-                    ),
-                    isDense: true,
-                    suffixText: 'tokens',
-                    suffixStyle: TextStyle(
-                      fontSize: 10,
-                      color: context.clanTextMuted,
-                    ),
-                  ),
-                  onChanged: (val) {
-                    final parsed = int.tryParse(val);
-                    if (parsed != null && parsed >= 128 && parsed <= effectiveMax) {
                       onChanged(parsed);
                     }
                   },

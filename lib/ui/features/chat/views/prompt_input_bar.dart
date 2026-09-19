@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:clan_ai/core/constants/app_theme.dart';
 import 'package:clan_ai/core/utils/message_attachment_store.dart';
+import 'package:clan_ai/ui/shared/snackbar_helper.dart';
 
 class PromptInputBar extends StatefulWidget {
   final bool isGenerating;
@@ -80,14 +81,7 @@ class _PromptInputBarState extends State<PromptInputBar> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to attach image'),
-            duration: Duration(seconds: 2),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(10))),
-          ),
-        );
+        showAppSnackBar(context, 'Failed to attach image', duration: const Duration(seconds: 2));
       }
     }
   }

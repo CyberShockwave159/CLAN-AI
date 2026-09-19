@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -13,14 +12,15 @@ import 'package:clan_ai/ui/features/chat/views/prompt_input_bar.dart';
 import 'package:clan_ai/ui/features/roleplay/views/roleplay_drawer.dart';
 import 'package:clan_ai/ui/features/roleplay/view_models/roleplay_view_model.dart';
 import 'package:clan_ai/ui/features/settings/view_models/settings_view_model.dart';
-import 'package:clan_ai/ui/features/settings/views/parameter_tuning_sheet.dart';
 import 'package:clan_ai/ui/features/settings/views/settings_screen.dart';
 import 'package:clan_ai/ui/shared/connection_badge.dart';
 import 'package:clan_ai/ui/features/roleplay/widgets/alternate_greeting_selector.dart';
 import 'package:clan_ai/ui/shared/mixins/auto_scroll_mixin.dart';
 import 'package:clan_ai/ui/shared/avatar_utils.dart';
 import 'package:clan_ai/ui/shared/delete_message_handler.dart';
+import 'package:clan_ai/ui/shared/message_debug_context.dart';
 import 'package:clan_ai/ui/shared/widgets/desktop_keyboard_shortcuts.dart';
+import 'package:clan_ai/ui/shared/widgets/parameter_sheet_opener.dart';
 
 class RoleplayScreen extends StatefulWidget {
   final VoidCallback? themeRefresh;
@@ -36,20 +36,6 @@ class _RoleplayScreenState extends State<RoleplayScreen> with AutoScrollMixin {
   void initState() {
     super.initState();
     initAutoScroll();
-  }
-
-  void _openParameterSheet(BuildContext context) {
-    final settingsVM = context.read<SettingsViewModel>();
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => ParameterTuningSheet(
-        initialParams: settingsVM.config.defaultParams,
-        onSave: (newParams) => settingsVM.updateDefaultParams(newParams),
-        isRoleplay: true,
-      ),
-    );
   }
 
   Future<void> _handleDeleteMessage(int messageIndex, SettingsViewModel settingsVM) async {
@@ -68,34 +54,6 @@ class _RoleplayScreenState extends State<RoleplayScreen> with AutoScrollMixin {
         scrollToBottom();
       },
       onThreadDeleted: () => scrollToBottom(false),
-    );
-  }
-
-  MessageDebugContext? _buildDebugContext(ChatMessage message, RoleplayViewModel roleplayVM, SettingsViewModel settingsVM) {
-    if (message.role != MessageRole.assistant || message.status != MessageStatus.completed) return null;
-
-    final thread = roleplayVM.activeThread;
-    final systemPrompt = thread?.systemPrompt ?? settingsVM.config.systemPrompt;
-    final params = settingsVM.config.defaultParams;
-    final ragMemories = message.ragMemoryContents != null && message.ragMemoryContents!.isNotEmpty
-        ? List<String>.from(jsonDecode(message.ragMemoryContents!))
-        : <String>[];
-
-    return MessageDebugContext(
-      model: settingsVM.config.selectedModel ?? 'unknown',
-      systemPrompt: systemPrompt,
-      ragMemories: ragMemories,
-      temperature: params.temperature,
-      topP: params.topP,
-      topK: params.topK,
-      contextSize: params.contextSize,
-      presencePenalty: params.presencePenalty,
-      frequencyPenalty: params.frequencyPenalty,
-      repeatPenalty: params.repeatPenalty,
-      timeToFirstTokenMs: message.timeToFirstTokenMs,
-      tokensPerSecond: message.tokensPerSecond,
-      totalTokens: message.totalTokens,
-      generationTimeSec: message.generationTimeSec,
     );
   }
 
@@ -282,7 +240,7 @@ class _RoleplayScreenState extends State<RoleplayScreen> with AutoScrollMixin {
                             message: message,
                             messageIndex: index,
                             isLastMessage: index == roleplayVM.messages.length - 1,
-                            debugContext: _buildDebugContext(message, roleplayVM, settingsVM),
+                            debugContext: buildMessageDebugContext(message, roleplayVM.activeThread, settingsVM),
                             characterAvatar: avatar,
                             characterName: name,
                             onRegenerate: isFirstAssistantMessage
@@ -394,7 +352,7 @@ class _RoleplayScreenState extends State<RoleplayScreen> with AutoScrollMixin {
               });
             },
             onStop: () => roleplayVM.stopGeneration(),
-            onOpenParams: () => _openParameterSheet(context),
+            onOpenParams: () => openParameterSheet(context, isRoleplay: true),
           ),
         ],
       ),

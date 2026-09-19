@@ -11,6 +11,7 @@ import 'package:clan_ai/ui/features/chat/widgets/markdown_body_view.dart';
 import 'package:clan_ai/ui/features/chat/widgets/token_speed_badge.dart';
 import 'package:clan_ai/ui/features/chat/widgets/reasoning_block.dart';
 import 'package:clan_ai/ui/shared/avatar_utils.dart';
+import 'package:clan_ai/ui/shared/snackbar_helper.dart';
 
 /// Debug context data for message copy-to-clipboard.
 class MessageDebugContext {
@@ -104,33 +105,15 @@ class MessageBubble extends StatelessWidget {
 
   void _copyToClipboard(BuildContext context) {
     Clipboard.setData(ClipboardData(text: message.content));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Message copied to clipboard'),
-        duration: const Duration(seconds: 1),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-    );
+    showAppSnackBar(context, 'Message copied to clipboard', duration: const Duration(seconds: 1));
   }
 
   void _copyDebugContext(BuildContext context) {
     if (debugContext == null) return;
     final jsonStr = jsonEncode(debugContext!.toMap());
     Clipboard.setData(ClipboardData(text: jsonStr));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Debug context copied to clipboard'),
-        duration: const Duration(seconds: 1),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-    );
+    showAppSnackBar(context, 'Debug context copied to clipboard', duration: const Duration(seconds: 1));
   }
-
-  Color _getAvatarColor(String name) => AvatarUtils.getColor(name);
-
-  String _getInitials(String name) => AvatarUtils.getInitials(name);
 
   void _showEditDialog(BuildContext context) {
     final controller = TextEditingController(text: message.content);
@@ -384,11 +367,11 @@ class MessageBubble extends StatelessWidget {
                     width: 24,
                     height: 24,
                     decoration: BoxDecoration(
-                      color: _getAvatarColor(characterName!),
+                      color: AvatarUtils.getColor(characterName!),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
-                      _getInitials(characterName!),
+                      AvatarUtils.getInitials(characterName!),
                       style: const TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,

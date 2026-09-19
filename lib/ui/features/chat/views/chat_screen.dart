@@ -3,19 +3,17 @@ import 'package:provider/provider.dart';
 import 'package:clan_ai/core/constants/app_theme.dart';
 import 'package:clan_ai/core/constants/clan_theme_colors.dart';
 import 'package:clan_ai/core/utils/latency_meter.dart';
-import 'dart:convert';
-
-import 'package:clan_ai/data/models/chat_message.dart';
 import 'package:clan_ai/ui/features/chat/view_models/chat_view_model.dart';
 import 'package:clan_ai/ui/features/chat/views/message_bubble.dart';
 import 'package:clan_ai/ui/features/chat/views/prompt_input_bar.dart';
 import 'package:clan_ai/ui/features/drawer/views/chat_drawer.dart';
 import 'package:clan_ai/ui/features/settings/view_models/settings_view_model.dart';
-import 'package:clan_ai/ui/features/settings/views/parameter_tuning_sheet.dart';
 import 'package:clan_ai/ui/features/settings/views/settings_screen.dart';
 import 'package:clan_ai/ui/shared/app_header.dart';
 import 'package:clan_ai/ui/shared/mixins/auto_scroll_mixin.dart';
 import 'package:clan_ai/ui/shared/delete_message_handler.dart';
+import 'package:clan_ai/ui/shared/message_debug_context.dart';
+import 'package:clan_ai/ui/shared/widgets/parameter_sheet_opener.dart';
 
 class ChatScreen extends StatefulWidget {
   final VoidCallback? themeRefresh;
@@ -41,20 +39,6 @@ class _ChatScreenState extends State<ChatScreen> with AutoScrollMixin {
   void dispose() {
     _quickConnectUrlController.dispose();
     super.dispose();
-  }
-
-  void _openParameterSheet(BuildContext context) {
-    final settingsVM = context.read<SettingsViewModel>();
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => ParameterTuningSheet(
-        initialParams: settingsVM.config.defaultParams,
-        onSave: (newParams) => settingsVM.updateDefaultParams(newParams),
-        isRoleplay: false,
-      ),
-    );
   }
 
   Future<void> _handleDeleteMessage(int messageIndex, SettingsViewModel settingsVM) async {
@@ -105,34 +89,6 @@ class _ChatScreenState extends State<ChatScreen> with AutoScrollMixin {
     }
   }
 
-  MessageDebugContext? _buildDebugContext(ChatMessage message, ChatViewModel chatVM, SettingsViewModel settingsVM) {
-    if (message.role != MessageRole.assistant || message.status != MessageStatus.completed) return null;
-
-    final thread = chatVM.activeThread;
-    final systemPrompt = thread?.systemPrompt ?? settingsVM.config.systemPrompt;
-    final params = settingsVM.config.defaultParams;
-    final ragMemories = message.ragMemoryContents != null && message.ragMemoryContents!.isNotEmpty
-        ? List<String>.from(jsonDecode(message.ragMemoryContents!))
-        : <String>[];
-
-    return MessageDebugContext(
-      model: settingsVM.config.selectedModel ?? 'unknown',
-      systemPrompt: systemPrompt,
-      ragMemories: ragMemories,
-      temperature: params.temperature,
-      topP: params.topP,
-      topK: params.topK,
-      contextSize: params.contextSize,
-      presencePenalty: params.presencePenalty,
-      frequencyPenalty: params.frequencyPenalty,
-      repeatPenalty: params.repeatPenalty,
-      timeToFirstTokenMs: message.timeToFirstTokenMs,
-      tokensPerSecond: message.tokensPerSecond,
-      totalTokens: message.totalTokens,
-      generationTimeSec: message.generationTimeSec,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final chatVM = context.watch<ChatViewModel>();
@@ -166,7 +122,7 @@ class _ChatScreenState extends State<ChatScreen> with AutoScrollMixin {
                                key: ValueKey(message.id),
                                message: message,
                                messageIndex: index,
-                               debugContext: _buildDebugContext(message, chatVM, settingsVM),
+                               debugContext: buildMessageDebugContext(message, chatVM.activeThread, settingsVM),
                                 onRegenerate: () {
                                   chatVM.regenerateMessage(
                                     messageIndex: index,
@@ -249,7 +205,7 @@ class _ChatScreenState extends State<ChatScreen> with AutoScrollMixin {
               });
             },
             onStop: () => chatVM.stopGeneration(),
-            onOpenParams: () => _openParameterSheet(context),
+            onOpenParams: () => openParameterSheet(context),
           ),
         ],
       ),

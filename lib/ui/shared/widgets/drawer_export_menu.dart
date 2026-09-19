@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:clan_ai/ui/shared/snackbar_helper.dart';
 
 /// Shared export menu items used by both ChatDrawer and RoleplayDrawer.
 /// Returns the two PopupMenuItems for TXT and JSON export.
@@ -31,12 +32,5 @@ List<PopupMenuEntry<String>> buildExportMenuItems() {
 /// Call after export completes to show the result.
 void showExportSuccess(BuildContext context, String path) {
   if (!context.mounted) return;
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text('Exported to $path'),
-      duration: const Duration(seconds: 3),
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-    ),
-  );
+  showAppSnackBar(context, 'Exported to $path');
 }

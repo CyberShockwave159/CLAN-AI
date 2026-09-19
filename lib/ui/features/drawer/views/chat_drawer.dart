@@ -1,8 +1,4 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:flutter/material.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:clan_ai/core/constants/app_theme.dart';
 import 'package:clan_ai/core/constants/clan_theme_colors.dart';
@@ -12,6 +8,9 @@ import 'package:clan_ai/data/models/chat_thread.dart';
 import 'package:clan_ai/ui/features/chat/view_models/chat_view_model.dart';
 import 'package:clan_ai/ui/features/settings/view_models/settings_view_model.dart';
 import 'package:clan_ai/ui/features/settings/views/settings_screen.dart';
+import 'package:clan_ai/ui/shared/conversation_import.dart';
+import 'package:clan_ai/ui/shared/widgets/confirm_delete_dialog.dart';
+import 'package:clan_ai/ui/shared/widgets/drawer_export_menu.dart';
 
 class ChatDrawer extends StatefulWidget {
   const ChatDrawer({super.key});
@@ -135,26 +134,11 @@ class _ChatDrawerState extends State<ChatDrawer> {
   }
 
   void _showDeleteDialog(BuildContext context, ChatThread thread, ChatViewModel chatVM) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Conversation?'),
-        content: Text('Are you sure you want to delete "${thread.title}"? This cannot be undone.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppTheme.statusError),
-            onPressed: () {
-              chatVM.deleteThread(thread.id);
-              Navigator.of(ctx).pop();
-            },
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+    showConfirmDeleteDialog(
+      context,
+      title: 'Delete Conversation?',
+      content: Text('Are you sure you want to delete "${thread.title}"? This cannot be undone.'),
+      onConfirm: () => chatVM.deleteThread(thread.id),
     );
   }
 
@@ -322,40 +306,13 @@ class _ChatDrawerState extends State<ChatDrawer> {
                                               final format = action == 'export_txt' ? ExportFormat.txt : ExportFormat.json;
                                               chatVM.exportThread(format, thread: thread).then((p) {
                                                     if (p != null && context.mounted) {
-                                                      // ignore: use_build_context_synchronously
-                                                      ScaffoldMessenger.of(context).showSnackBar(
-                                                        SnackBar(
-                                                          content: Text('Exported to $p'),
-                                                          duration: const Duration(seconds: 3),
-                                                          behavior: SnackBarBehavior.floating,
-                                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                                        ),
-                                                      );
+                                                      showExportSuccess(context, p);
                                                     }
                                                   });
                                                 }
                                               },
                                               itemBuilder: (ctx) => [
-                                                const PopupMenuItem(
-                                                  value: 'export_txt',
-                                                  child: Row(
-                                                    children: [
-                                                      Icon(Icons.file_copy_outlined, size: 18),
-                                                      SizedBox(width: 8),
-                                                      Text('Export as TXT'),
-                                                    ],
-                                                  ),
-                                                ),
-                                                const PopupMenuItem(
-                                                  value: 'export_json',
-                                                  child: Row(
-                                                    children: [
-                                                      Icon(Icons.code_outlined, size: 18),
-                                                      SizedBox(width: 8),
-                                                      Text('Export as JSON'),
-                                                    ],
-                                                  ),
-                                                ),
+                                                ...buildExportMenuItems(),
                                                 const PopupMenuItem(
                                                   value: 'rename',
                                                   child: Row(
@@ -410,64 +367,11 @@ class _ChatDrawerState extends State<ChatDrawer> {
                     color: context.clanBorder,
                   ),
                 ),
-                onPressed: () async {
-                  try {
-                    final result = await FilePicker.platform.pickFiles(
-                      type: FileType.custom,
-                      allowedExtensions: ['json'],
-                      allowMultiple: false,
-                    );
-                    if (result == null || result.files.isEmpty || result.files.first.path == null) return;
-
-                    if (!context.mounted) return;
-                    Navigator.of(context).pop();
-
-                    final content = await File(result.files.first.path!).readAsString();
-                    final json = jsonDecode(content) as Map<String, dynamic>;
-
-                    if (!json.containsKey('thread') || !json.containsKey('messages')) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: const Text('Invalid import file format'),
-                            duration: const Duration(seconds: 3),
-                            behavior: SnackBarBehavior.floating,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          ),
-                        );
-                      }
-                      return;
-                    }
-
-                    final (thread, messages, _) = ConversationExport.fromJson(json);
-
-                    if (context.mounted) {
-                      final chatVM = context.read<ChatViewModel>();
-                      await chatVM.importThread(thread, messages);
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: const Text('Chat imported successfully'),
-                            duration: const Duration(seconds: 3),
-                            behavior: SnackBarBehavior.floating,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          ),
-                        );
-                      }
-                    }
-                  } catch (e) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Import failed: $e'),
-                          duration: const Duration(seconds: 3),
-                          behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                      );
-                    }
-                  }
-                },
+                onPressed: () => importConversationFromJsonFile(
+                  context,
+                  onImport: (thread, messages) =>
+                      context.read<ChatViewModel>().importThread(thread, messages),
+                ),
               ),
             ),
 
