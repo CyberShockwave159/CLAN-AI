@@ -4,9 +4,9 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 /// Stores message image attachments as files on disk.
-/// Mirrors [AvatarStorageService]: keeps the SQLite database lightweight by
-/// moving image bytes to the filesystem and persisting only the file path
-/// on the `ChatMessage` row (`messages.image_path`).
+/// Keeps the SQLite database lightweight by moving image bytes to the
+/// filesystem and persisting only the file path on the `ChatMessage` row
+/// (`messages.image_path`).
 ///
 /// Files live under `<app documents>/attachments/` keyed by a generated id,
 /// preserving the original file extension so the mime type stays resolvable

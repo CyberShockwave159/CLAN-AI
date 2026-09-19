@@ -2,7 +2,6 @@ import 'package:clan_ai/core/utils/latency_meter.dart';
 import 'package:clan_ai/data/models/chat_message.dart';
 import 'package:clan_ai/data/models/chat_thread.dart';
 import 'package:clan_ai/data/models/character_profile.dart';
-import 'package:clan_ai/data/models/persona_template.dart';
 import 'package:clan_ai/data/models/server_config.dart';
 import 'package:clan_ai/data/models/server_profile.dart';
 import 'package:clan_ai/domain/models/generation_params.dart';
@@ -108,26 +107,6 @@ CharacterProfile buildCharacter({
     systemPrompt: systemPrompt,
     postHistoryInstructions: postHistoryInstructions,
     alternateGreetings: alternateGreetings ?? [],
-  );
-}
-
-// --- PersonaTemplate factories ---
-
-PersonaTemplate buildPersonaTemplate({
-  String? id,
-  String name = 'Test Template',
-  String personaName = 'Test Persona',
-  String description = 'A test persona description',
-  DateTime? createdAt,
-  DateTime? updatedAt,
-}) {
-  return PersonaTemplate(
-    id: id ?? 'tpl-${DateTime.now().millisecondsSinceEpoch}',
-    name: name,
-    personaName: personaName,
-    description: description,
-    createdAt: createdAt ?? DateTime.now(),
-    updatedAt: updatedAt ?? DateTime.now(),
   );
 }
 

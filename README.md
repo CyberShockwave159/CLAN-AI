@@ -222,7 +222,7 @@ Characters can have multiple opening messages:
 - **Reasoning pipeline**: `SseClient.parseStream()` extracts reasoning from multiple field names (`reasoning`, `reasoning_content`, `thought`). `SseClient.filterReasoning()` processes inline thinking tags and forwards dedicated reasoning fields through a stream pipeline. The OpenAI-compatible protocol supports the `reasoning` parameter.
 - **Thread isolation**: `ChatThread.characterId` distinguishes assistant vs roleplay threads
 - **FileSaver**: Native mobile save dialogs via platform channels (Android SAF, iOS UIDocumentPicker); desktop falls back to app documents directory
-- **SillyTavern Import**: `lib/core/utils/silly_tavern_card_parser.dart` parses `chara_card_v2` JSON; extracts `system_prompt`, `post_history_instructions`, and `alternate_greetings` in addition to core fields. `lib/core/utils/st_avatar_downloader.dart` fetches avatars; auto-edit dialog for imported characters via `CharacterEditDialog` (proper StatefulWidget)
+- **SillyTavern Import**: `lib/core/utils/silly_tavern_card_parser.dart` parses `chara_card_v2` JSON; extracts `system_prompt`, `post_history_instructions`, and `alternate_greetings` in addition to core fields. Import opens an auto-edit dialog via `CharacterEditDialog` (proper StatefulWidget)
 - **Memory chip**: Assistant messages display a memory chip showing count of RAG memories used. Tapping reveals the actual memory content that was injected into the system prompt. `ragMemoryContents` field stores JSON-encoded memory strings on `ChatMessage`
 - **Memory management**: `lib/ui/features/roleplay/widgets/character_memories_dialog.dart` — Per-character memory viewer and pruner. List all vector embeddings for a character; delete individual memories or clear all. Accessible via character popup menu → "Manage Memories"
 - **Configurable RAG**: `GenerationParams` includes `ragTopK` (1-10) and `ragMinScore` (0.0-1.0). Adjustable in Settings → Generation Parameters. `RoleplayContextBuilder` filters memories by minimum similarity score
@@ -230,7 +230,6 @@ Characters can have multiple opening messages:
 - **Persona Templates**: Global reusable user personas stored in SQLite (persona_templates table). Applied via dropdown selector in character creation, editing, and SillyTavern import dialogs. `CharacterEditDialog` uses `context.watch` for reactive template loading.
 - **`{{char}}` / `{{user}}` replacement**: Parser automatically substitutes these tokens with the character name and user persona in all fields, including system prompt and post history instructions.
 - **Keyboard Shortcuts Help**: Press `Ctrl+/` or `F1` to open the ShortcutsHelpDialog showing all keyboard shortcuts. Platform-aware labels (`Cmd` on macOS, `Ctrl` on other platforms).
-- **Avatar file storage**: Large avatars (over 500KB) are stored as files on disk via `AvatarStorageService` to keep SQLite lightweight. Small avatars remain inline.
 
 ## Development
 
