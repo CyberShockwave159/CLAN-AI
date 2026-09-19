@@ -165,14 +165,37 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
   }
 
   /// Start a roleplay session with the given character.
-  /// Reuses existing thread for this character if one exists, otherwise creates a new one.
+  /// Reuses the most recently updated existing thread for this character if
+  /// one exists, otherwise creates a new one.
   Future<void> startRoleplay(CharacterProfile character, {
     required ServerConfig serverConfig,
     required ServerProfile? connection,
     GenerationParams? customParams,
     int? modelContextLength,
   }) async {
-    await _startRoleplayWithGreeting(character, character.firstMessage, serverConfig: serverConfig, connection: connection, customParams: customParams, modelContextLength: modelContextLength);
+    if (_isGenerating) {
+      stopGeneration();
+    }
+
+    _activeCharacter = character;
+
+    // Reuse the most recently updated thread for this character if one exists
+    final characterThreads = await _chatRepository.getThreadsForCharacter(character.id);
+    if (characterThreads.isNotEmpty) {
+      _activeThread = characterThreads.first;
+      _messages = await _chatRepository.getMessagesForThread(_activeThread!.id);
+      notifyListeners();
+      return;
+    }
+
+    await _startRoleplayWithGreeting(
+      character,
+      character.firstMessage,
+      serverConfig: serverConfig,
+      connection: connection,
+      customParams: customParams,
+      modelContextLength: modelContextLength,
+    );
   }
 
   /// Start a new conversation with the character using an alternate greeting.

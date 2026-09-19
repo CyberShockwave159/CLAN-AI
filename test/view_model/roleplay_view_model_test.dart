@@ -110,10 +110,8 @@ void main() {
       // Create an existing thread for this character
       await fakeChatRepo.createThread(title: 'Existing Chat', characterId: 'char-1');
       final existingThreads = await fakeChatRepo.getThreadsForCharacter('char-1');
-      if (existingThreads.isNotEmpty) {
-        vm.activeThread = existingThreads.first;
-        vm.messages = await fakeChatRepo.getMessagesForThread(existingThreads.first.id);
-      }
+      expect(existingThreads, hasLength(1));
+      final existingThreadId = existingThreads.first.id;
 
       await vm.startRoleplay(
         character,
@@ -123,7 +121,10 @@ void main() {
         modelContextLength: null,
       );
 
+      // Reuses the existing thread instead of creating a duplicate
       expect(vm.activeThread, isNotNull);
+      expect(vm.activeThread!.id, equals(existingThreadId));
+      expect(await fakeChatRepo.getThreadsForCharacter('char-1'), hasLength(1));
     });
 
     test('sets active character', () async {

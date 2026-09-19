@@ -100,6 +100,24 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
     Navigator.of(context).pop();
   }
 
+  /// Starts a brand-new conversation with [character]'s default greeting.
+  /// Unlike [startRoleplay] (which resumes the most recent thread for the
+  /// character), this always creates a fresh thread.
+  Future<void> _handleNewConversation(BuildContext context, CharacterProfile character) async {
+    final settingsVM = context.read<SettingsViewModel>();
+    final roleplayVM = context.read<RoleplayViewModel>();
+    await roleplayVM.startRoleplayWithGreeting(
+      character,
+      character.firstMessage,
+      serverConfig: settingsVM.config,
+      connection: settingsVM.connectionDetails,
+      modelContextLength: settingsVM.getSelectedModelContextLength(),
+    );
+    // ignore: use_build_context_synchronously
+    if (!context.mounted) return;
+    Navigator.of(context).pop();
+  }
+
   Future<void> _handleImportChat(BuildContext context, CharacterProfile character) {
     return importConversationFromJsonFile(
       context,
@@ -508,7 +526,7 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
                                           color: Colors.transparent,
                                           child: InkWell(
                                             onTap: () {
-                                              _handleStartChat(context, character);
+                                              _handleNewConversation(context, character);
                                               _toggleCharacterExpansion(character.id);
                                             },
                                             child: Padding(
