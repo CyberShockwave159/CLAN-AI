@@ -353,54 +353,11 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
     GenerationParams? customParams,
     int? modelContextLength,
   }) async {
-    if (_isGenerating || messageIndex < 0 || messageIndex >= _messages.length) return;
-
-    final targetMsg = _messages[messageIndex];
-    if (targetMsg.role != MessageRole.assistant) return;
-
-    final parentId = targetMsg.parentId;
-    final newAssistantId = const Uuid().v4();
-    final nextVariantIndex = targetMsg.totalVariants;
-    final newTotalVariants = targetMsg.totalVariants + 1;
-
-    final existingSiblings = await _chatRepository.getAllMessagesForThread(targetMsg.threadId);
-    final variantSiblings = existingSiblings.where((m) => m.role == MessageRole.assistant && m.parentId == targetMsg.parentId);
-    final allSiblingIds = {...variantSiblings.map((m) => m.id), targetMsg.id, newAssistantId};
-    final completeSiblingList = allSiblingIds.toList()..sort();
-
-    final updatedOldMsg = targetMsg.copyWith(
-      variantIndex: targetMsg.variantIndex,
-      totalVariants: newTotalVariants,
-      siblingIds: completeSiblingList,
-    );
-    _messages[messageIndex] = updatedOldMsg;
-    await _chatRepository.saveMessage(updatedOldMsg);
-
-    for (final siblingMsg in existingSiblings) {
-      if (siblingMsg.id != targetMsg.id) {
-        await _chatRepository.saveMessage(siblingMsg.copyWith(
-          siblingIds: completeSiblingList,
-        ));
-      }
-    }
-
-    final newAssistantMsg = ChatMessage(
-      id: newAssistantId,
-      threadId: targetMsg.threadId,
-      parentId: parentId,
-      role: MessageRole.assistant,
-      content: '',
-      status: MessageStatus.streaming,
-      variantIndex: nextVariantIndex,
-      totalVariants: newTotalVariants,
-      siblingIds: completeSiblingList,
-    );
-
-    _messages[messageIndex] = newAssistantMsg;
-    notifyListeners();
+    final result = await doRegenerateMessage(messageIndex: messageIndex);
+    if (result == null) return;
 
     await _streamResponse(
-      assistantMessageId: newAssistantId,
+      assistantMessageId: result.newAssistantId,
       serverConfig: serverConfig,
       connection: connection,
       customParams: customParams,
@@ -413,7 +370,7 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
         await _characterRepository.deleteEmbeddingsForMessages(
           characterId: _activeCharacter!.id,
           threadId: _activeThread!.id,
-          messageIds: [targetMsg.id],
+          messageIds: [result.oldMessageId],
         );
       } catch (_) {}
     }
@@ -427,39 +384,10 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
     GenerationParams? customParams,
     int? modelContextLength,
   }) async {
-    if (_isGenerating || messageIndex < 0 || messageIndex >= _messages.length || _activeCharacter == null) return;
+    if (_activeCharacter == null) return;
 
-    final oldUserMsg = _messages[messageIndex];
-    if (oldUserMsg.role != MessageRole.user) return;
-
-    String? oldAssistantId;
-    final oldAssistantMsgIndex = messageIndex + 1;
-    if (oldAssistantMsgIndex < _messages.length && _messages[oldAssistantMsgIndex].role == MessageRole.assistant) {
-      final oldAssistantMsg = _messages[oldAssistantMsgIndex];
-      oldAssistantId = oldAssistantMsg.id;
-      final newAssistantId = const Uuid().v4();
-      final newTotalVariants = oldAssistantMsg.totalVariants + 1;
-
-      final updatedOldAssistant = oldAssistantMsg.copyWith(
-        totalVariants: newTotalVariants,
-        siblingIds: [...oldAssistantMsg.siblingIds, newAssistantId],
-      );
-      await _chatRepository.saveMessage(updatedOldAssistant);
-    }
-
-    final newUserMsg = oldUserMsg.copyWith(
-      id: const Uuid().v4(),
-      content: newContent.trim(),
-      variantIndex: oldUserMsg.totalVariants,
-      totalVariants: oldUserMsg.totalVariants + 1,
-      siblingIds: [...oldUserMsg.siblingIds, oldUserMsg.id],
-      createdAt: DateTime.now(),
-    );
-    await _chatRepository.saveMessage(newUserMsg);
-
-    _messages = _messages.sublist(0, messageIndex);
-    _messages.add(newUserMsg);
-    notifyListeners();
+    final result = await doEditUserPrompt(messageIndex: messageIndex, newContent: newContent);
+    if (result == null) return;
 
     // Rebuild RAG context for the new prompt
     final contextBuilder = RoleplayContextBuilder();
@@ -484,7 +412,7 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
     await _chatRepository.updateThread(updatedThread);
 
     final assistantMessageId = const Uuid().v4();
-    final hasOldAssistant = oldAssistantId != null;
+    final hasOldAssistant = result.oldAssistantId != null;
     final ragMemoryCount = context.memories.isNotEmpty ? context.memories.length : null;
     final ragMemoryContents = context.memoryInfo.isNotEmpty
         ? jsonEncode(context.memoryInfo.map((m) => m['content'] as String).toList())
@@ -493,13 +421,13 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
     final assistantPlaceholder = ChatMessage(
       id: assistantMessageId,
       threadId: _activeThread!.id,
-      parentId: newUserMsg.id,
+      parentId: result.newUserMessage.id,
       role: MessageRole.assistant,
       content: '',
       status: MessageStatus.streaming,
       variantIndex: hasOldAssistant ? 1 : 0,
       totalVariants: hasOldAssistant ? 2 : 1,
-      siblingIds: hasOldAssistant ? [oldAssistantId] : <String>[],
+      siblingIds: hasOldAssistant ? [result.oldAssistantId!] : <String>[],
       ragMemoryCount: ragMemoryCount,
       ragMemoryContents: ragMemoryContents,
     );
@@ -683,33 +611,15 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
     GenerationParams? customParams,
     int? modelContextLength,
   }) async {
-    if (_isGenerating || messageIndex < 0 || messageIndex >= _messages.length || _activeThread == null) return false;
+    final result = await doDeleteMessageHead(messageIndex: messageIndex);
+    if (result == null) return false;
 
-    final deletedMsg = _messages[messageIndex];
-    final isFirstMessage = messageIndex == 0;
-    final isUserMessage = deletedMsg.role == MessageRole.user;
-
-    final messagesToDelete = _messages.sublist(messageIndex);
-
-    for (final msg in messagesToDelete) {
-      await _chatRepository.deleteMessage(msg.id);
-      await MessageAttachmentStore.instance.deleteIfExists(msg.imagePath);
-    }
-
-    if (isFirstMessage) {
-      await deleteThread(_activeThread!.id);
+    if (result.threadToDelete != null) {
+      await deleteThread(result.threadToDelete!);
       return true;
     }
 
-    // Keep messages before the deleted one
-    _messages = _messages.sublist(0, messageIndex);
-
-    // Store for undo (only user messages, not AI responses that trigger regeneration)
-    if (isUserMessage) {
-      storeUndoMessage(deletedMsg);
-    }
-
-    if (!isUserMessage && _messages.isNotEmpty) {
+    if (!result.isUserMessage && _messages.isNotEmpty) {
       final lastUserMsg = _messages.reversed.firstWhere(
         (m) => m.role == MessageRole.user,
         orElse: () => _messages.last,
@@ -919,16 +829,7 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
               characterName: resolvedCharacterName,
             );
 
-      final sanitizedTitle = target.title.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
-      final extension = format == ExportFormat.txt ? 'txt' : 'json';
-      final filename = 'clan_ai_$sanitizedTitle.$extension';
-      final mimeType = format == ExportFormat.json ? 'application/json' : 'text/plain';
-
-      return await FileSaver.saveFile(
-        filename: filename,
-        content: content,
-        mimeType: mimeType,
-      );
+      return await ConversationExport.saveToFile(target, content, format);
     } catch (_) {
       return null;
     }
@@ -977,12 +878,5 @@ class RoleplayViewModel extends ChangeNotifier with StreamMutationMixin {
     // Select the thread as active
     await selectThread(savedThread);
     notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    uiThrottleTimer?.cancel();
-    currentCancelToken?.cancel();
-    super.dispose();
   }
 }

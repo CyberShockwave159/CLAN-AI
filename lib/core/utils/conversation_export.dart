@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:uuid/uuid.dart';
+import 'package:clan_ai/core/utils/file_saver.dart';
 import 'package:clan_ai/data/models/chat_message.dart';
 import 'package:clan_ai/data/models/chat_thread.dart';
 import 'package:clan_ai/domain/models/generation_params.dart';
@@ -7,6 +8,25 @@ import 'package:clan_ai/domain/models/generation_params.dart';
 enum ExportFormat { txt, json }
 
 class ConversationExport {
+  /// Builds the export filename from [thread]'s title and persists [content]
+  /// via [FileSaver]. Shared by the ChatViewModel and RoleplayViewModel
+  /// export flows (previously duplicated in both).
+  static Future<String?> saveToFile(
+    ChatThread thread,
+    String content,
+    ExportFormat format,
+  ) async {
+    final sanitizedTitle = thread.title.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+    final extension = format == ExportFormat.txt ? 'txt' : 'json';
+    final filename = 'clan_ai_$sanitizedTitle.$extension';
+    final mimeType = format == ExportFormat.json ? 'application/json' : 'text/plain';
+    return await FileSaver.saveFile(
+      filename: filename,
+      content: content,
+      mimeType: mimeType,
+    );
+  }
+
   static String formatTimestamp(DateTime timestamp) {
     final month = timestamp.month.toString().padLeft(2, '0');
     final day = timestamp.day.toString().padLeft(2, '0');
