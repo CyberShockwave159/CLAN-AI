@@ -148,7 +148,7 @@ Legend: ✓ verified in a real headless Chrome (real WASM sqlite/IndexedDB/local
 
 **Findings recorded (runtime behavior, no fixes shipped in this phase):**
 1. Stop-generation does not abort the underlying fetch during server silence (SSE `cancelToken` is only observed per-line; `BrowserClient` has no AbortController wiring) — see ⚠️ above + §7.
-2. There is **no model dropdown in the Settings UI** — `SettingsViewModel.availableModels` feeds a debug context only, and the app auto-selects `availableModels.first` for chat; on servers whose `/props` lacks a `model` key the UI shows the `'llama.cpp Model'` fallback label.
+2. There is **no model dropdown in the Settings UI** (removed as a feature — `SettingsViewModel.availableModels` feeds a debug context only; app auto-selects `availableModels.first` for chat).
 3. On boot the chat VM auto-selects the **first persisted thread** (`chat_view_model.dart:106`), which hides the empty-state `'Connected to …'` text — the web QA suites must start from a cleared thread table to assert the boot connect state.
 
 ---
