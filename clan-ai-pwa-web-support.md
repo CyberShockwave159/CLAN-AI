@@ -131,6 +131,8 @@ Principle: keep every native code path byte-identical; add web variants behind D
 
 ## 6. Phase 3 — QA checklist (Chrome, against a `--cors`-enabled llama-server)
 
+**Status:** All automated gates passed. Final re-run on `2026-09-20`: `flutter analyze` 0 issues, 505/505 hermetic tests green, fixture journey 6/6 PASS, real-server journey 6/6 PASS, `flutter build web --release --no-web-resources-cdn` PASS.
+
 Legend: ✓ verified in a real headless Chrome (real WASM sqlite/IndexedDB/localStorage + the served app or integration-test bundle); ⚠️ verified with a documented caveat / partial; **manual** = not drivable headless, recorded as a manual QA item.
 
 - [x] **Fresh web build compiles** (`flutter build web --release` ✅, `--target=integration_test/…` bundle ✅), `flutter analyze` **0 issues**, hermetic suite green (re-run in the final gate).
