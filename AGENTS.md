@@ -1,15 +1,15 @@
 # clan_ai — Agent Notes
 
-Flutter (Dart SDK ^3.13) cross-platform llama.cpp client — OpenAI-compatible endpoints (llama.cpp llama-server and any OpenAI-compatible backend). Platforms: Linux/macOS/Windows/Android/iOS; **web unsupported**. Deep architecture: `ARCHITECTURE.md`. Features/setup/installer docs: `README.md`. This file only covers what an agent would otherwise get wrong.
+Flutter (Dart SDK ^3.13) cross-platform llama.cpp client — OpenAI-compatible endpoints (llama.cpp llama-server and any OpenAI-compatible backend). Platforms: Linux/macOS/Windows/Android/iOS/Web(PWA — Beta). Deep architecture: `ARCHITECTURE.md`. Features/setup/installer docs: `README.md`. This file only covers what an agent would otherwise get wrong.
 
 ## Commands
 ```
 flutter pub get          # required after every git pull
 flutter analyze          # lint + typecheck (flutter_lints)
-flutter test             # 28 test files, 503 tests, all hermetic
+flutter test             # 28 test files, 505 tests, all hermetic
 flutter test test/domain/generation_params_test.dart   # single file
 flutter test test/integration/   # suite subset
-flutter run -d linux     # linux | macos | windows | <android-id>
+flutter run -d linux     # linux | macos | windows | <android-id> | chrome
 ```
 Windows packaging: `.github/workflows/build-windows.yml` is the *only* Windows workflow — it builds on pushes/PRs to `main` and publishes a GitHub Release on `v*` tags (build → MSIX via `dart run msix:create` → NSIS). The NSIS script must **embed** the MSIX with `File`; a runtime `CopyFiles` produces a tiny installer with no payload that fails on user machines. `version` in `pubspec.yaml` is the single source of truth for the MSIX version (`msix_version` intentionally omitted); `msix_config.yaml` is **not** read by the msix tool (it only reads `pubspec.yaml`). `scripts/build-windows-installer.{bat,sh}` produce `dist/` locally.
 
@@ -65,4 +65,4 @@ Pure-Dart 256-dim trigram hash embeddings (`HashEmbedding`, FNV-1a, no ML deps).
 - `flutter analyze` currently reports 12 pre-existing issues (0 errors): 3 unused imports in `test/view_model/chat_view_model_test.dart`, rest are lint infos (getters/setters in chat+roleplay VMs, `use_build_context_synchronously` in `profile_section.dart`, `__` identifiers in `conversation_export_test.dart`). Don't attribute them to your changes.
 
 ## Testing
-28 test files, 503 tests — all pass; fully hermetic (**no real SQLite or network**). Fakes in `test/helpers/`: `FakeChatRepository`, `FakeCharacterRepository` (thread-scoped embeddings), `FakeVectorStore`, `FakeServerRepository`, `FakePersonaTemplateRepository`, `FakeSystemPromptTemplatesRepository`, `test_model_factories`, `mock_path_provider`. `FakeChatRepository`/`FakeServerRepository` **`implements`** their concrete repo (not `extends`) so they don't inherit the real constructor — don't switch them back, the real constructors now require an injected `LlamaApiService`. ViewModels expose private state via setters for injection. Suites: `domain/`, `network/`, `utils/` (incl. vector_store, ST parser, conversation_export), `mixin/`, `repository/`, `view_model/`, `widget/` (message_bubble, reasoning, character_edit_dialog, alternate_greeting_selector), `integration/`.
+28 test files, 505 tests — all pass; fully hermetic (**no real SQLite or network**). Fakes in `test/helpers/`: `FakeChatRepository`, `FakeCharacterRepository` (thread-scoped embeddings), `FakeVectorStore`, `FakeServerRepository`, `FakePersonaTemplateRepository`, `FakeSystemPromptTemplatesRepository`, `test_model_factories`, `mock_path_provider`. `FakeChatRepository`/`FakeServerRepository` **`implements`** their concrete repo (not `extends`) so they don't inherit the real constructor — don't switch them back, the real constructors now require an injected `LlamaApiService`. ViewModels expose private state via setters for injection. Suites: `domain/`, `network/`, `utils/` (incl. vector_store, ST parser, conversation_export), `mixin/`, `repository/`, `view_model/`, `widget/` (message_bubble, reasoning, character_edit_dialog, alternate_greeting_selector), `integration/`, `integration_test/` (web QA journey, storage QA, smoke).

@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+### ✨ New Features
+
+**Web (PWA) Support — Beta**
+
+Complete portability refactor enabling a Progressive Web App build of CLAN AI. The app runs in the browser with full SQLite (WASM/IndexedDB), SSE token streaming via `fetch` + `ReadableStream`, and IndexedDB-backed image attachments — all byte-identical to native behavior.
+
+- **Phase 0** validation spike: confirmed web compilation (dart2js), WASM sqlite persistence (IndexedDB, SharedWorker, cross-tab), incremental SSE streaming with abort, and `flutter_secure_storage` web compat
+- **Phase 1** portability refactor — zero native behavioral change:
+  - Web SQLite via `sqflite_common_ffi_web` (WASM, IndexedDB-backed, SharedWorker cross-tab) with a separate attachment BLOB database
+  - Web HTTP transport: `web.window.fetch` + `ReadableStreamDefaultReader` feeding `SseClient.parseStream` unchanged; `AbortController` for stop-generation abort
+  - `AttachmentImage` widget: `Image.file` on native, `Image.memory` (IndexedDB-backed) on web
+  - Browser download for file export via `Blob` + object URL; `file_picker` bytes for web import
+  - Platform guards updated to `defaultTargetPlatform` + `kIsWeb`; `dart:io` imports removed from web-impacted files
+- **Phase 2** PWA layer: manifest/icons (dark `#0F1117`, `any` + `maskable`), PWA meta tags, custom service worker (precaches app shell, stale-while-revalidate runtime cache, network-first navigations, version-keyed), CI workflow (`build-web.yml` with optional manual Pages deploy)
+- **Phase 3** QA: all 6 checkpoint journey tests pass against both fixture (deterministic SSE) and a real llama.cpp server (Qwen3.6-35B) in headless Chrome; 4/4 storage suite pass; PWA probes confirm CORS + auth, shared worker/IDB across tabs, offline shell reload, and key restore; `flutter analyze` 0 issues; 505 hermetic tests green; both `flutter build web --release` and `flutter build linux --release` pass
+- **Findings:** (1) stop-generation doesn't abort the underlying fetch during server silence; (2) no model dropdown in Settings (intentional, removed); (3) boot auto-selects first persisted thread
+
 ### 🏗 Hardening & Infrastructure
 
 **Dependency Injection**
