@@ -1,7 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:clan_ai/core/utils/browser_download.dart';
 
 /// Platform-independent file saver.
 ///
@@ -10,6 +13,8 @@ import 'package:path_provider/path_provider.dart';
 ///
 /// On desktop platforms (Linux, macOS, Windows) it writes directly to the
 /// app's documents directory since those platforms do not sandbox file access.
+///
+/// On web it triggers a browser download (Blob URL + anchor click).
 class FileSaver {
   static const MethodChannel _channel =
       MethodChannel('com.clanai.clan_ai/file_saver');
@@ -19,12 +24,20 @@ class FileSaver {
   /// [filename] is the suggested filename (sanitized by callers).
   /// [mimeType] should be [text/plain] or [application/json].
   ///
-  /// Returns the final file path on success, or `null` if cancelled / failed.
+  /// Returns the final file path on success (the suggested filename on web,
+  /// where browsers don't expose the destination), or `null` on failure.
   static Future<String?> saveFile({
     required String filename,
     required String content,
     required String mimeType,
   }) {
+    if (kIsWeb) {
+      return browserDownload(
+        filename: filename,
+        content: content,
+        mimeType: mimeType,
+      );
+    }
     if (Platform.isAndroid || Platform.isIOS) {
       final contentBytes = Uint8List.fromList(utf8.encode(content));
       final base64Content = base64Encode(contentBytes);
@@ -35,7 +48,7 @@ class FileSaver {
       });
     }
 
-    // Desktop / web fallback: write to app documents directory
+    // Desktop fallback: write to app documents directory
     return _saveToDocuments(filename: filename, content: content);
   }
 

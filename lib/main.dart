@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -21,13 +20,24 @@ import 'package:clan_ai/ui/features/roleplay/view_models/roleplay_view_model.dar
 import 'package:clan_ai/ui/features/settings/view_models/settings_view_model.dart';
 import 'package:clan_ai/ui/shared/widgets/desktop_keyboard_shortcuts.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 
 // Global flag to track if SQLite FFI factory has been initialized
 bool _sqfliteFfiInitialized = false;
 
 void _initSqliteFfi() {
   if (_sqfliteFfiInitialized) return;
-  if (!kIsWeb && (Platform.isLinux || Platform.isWindows || Platform.isMacOS)) {
+  if (kIsWeb) {
+    // Web: sqlite runs in-browser via WASM, persisted in IndexedDB
+    // (sqflite_common_ffi_web, shared-worker backed). The getter throws on
+    // native platforms, but this branch only executes on web.
+    databaseFactory = databaseFactoryFfiWeb;
+    _sqfliteFfiInitialized = true;
+    return;
+  }
+  if (defaultTargetPlatform == TargetPlatform.linux ||
+      defaultTargetPlatform == TargetPlatform.windows ||
+      defaultTargetPlatform == TargetPlatform.macOS) {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
     _sqfliteFfiInitialized = true;

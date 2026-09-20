@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -199,7 +197,10 @@ class _RoleplayScreenState extends State<RoleplayScreen> with AutoScrollMixin {
             tooltip: 'Settings',
           ),
           const SizedBox(width: 4),
-          if (kIsWeb || Platform.isLinux || Platform.isWindows || Platform.isMacOS) ...[
+          if (kIsWeb ||
+              defaultTargetPlatform == TargetPlatform.linux ||
+              defaultTargetPlatform == TargetPlatform.windows ||
+              defaultTargetPlatform == TargetPlatform.macOS) ...[
             const SizedBox(width: 4),
             IconButton(
               icon: const Icon(Icons.keyboard_outlined, size: 20),

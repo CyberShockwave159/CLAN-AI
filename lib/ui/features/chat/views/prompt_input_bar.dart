@@ -1,11 +1,11 @@
-import 'dart:io';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:clan_ai/core/constants/app_theme.dart';
 import 'package:clan_ai/core/utils/message_attachment_store.dart';
 import 'package:clan_ai/ui/shared/snackbar_helper.dart';
+import 'package:clan_ai/ui/shared/widgets/attachment_image.dart';
 
 class PromptInputBar extends StatefulWidget {
   final bool isGenerating;
@@ -65,10 +65,13 @@ class _PromptInputBarState extends State<PromptInputBar> {
       final fileId = '${DateTime.now().millisecondsSinceEpoch}_${image.name
           .split('.')
           .first}';
+      // On web `XFile.path` is empty — the filename is only available via
+      // `name`; native keeps the absolute path (with its extension).
+      final sourceName = kIsWeb ? image.name : image.path;
       final savedPath = await MessageAttachmentStore.instance.saveImage(
         fileId: fileId,
         data: bytes,
-        extension: MessageAttachmentStore.extensionOf(image.path),
+        extension: MessageAttachmentStore.extensionOf(sourceName),
       );
 
       // Remove a previously selected (unsent) image to avoid orphans.
@@ -268,8 +271,8 @@ class _PromptInputBarState extends State<PromptInputBar> {
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
-            child: Image.file(
-              File(imagePath),
+            child: AttachmentImage(
+              ref: imagePath,
               height: 110,
               width: 110,
               fit: BoxFit.cover,

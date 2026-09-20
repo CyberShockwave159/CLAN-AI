@@ -2,8 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
-import 'package:http/io_client.dart';
 import 'package:clan_ai/core/errors/app_exception.dart';
+import 'package:clan_ai/core/network/http_transport.dart';
+import 'package:clan_ai/core/network/streamed_api_response.dart';
 
 /// Network HTTP client configured with timeouts, error mapping, and streaming support.
 class ApiHttpClient {
@@ -15,20 +16,7 @@ class ApiHttpClient {
     http.Client? client,
     this.connectTimeout = const Duration(seconds: 10),
     this.receiveTimeout = const Duration(seconds: 60),
-  }) : _client = client ?? _createDefaultClient(connectTimeout);
-
-  /// Builds a client with a *real* TCP/TLS connect timeout.
-  ///
-  /// `Future.timeout` bounds a whole request, so it cannot tell a stalled TCP
-  /// connect apart from slow response data. [HttpClient.connectionTimeout]
-  /// covers the connect/TLS phase; the per-request `.timeout(...)` guards below
-  /// continue to bound the receive phase. (`HttpClient.idleTimeout` is not used
-  /// here — it governs how long pooled keep-alive sockets stay idle, not how
-  /// long a response may stall.)
-  static http.Client _createDefaultClient(Duration connectTimeout) {
-    final httpClient = HttpClient()..connectionTimeout = connectTimeout;
-    return IOClient(httpClient);
-  }
+  }) : _client = client ?? createHttpClient(connectTimeout);
 
   Map<String, String> _buildHeaders({String? apiKey, Map<String, String>? extraHeaders}) {
     final headers = <String, String>{
@@ -102,18 +90,19 @@ class ApiHttpClient {
     }
   }
 
-  /// Sends a streaming POST request returning an [http.StreamedResponse].
+  /// Sends a streaming POST request returning a [StreamedApiResponse].
   ///
-  /// [http.Client.send] resolves once the response *headers* arrive, so the
-  /// guard below uses [receiveTimeout], not [connectTimeout]: the TCP/TLS
-  /// connect phase is already hard-bounded by [HttpClient.connectionTimeout],
-  /// while waiting for the server's response — which on a busy or slow server
-  /// includes slot queueing and prompt prefill before the first byte — is part
-  /// of receiving. Bounding the header wait with the tight 10s connect budget
-  /// made remote servers with a healthy link (low ping, prior exchanges fine)
-  /// falsely report a "connection" failure whenever first-token time crept
-  /// past 10 seconds.
-  Future<http.StreamedResponse> postStream(
+  /// The response resolves once the response *headers* arrive, so the guard
+  /// below uses [receiveTimeout], not [connectTimeout]: the TCP/TLS connect
+  /// phase is already hard-bounded by the underlying transport
+  /// ([createHttpClient] on io; the browser fetch on web), while waiting for
+  /// the server's response — which on a busy or slow server includes slot
+  /// queueing and prompt prefill before the first byte — is part of receiving.
+  /// Bounding the header wait with the tight 10s connect budget made remote
+  /// servers with a healthy link (low ping, prior exchanges fine) falsely
+  /// report a "connection" failure whenever first-token time crept past 10
+  /// seconds.
+  Future<StreamedApiResponse> postStream(
     Uri uri, {
     required Map<String, dynamic> body,
     String? apiKey,
@@ -124,7 +113,7 @@ class ApiHttpClient {
         ..headers.addAll(_buildHeaders(apiKey: apiKey, extraHeaders: extraHeaders))
         ..body = jsonEncode(body);
 
-      final streamedResponse = await _client.send(request).timeout(receiveTimeout);
+      final streamedResponse = await streamSend(_client, request).timeout(receiveTimeout);
 
       if (streamedResponse.statusCode >= 400) {
         // bytesToString() already drains the response stream to completion
@@ -133,7 +122,7 @@ class ApiHttpClient {
         // with a body-read error.
         String errBody = '';
         try {
-          errBody = await streamedResponse.stream.bytesToString();
+          errBody = await streamedResponse.bodyToString();
         } catch (_) {}
         throwForStatusCode(streamedResponse.statusCode, errBody, uri);
       }

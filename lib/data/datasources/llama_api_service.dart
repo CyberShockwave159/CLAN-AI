@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'package:clan_ai/core/constants/app_constants.dart';
 import 'package:clan_ai/core/constants/api_endpoints.dart';
 import 'package:clan_ai/core/network/http_client.dart';
@@ -167,10 +166,11 @@ class LlamaApiService {
   ///
   /// Returns the plain text string when the message carries no image, or an
   /// array of typed content parts (`text` + `image_url`) when a user message
-  /// has an image attachment. The image bytes are read from disk and encoded
-  /// as a base64 data URI — the format accepted by llama.cpp llama-server,
-  /// Ollama, LM Studio, vLLM, and OpenAI. A missing/unreadable file falls
-  /// back to the plain text so a broken attachment never breaks the request.
+  /// has an image attachment. The image bytes are read through the attachment
+  /// store and encoded as a base64 data URI — the format accepted by llama.cpp
+  /// llama-server, Ollama, LM Studio, vLLM, and OpenAI. A missing/unreadable
+  /// attachment falls back to the plain text so a broken attachment never
+  /// breaks the request.
   Future<dynamic> _serializeOpenAiContent(ChatMessage msg) async {
     final imagePath = msg.imagePath;
     if (msg.role != MessageRole.user ||
@@ -180,7 +180,8 @@ class LlamaApiService {
     }
 
     try {
-      final bytes = await File(imagePath).readAsBytes();
+      final bytes = await MessageAttachmentStore.instance.readBytes(imagePath);
+      if (bytes == null) return msg.content;
       // Trust the file's magic bytes over the filename extension: a `png`-named
       // JPEG (or an extension-less path) would otherwise be declared with the
       // wrong mime, and some servers use the declared mime to pick a decoder.

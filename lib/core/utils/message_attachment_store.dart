@@ -1,21 +1,20 @@
-import 'dart:io';
 import 'dart:typed_data';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
-/// Stores message image attachments as files on disk.
-/// Keeps the SQLite database lightweight by moving image bytes to the
-/// filesystem and persisting only the file path on the `ChatMessage` row
-/// (`messages.image_path`).
+import 'package:clan_ai/core/utils/message_attachment_backend.dart';
+
+/// Persists message image attachment bytes and resolves their mime types.
 ///
-/// Files live under `<app documents>/attachments/` keyed by a generated id,
-/// preserving the original file extension so the mime type stays resolvable
-/// when the image is base64-encoded into an OpenAI-compatible payload.
+/// The storage mechanism is platform-dependent ([AttachmentBackend]): native
+/// platforms keep the SQLite database lightweight by moving image bytes to the
+/// filesystem (`<app documents>/attachments/`) and persisting only the file
+/// path on the `ChatMessage` row (`messages.image_path`); web stores the same
+/// bytes in a dedicated WASM sqlite database. The reference string returned by
+/// [saveImage] is opaque to callers.
 class MessageAttachmentStore {
   static final MessageAttachmentStore instance = MessageAttachmentStore._init();
   MessageAttachmentStore._init();
 
-  static const _attachmentDirName = 'attachments';
+  final AttachmentBackend _backend = createAttachmentBackend();
 
   static const Map<String, String> _mimeByExtension = {
     'jpg': 'image/jpeg',
@@ -28,42 +27,28 @@ class MessageAttachmentStore {
     'heif': 'image/heif',
   };
 
-  Future<Directory> _getAttachmentDir() async {
-    final baseDir = await getApplicationDocumentsDirectory();
-    final dir = Directory(p.join(baseDir.path, _attachmentDirName));
-    if (!await dir.exists()) {
-      await dir.create(recursive: true);
-    }
-    return dir;
-  }
-
-  /// Saves [data] to disk and returns the absolute file path.
-  /// The file is named by [fileId] (typically a message/variant id) with the
-  /// original [extension] (without dot) preserved for mime detection.
+  /// Saves [data] and returns an opaque reference that can later be passed to
+  /// [readBytes] / [deleteIfExists]. The reference is derived from [fileId]
+  /// (typically a message/variant id) with the original [extension] (without
+  /// dot) preserved for mime detection.
   Future<String> saveImage({
     required String fileId,
     required Uint8List data,
     String? extension,
-  }) async {
-    final dir = await _getAttachmentDir();
-    final ext = _sanitizeExtension(extension ?? 'jpg');
-    final file = File(p.join(dir.path, '$fileId.$ext'));
-    await file.writeAsBytes(data);
-    return file.path;
+  }) {
+    return _backend.saveImage(
+      fileId: fileId,
+      data: data,
+      extension: extension,
+    );
   }
 
-  /// Deletes the attachment file at [path] if it exists. No-op for null paths.
-  Future<void> deleteIfExists(String? path) async {
-    if (path == null || path.trim().isEmpty) return;
-    try {
-      final file = File(path);
-      if (await file.exists()) {
-        await file.delete();
-      }
-    } catch (_) {
-      // Best-effort cleanup — a dangling file is harmless.
-    }
-  }
+  /// Deletes the attachment at [ref] if it exists. No-op for null refs.
+  Future<void> deleteIfExists(String? ref) => _backend.deleteIfExists(ref);
+
+  /// Reads the bytes for an attachment [ref], or `null` when missing or
+  /// unreadable (a broken attachment never breaks a request).
+  Future<Uint8List?> readBytes(String ref) => _backend.readBytes(ref);
 
   /// Resolves the mime type for [extension] (with or without leading dot),
   /// defaulting to `image/jpeg` when unknown.

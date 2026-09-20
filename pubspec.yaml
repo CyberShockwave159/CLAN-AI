@@ -24,6 +24,9 @@ dependencies:
   flutter_secure_storage: ^9.2.2
   google_fonts: ^6.2.1
   uuid: ^4.4.0
+  web: ^1.1.1
+  sqflite_common_ffi_web: ^1.2.0
+  sqflite_common: ^2.5.13
 
 dev_dependencies:
   flutter_test:

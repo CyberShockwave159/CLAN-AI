@@ -24,13 +24,18 @@ Future<void> importConversationFromJsonFile(
     allowedExtensions: ['json'],
     allowMultiple: false,
   );
-  if (result == null || result.files.isEmpty || result.files.first.path == null) return;
+  if (result == null || result.files.isEmpty) return;
+  final picked = result.files.first;
+  // Web file pickers expose the content bytes instead of a filesystem path.
+  if (picked.path == null && picked.bytes == null) return;
 
   if (!context.mounted) return;
   Navigator.of(context).pop();
 
   try {
-    final content = await File(result.files.first.path!).readAsString();
+    final content = picked.bytes != null
+        ? utf8.decode(picked.bytes!)
+        : await File(picked.path!).readAsString();
     final json = jsonDecode(content) as Map<String, dynamic>;
 
     if (!json.containsKey('thread') || !json.containsKey('messages')) {

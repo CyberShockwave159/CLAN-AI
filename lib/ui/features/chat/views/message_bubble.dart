@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -12,6 +11,7 @@ import 'package:clan_ai/ui/features/chat/widgets/token_speed_badge.dart';
 import 'package:clan_ai/ui/features/chat/widgets/reasoning_block.dart';
 import 'package:clan_ai/ui/shared/avatar_utils.dart';
 import 'package:clan_ai/ui/shared/snackbar_helper.dart';
+import 'package:clan_ai/ui/shared/widgets/attachment_image.dart';
 
 /// Debug context data for message copy-to-clipboard.
 class MessageDebugContext {
@@ -310,8 +310,8 @@ class MessageBubble extends StatelessWidget {
           child: InteractiveViewer(
             maxScale: 6,
             child: Center(
-              child: Image.file(
-                File(path),
+              child: AttachmentImage(
+                ref: path,
                 fit: BoxFit.contain,
                 errorBuilder: (context, error, stackTrace) => Padding(
                   padding: const EdgeInsets.all(32),
@@ -444,8 +444,8 @@ class MessageBubble extends StatelessWidget {
                           onTap: () => _showImageFullscreen(context, message.imagePath!),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(10),
-                            child: Image.file(
-                              File(message.imagePath!),
+                            child: AttachmentImage(
+                              ref: message.imagePath!,
                               width: 220,
                               height: 220,
                               fit: BoxFit.cover,
