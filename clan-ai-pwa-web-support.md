@@ -10,7 +10,7 @@ Adding a Progressive Web App build of CLAN AI is **feasible with a portability r
 2. **HTTP / SSE streaming** (`dart:io HttpClient` + `IOClient`) — `BrowserClient` buffers whole responses, so token streaming needs a custom `fetch()` + `ReadableStream` transport. **Highest-risk item.**
 3. **File I/O** (attachments on disk, `File(...)` reads/writes, `path_provider`, `dart:io` in 12 files) — needs browser-analogues: IndexedDB-backed attachment store, `Image.memory`, picker `.bytes`, anchor download.
 
-Outside the code: browsers enforce **CORS** (users must run `llama-server --cors <origin>`) and **HTTPS / mixed-content** rules (an HTTPS-hosted app cannot fetch `http://LAN-IP` llama.cpp servers). Web data lives in the browser origin's IndexedDB — isolated from the desktop `.db` (JSON import/export is the migration bridge).
+Outside the code: browsers enforce **CORS** (users must run `llama-server --cors-origins <origin>`) and **HTTPS / mixed-content** rules (an HTTPS-hosted app cannot fetch `http://LAN-IP` llama.cpp servers). Web data lives in the browser origin's IndexedDB — isolated from the desktop `.db` (JSON import/export is the migration bridge).
 
 Suggested delivery: Phase 0 validation spike → Phase 1 portability refactor (native behavior unchanged, 503 tests stay green) → Phase 2 PWA layer → Phase 3 QA.
 
@@ -125,11 +125,11 @@ Principle: keep every native code path byte-identical; add web variants behind D
    - CanvasKit: `flutter build web` **must** use `--no-web-resources-cdn` (`UseLocalCanvasKit`), otherwise the loader fetches `canvaskit.wasm` from the gstatic CDN and offline boot fails. CI + README use this flag.
 2. **Hosting & CI:**
    - ✅ `.github/workflows/build-web.yml`: checkout → Flutter 3.47.x → `pub get` → `flutter analyze` + `flutter test` (505 hermetic tests; both io/web conditional variants compiled per PR) → `flutter build web --release --no-web-resources-cdn` → upload artifact. Separate `deploy-pages` job gated to `workflow_dispatch` (manual checkbox) since project Pages serves under `/CLAN-AI/` and needs `flutter build web --release --base-href /CLAN-AI/` + matching `start_url`; recommend Cloudflare/Vercel/Netlify or local static hosting otherwise.
-3. **Docs:** ✅ README — Platforms table "Web (PWA) — Beta"; "Web (PWA)" install/run section (run, build+serve, PWA install, `llama-server --cors <origin>`, HTTPS/mixed-content rules, data-isolation + JSON migration, storage quota); build targets + Getting Started + Configuration base-URL; Features + Gotchas (web CORS/data isolation/secure-storage grade/WASM pair rule). ARCHITECTURE.md — HTTP Client transport table (io/web), SQLite FFI web path + WASM pair rule, new Attachment Storage section, Key Constraints §13–14.
+3. **Docs:** ✅ README — Platforms table "Web (PWA) — Beta"; "Web (PWA)" install/run section (run, build+serve, PWA install, `llama-server --cors-origins <origin>`, HTTPS/mixed-content rules, data-isolation + JSON migration, storage quota); build targets + Getting Started + Configuration base-URL; Features + Gotchas (web CORS/data isolation/secure-storage grade/WASM pair rule). ARCHITECTURE.md — HTTP Client transport table (io/web), SQLite FFI web path + WASM pair rule, new Attachment Storage section, Key Constraints §13–14.
 
 ---
 
-## 6. Phase 3 — QA checklist (Chrome, against a `--cors`-enabled llama-server)
+## 6. Phase 3 — QA checklist (Chrome, against a `--cors-origins`-enabled llama-server)
 
 **Status:** All automated gates passed. Final re-run on `2026-09-20`: `flutter analyze` 0 issues, 505/505 hermetic tests green, fixture journey 6/6 PASS, real-server journey 6/6 PASS, `flutter build web --release --no-web-resources-cdn` PASS.
 
@@ -163,7 +163,7 @@ Legend: ✓ verified in a real headless Chrome (real WASM sqlite/IndexedDB/local
 | WASM sqlite persistence (IndexedDB-backed) | ~~High~~ **Resolved in Phase 0 — Low** | Persistence across reload *and* Chrome restarts verified (§3.1 #4); schema + PRAGMAs exercised; Origin+port scoping documented; JSON export remains the backup path |
 | **WASM loader/worker pair drift** (hit in Phase 1: `sqflite_common_ffi_web` 0.4.5+4 + its pinned `sqlite3-2.4.6` wasm → `Import #25 "env"` boot crash) | Med → fixed | Pair is fixed at **1.2.0 + `sqlite3-3.6.0/sqlite3.wasm`** (the Phase-0-verified set); rule: re-run `dart run sqflite_common_ffi_web:setup --force` after any `sqflite*`/`sqlite3` resolution change and re-smoke; CI web-build job only proves compile, so keep the boot smoke as the runtime gate |
 | API keys on web = localStorage-grade (regional storage plugin) | Med (accept) | Works (verified); document weaker guarantee; optional future: browser Credential Management API |
-| CORS / mixed content / Private Network Access block LAN servers from HTTPS pages | Ext (operational) | Users: `llama-server --cors <origin>`; serve app from localhost or HTTPS; README instructions |
+| CORS / mixed content / Private Network Access block LAN servers from HTTPS pages | Ext (operational) | Users: `llama-server --cors-origins <origin>`; serve app from localhost or HTTPS; README instructions |
 | Storage quota (attachments) | Low-Med | Attachments live in a **separate** `clan_ai_attachments.db` (kept out of `clan_ai.db`); bound image size (already 2048px/85q) |
 | Conditional-import drift breaks one platform | Low | CI builds both `io` (tests/analyze) and `web` (build job) |
 | `flutter_secure_storage` web blocks wasm target | Low (v1 is JS-only) | Keep JS target; re-check when plugin drops `dart:html`/`dart:js_util` |

@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [v1.2.0]
 
 ### ✨ New Features
 
@@ -18,6 +18,9 @@ Complete portability refactor enabling a Progressive Web App build of CLAN AI. T
 - **Phase 2** PWA layer: manifest/icons (dark `#0F1117`, `any` + `maskable`), PWA meta tags, custom service worker (precaches app shell, stale-while-revalidate runtime cache, network-first navigations, version-keyed), CI workflow (`build-web.yml` with optional manual Pages deploy)
 - **Phase 3** QA: all 6 checkpoint journey tests pass against both fixture (deterministic SSE) and a real llama.cpp server (Qwen3.6-35B) in headless Chrome; 4/4 storage suite pass; PWA probes confirm CORS + auth, shared worker/IDB across tabs, offline shell reload, and key restore; `flutter analyze` 0 issues; 505 hermetic tests green; both `flutter build web --release` and `flutter build linux --release` pass
 - **Findings:** (1) stop-generation doesn't abort the underlying fetch during server silence; (2) no model dropdown in Settings (intentional, removed); (3) boot auto-selects first persisted thread
+- **Firefox support:** PWA works in Firefox — service workers, IndexedDB, WASM, and `fetch`/`ReadableStream` all supported. Install via browser's "Add CLAN AI" menu entry.
+
+## [Unreleased]
 
 ### 🏗 Hardening & Infrastructure
 

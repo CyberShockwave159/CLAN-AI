@@ -134,15 +134,74 @@ python3 -m http.server 8080 --directory build/web
 
 1. Start the server with CORS enabled for the app's origin:
    ```bash
-   llama-server --host 0.0.0.0 --port 8080 --cors http://localhost:8080
+   llama-server --host 0.0.0.0 --port 8080 --cors-origins http://localhost:8080
    ```
-   (Use your deployed app's origin if hosted elsewhere — e.g. `--cors https://your-app.example.com`. `Authorization` headers are handled by the preflight automatically.)
+   (Use your deployed app's origin if hosted elsewhere — e.g. `--cors-origins https://your-app.example.com`. `Authorization` headers are handled by the preflight automatically.)
+
 2. **Mixed content:** an HTTPS-hosted app **cannot** talk to `http://<LAN-IP>:8080`. Either deploy the app on the same machine (localhost) or serve the app and server over HTTPS.
+
 3. Set the **Base URL** in Settings to your server (e.g. `http://localhost:8080`).
 
 **Data isolation:** web data lives in the browser origin's IndexedDB (scoped to origin **and port**), separate from the desktop `.db` files. Use **Export → JSON** on one platform and **Import** on the other to move chats, characters, and RAG memories. Attachments are stored in a second IndexedDB-backed database and count toward the browser's storage quota (typically at least a few hundred MB in Chrome; a few MB of images is comfortable).
 
-> Opera also supports `--cors`; if you use a different OpenAI-compatible backend, enable its equivalent CORS setting.
+> Opera also supports `--cors-origins`; if you use a different OpenAI-compatible backend, enable its equivalent CORS setting.
+
+**LAN deployment with HTTPS (mkcert + Caddy):**
+
+For multi-device LAN access with a green lock on every device:
+
+1. **Install mkcert** (creates locally-trusted self-signed CA):
+   ```bash
+   curl -s https://dl.filippo.io/mkcert/latest?for=linux/amd64 | sudo chmod +x /usr/local/bin/mkcert
+   sudo apt install libnss3-tools   # for trust on Linux
+   mkcert -install
+   ```
+
+2. **Generate certificates** for your LAN hostnames:
+   ```bash
+   mkcert "*.lan" "*.local" "192.168.1.42"
+   # Produces: _cert.pem and _key.pem
+   ```
+
+3. **Serve the app** with Caddy (`/etc/caddy/Caddyfile`):
+   ```
+   https://clan-lan {
+       root * /var/www/clan-ai
+       file_server
+       tls /path/to/_cert.pem /path/to/_key.pem
+   }
+   ```
+   Start: `sudo caddy run --config /etc/caddy/Caddyfile`
+
+4. **Start llama-server** with CORS for the app's origin:
+   ```bash
+   llama-server --host 0.0.0.0 --port 8080 \
+     --cors-origins http://clan-lan:443
+   ```
+   (Or if your app runs on a different port, e.g. 8082: `--cors-origins https://clan-lan:8082`.)
+
+5. **Connect** each device on the LAN by browsing to `https://clan-lan` (or whatever hostname you configured). The mkcert CA is trusted by the OS, so no browser warnings.
+
+For a reverse proxy setup (app + server on the same domain), Caddy can proxy both:
+```
+https://clan-lan {
+    # App
+    handle_path /app/* {
+        root * /var/www/clan-ai
+        file_server
+    }
+
+    # llama.cpp proxy
+    handle_path /api/* {
+        reverse_proxy http://127.0.0.1:8080
+    }
+
+    tls /path/to/_cert.pem /path/to/_key.pem
+}
+```
+Set the Base URL in Settings to `https://clan-lan/api/` and point your llama-server `--cors-origins` to `https://clan-lan`.
+
+**Firefox support:** CLAN AI works in Firefox. Service workers, IndexedDB, WASM, and `fetch`/`ReadableStream` are all supported. Debug via `about:debugging` (service workers) and DevTools → Storage (IndexedDB). Install via the browser's "Add CLAN AI" menu entry.
 
 ### Development Builds
 
@@ -209,7 +268,7 @@ On first launch, open Settings from the side drawer and configure your llama.cpp
    - Android emulator: `http://10.0.2.2:8080`
    - Android physical device: `http://<host-lan-ip>:8080`
    - iOS simulator: `http://localhost:8080`
-   - Web: `http://localhost:8080` (server must run with `--cors` for the app's origin — see [Web (PWA)](#web-pwa))
+   - Web: `http://localhost:8080` (server must run with `--cors-origins` for the app's origin — see [Web (PWA)](#web-pwa))
 2. **Model** — Select a model from the auto-discovered list
 3. Test the connection, then start chatting
 
@@ -325,7 +384,7 @@ flutter run            # launch app
 - **RAG params**: `ragTopK` (default 3) controls how many memories are retrieved. `ragMinScore` (default 0.0) filters memories below this cosine similarity threshold. Both configurable in Settings → Generation Parameters. `RoleplayContextBuilder.build()` accepts these as parameters.
 - **Memory chip**: Assistant messages show a chip with `ragMemoryCount` when RAG memories were injected. Tapping displays the actual memory content from `ragMemoryContents` field (JSON-encoded list). `vector_store.getAllMemories()` lists all embeddings for a character.
 - **Export**: Chat export is only available via context menus in the chat drawer and character drawer. On mobile, tapping export opens a native save dialog (Android SAF / iOS UIDocumentPicker) so users choose the destination. On desktop, files write to the app documents directory. On web, export triggers a browser download (a "Downloaded <file>" snackbar confirms it).
-- **Web — CORS**: Browsers enforce CORS. Run llama.cpp with `--cors <app-origin>` (e.g. `llama-server --cors http://localhost:8080`). An HTTPS-hosted app cannot fetch a plain `http://` LAN server (mixed content / Private Network Access) — serve the app locally or over HTTPS with the server.
+- **Web — CORS**: Browsers enforce CORS. Run llama.cpp with `--cors-origins <app-origin>` (e.g. `llama-server --cors-origins http://localhost:8080`). An HTTPS-hosted app cannot fetch a plain `http://` LAN server (mixed content / Private Network Access) — serve the app locally or over HTTPS with the server.
 - **Web — data isolation & persistence**: All web data lives in the browser origin's IndexedDB, scoped to **origin + port** (e.g. `localhost:8080` ≠ `localhost:8081`; see plan §3.1 #4). It is completely separate from desktop `.db` files — use JSON Export/Import as the migration bridge. Chat history persists across reloads and offline app-shell launches as long as you use the same origin/port.
 - **Web — secure storage**: `flutter_secure_storage` works in the browser but is **localStorage-grade** security (obfuscated, not Keychain/KeyStore-grade). Consider it obfuscation, not a secure vault, on web.
 - **Web — SQLite WASM pair**: `web/sqlite3.wasm` + `web/sqflite_sw.js` are a locked pair, committed in the repo. Re-run `dart run sqflite_common_ffi_web:setup --force` after any `sqflite*`/`sqlite3` resolution change, or the app crashes at boot with a WebAssembly import error. Attachments live in a separate `clan_ai_attachments.db` and count toward the browser storage quota.
