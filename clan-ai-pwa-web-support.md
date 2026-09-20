@@ -131,18 +131,25 @@ Principle: keep every native code path byte-identical; add web variants behind D
 
 ## 6. Phase 3 — QA checklist (Chrome, against a `--cors`-enabled llama-server)
 
-- [ ] Fresh web build compiles (`flutter build web --release`), `flutter analyze` clean, suite green.
-- [ ] Health poll, `/props`, `/v1/models` (CORS preflight with `Authorization`).
-- [ ] **Token streaming incremental** in UI; TTFT metrics; cancellation (Esc/stop) works (AbortController) and cleans up.
-- [ ] Reasoning paths: `reasoning_content` chunks + inline `...` / `<thought>` tags across arbitrary chunk boundaries.
-- [ ] Chat: regenerate → variant; edit; branch thread. Roleplay: greeting, thread reuse, identity guard, RAG memories (vector store), memory pruning dialog.
-- [ ] Image attach round-trip: pick → preview → send → payload contains base64 data URI → photo renders → attach on reload still renders (IDB read) → delete cleans up.
-- [ ] Import/export conversations; export downloads; import reads `.bytes`.
-- [ ] API key save/restore across reload (secure storage web).
-- [ ] Theme (dark/light/custom) persists; app mode persists.
-- [ ] **PWA:** installable (manifest + icons), launches standalone, offline app-shell reload works, **chat history persists across reload/offline** (IndexedDB-backed sqlite).
-- [ ] KB shortcuts (Ctrl+N/K/, , Esc, Ctrl+/), search.
-- [ ] Quota sanity: several MB of attachments; two tabs open concurrently (shared IDB — accept single-writer assumption, document).
+Legend: ✓ verified in a real headless Chrome (real WASM sqlite/IndexedDB/localStorage + the served app or integration-test bundle); ⚠️ verified with a documented caveat / partial; **manual** = not drivable headless, recorded as a manual QA item.
+
+- [x] **Fresh web build compiles** (`flutter build web --release` ✅, `--target=integration_test/…` bundle ✅), `flutter analyze` **0 issues**, hermetic suite green (re-run in the final gate).
+- [x] **Health poll, `/props`, `/v1/models` (CORS preflight with `Authorization`)** — UI #1 (fixture), PWA probe `cors` block (health 200, models-with-key 200 `qa-fixture-8b`, no-key 401, preflight 204), and the real-server run. Fixture logged `OPTIONS` preflights + `GET /v1/models -> 200 origin=…` for every app boot.
+- [x] ⚠️ **Token streaming incremental in UI; TTFT metrics; cancellation** — incremental deltas + TTFT/tps badge verified in both fixture and real-server runs; cancel verified (stop button → UI idle, no extra tokens, no extra message bubble). **Finding (recorded, not fixed):** during *server silence* stop-generation returns the UI to idle but does **not** abort the underlying fetch — `SseClient.parseStream` only observes `cancelToken` between received lines, and the web `BrowserClient` has no AbortController wiring, so the TCP/SSE connection stays open until the server's next chunk (fixture: `stall released: client did not disconnect after 90.09s`). Follow-up recommendation: wire an `AbortController`/`CancelToken` signal into `dart:html`/fetch on stop.
+- [x] **Reasoning paths** — `reasoning_content` deltas + inline `…`/`<thought>` across chunk boundaries: strict assert vs the fixture (always emits); adaptive (skip-if-absent + no-block UI) against a real llama-server whose flags may not emit reasoning.
+- [x] ⚠️ **Chat: regenerate → variant; edit; branch thread. Roleplay: greeting, thread reuse, identity guard, RAG memories, memory pruning** — regenerate → variant 2/2 → previous 1/2 navigation ✓ (fixture + real; web variant switcher). Edit-assistant/branch-thread covered by hermetic tests only (not re-exercised in the web journey). Roleplay greeting + thread reuse + reply stream ✓ in-browser; identity-guard prompt (sole location `RoleplayPromptFormatter.buildSystemPrompt`) + RAG trigram store + pruning dialog are Dart-layer logic verified by the hermetic suites — web UI of the pruning dialog remains a manual QA item.
+- [x] ⚠️ **Image attach round-trip** — attachment bytes → `clan_ai_attachments` stores → reload renders from IndexedDB → delete cleans up (storage suite, real Chrome). **manual:** the OS file-picker dialog itself (headless Chrome can't drive it) and preview.
+- [x] ⚠️ **Import/export conversations; export downloads** — export → import round trip against real web sqlite ✓ (storage suite). **manual:** the actual download dialog (FileSaver/`<a download>`) and the import file-picker.
+- [x] **API key save/restore across reload (secure storage web)** — storage suite key round trip ✓; PWA probe seeded `flutter_secure_storage` with the plugin scheme and the app re-connected **200 on the online reload after an offline round trip without re-seeding** → per-profile key restore across reload ✓. Tooling note: `flutter_secure_storage` 11.2.0's web `WebOptions.publicKey` default is `'FlutterSecureStorage'` (AES-key entry + `FlutterSecureStorage.<name>` values), *not* the `flutter.` prefix used by `shared_preferences_web`.
+- [x] **Theme (dark/light/custom) persists; app mode persists** — UI #5 (Light theme + roleplay mode persisted to web SharedPreferences) + storage suite prefs round trip.
+- [x] ⚠️ **PWA: installable, launches standalone, offline app-shell reload, chat history persists across reload/offline** — offline shell reload served by the service worker (`swControlled: true`, app boots, canvases present) ✓; single shared worker across two tabs + identical IndexedDB (`sqflite_databases`) in both ✓; key restore + re-connect after reload ✓. **manual:** the install/standalone-launch flow (needs a user gesture / Chrome dialog; manifest + icons verified structurally in Phase 2).
+- [ ] **manual — KB shortcuts (Ctrl+N/K/, , Esc, Ctrl+/), search** — implemented via `DesktopKeyboardShortcuts`; web key-event delivery is flaky headless; recorded as a manual QA item.
+- [x] ⚠️ **Quota sanity; two tabs concurrently** — two tabs share one WASM sqlite worker + DB (documented single-writer assumption) ✓; **manual:** several-MB attachment quota-fill.
+
+**Findings recorded (runtime behavior, no fixes shipped in this phase):**
+1. Stop-generation does not abort the underlying fetch during server silence (SSE `cancelToken` is only observed per-line; `BrowserClient` has no AbortController wiring) — see ⚠️ above + §7.
+2. There is **no model dropdown in the Settings UI** — `SettingsViewModel.availableModels` feeds a debug context only, and the app auto-selects `availableModels.first` for chat; on servers whose `/props` lacks a `model` key the UI shows the `'llama.cpp Model'` fallback label.
+3. On boot the chat VM auto-selects the **first persisted thread** (`chat_view_model.dart:106`), which hides the empty-state `'Connected to …'` text — the web QA suites must start from a cleared thread table to assert the boot connect state.
 
 ---
 
@@ -150,7 +157,7 @@ Principle: keep every native code path byte-identical; add web variants behind D
 
 | Risk | Severity | Mitigation |
 |---|---|---|
-| SSE streaming on web (fetch/ReadableStream + chunk-boundary reasoning) | ~~High~~ **Resolved in Phase 0 — Low** | Incremental delivery + abort verified in a real browser (§3.1 #5); `SseClient` untouched; Phase 3 checklist remains |
+| SSE streaming on web (fetch/ReadableStream + chunk-boundary reasoning) | ~~High~~ **Resolved in Phase 0 — Low** | Incremental delivery + abort verified in a real browser (§3.1 #5); `SseClient` untouched; Phase 3 checklist remains. ⚠️ New: stop returns the UI to idle but does **not** abort the fetch during server silence (per-line `cancelToken` check; `BrowserClient` has no AbortController) — recorded in §6, follow-up recommended |
 | WASM sqlite persistence (IndexedDB-backed) | ~~High~~ **Resolved in Phase 0 — Low** | Persistence across reload *and* Chrome restarts verified (§3.1 #4); schema + PRAGMAs exercised; Origin+port scoping documented; JSON export remains the backup path |
 | **WASM loader/worker pair drift** (hit in Phase 1: `sqflite_common_ffi_web` 0.4.5+4 + its pinned `sqlite3-2.4.6` wasm → `Import #25 "env"` boot crash) | Med → fixed | Pair is fixed at **1.2.0 + `sqlite3-3.6.0/sqlite3.wasm`** (the Phase-0-verified set); rule: re-run `dart run sqflite_common_ffi_web:setup --force` after any `sqflite*`/`sqlite3` resolution change and re-smoke; CI web-build job only proves compile, so keep the boot smoke as the runtime gate |
 | API keys on web = localStorage-grade (regional storage plugin) | Med (accept) | Works (verified); document weaker guarantee; optional future: browser Credential Management API |
