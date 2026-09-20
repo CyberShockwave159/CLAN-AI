@@ -18,18 +18,22 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="Frontier-class cross-platform llama.cpp client. Streaming chat and roleplay with local or networked llama.cpp servers, right from your browser.">
+
+  <!-- Brand dark surface (AppTheme.darkBg) used by the app shell -->
+  <meta name="theme-color" content="#0F1117">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="clan_ai">
-  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <meta name="apple-mobile-web-app-title" content="CLAN AI">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 
   <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon.png">
 
-  <title>clan_ai</title>
+  <title>CLAN AI</title>
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
@@ -42,5 +46,19 @@
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
   <script src="flutter_bootstrap.js" async></script>
+  <script>
+    // PWA: register CLAN AI's service worker (offline app shell + Chrome
+    // installability, which requires a fetch handler). Flutter now generates a
+    // self-unregistering `flutter_service_worker.js`, so we ship our own
+    // `clan_ai_sw.js` (committed in web/). llama.cpp API calls are never
+    // intercepted — they stay network-only.
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('clan_ai_sw.js').catch(function (err) {
+          console.warn('CLAN AI service worker registration failed:', err);
+        });
+      });
+    }
+  </script>
 </body>
 </html>

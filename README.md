@@ -11,7 +11,7 @@ Frontier-class cross-platform llama.cpp client. A Flutter app that connects to a
 | Windows (desktop) | Supported |
 | Android | Supported |
 | iOS | Supported (requires macOS to build) |
-| Web | Not supported |
+| Web (PWA) | Beta |
 
 ## Installation
 
@@ -111,6 +111,39 @@ Or build an IPA:
 flutter build ios --release
 ```
 
+### Web (PWA)
+
+CLAN AI builds as a Progressive Web App — an installable, standalone app served from any static host. SQLite and RAG run in the browser (WASM, persisted to IndexedDB); SSE token streaming uses a `fetch` + `ReadableStream` transport.
+
+**Run locally:**
+
+```bash
+flutter pub get
+flutter run -d chrome            # debug with hot reload
+# or build and serve the release:
+flutter build web --release --no-web-resources-cdn
+python3 -m http.server 8080 --directory build/web
+# open http://localhost:8080
+```
+
+`--no-web-resources-cdn` bundles CanvasKit locally instead of loading it from Google's CDN — required for the offline app shell. (CI builds with the same flag.)
+
+**Install as a PWA:** open the served app in Chrome/Edge → the install icon appears in the address bar (or **⋮ → Install app / Cast, save & share → Install**). It launches in its own standalone window. After the first successful load, the app shell (Dart code, sqlite WASM + SharedWorker, local CanvasKit) is served from CLAN AI's service worker cache (`web/clan_ai_sw.js`), so reloads work offline; chat history lives in IndexedDB and persists too. Runtime-fetched Google Fonts are cached by the browser's HTTP cache, not the service worker. Live inference still needs a reachable server.
+
+**Connect to your llama.cpp server** — browsers enforce CORS and HTTPS/mixed-content rules:
+
+1. Start the server with CORS enabled for the app's origin:
+   ```bash
+   llama-server --host 0.0.0.0 --port 8080 --cors http://localhost:8080
+   ```
+   (Use your deployed app's origin if hosted elsewhere — e.g. `--cors https://your-app.example.com`. `Authorization` headers are handled by the preflight automatically.)
+2. **Mixed content:** an HTTPS-hosted app **cannot** talk to `http://<LAN-IP>:8080`. Either deploy the app on the same machine (localhost) or serve the app and server over HTTPS.
+3. Set the **Base URL** in Settings to your server (e.g. `http://localhost:8080`).
+
+**Data isolation:** web data lives in the browser origin's IndexedDB (scoped to origin **and port**), separate from the desktop `.db` files. Use **Export → JSON** on one platform and **Import** on the other to move chats, characters, and RAG memories. Attachments are stored in a second IndexedDB-backed database and count toward the browser's storage quota (typically at least a few hundred MB in Chrome; a few MB of images is comfortable).
+
+> Opera also supports `--cors`; if you use a different OpenAI-compatible backend, enable its equivalent CORS setting.
+
 ### Development Builds
 
 To build any platform from source:
@@ -119,11 +152,12 @@ flutter pub get
 flutter build <platform> --release
 ```
 
-Supported build targets: `linux`, `macos`, `windows`, `apk` (Android), `ios`.
+Supported build targets: `linux`, `macos`, `windows`, `apk` (Android), `ios`, `web`.
 
 ## Features
 
 - Real-time streaming chat over OpenAI-compatible endpoints
+- **Progressive Web App** — Installable web build (manifest + icons, standalone launch, offline app-shell). SQLite (WASM) and SSE streaming run entirely in-browser; data persists in the origin's IndexedDB.
 - **Server Health Status** — Chat and roleplay screens display a red warning banner when server is unreachable, with quick link to Settings
 - **Reasoning/Thinking Block View** — Toggle in Settings to request and display model reasoning/thinking as a collapsible block. Supports dedicated reasoning fields (`delta.reasoning`), inline tags (```xml, `<thought>`), and multiple field name conventions across models
 - **AI Roleplay Mode** — Toggle from Settings; mirrors assistant mode UI with per-character isolated sessions and client-side RAG memory
@@ -162,6 +196,7 @@ flutter run                          # defaults to connected device
 flutter run -d linux                 # Linux desktop
 flutter run -d macos                 # macOS desktop
 flutter run -d windows               # Windows desktop
+flutter run -d chrome                # Web (PWA) — see "Web (PWA)" below
 flutter run -d <android-device-id>   # Android device/emulator
 ```
 
@@ -174,6 +209,7 @@ On first launch, open Settings from the side drawer and configure your llama.cpp
    - Android emulator: `http://10.0.2.2:8080`
    - Android physical device: `http://<host-lan-ip>:8080`
    - iOS simulator: `http://localhost:8080`
+   - Web: `http://localhost:8080` (server must run with `--cors` for the app's origin — see [Web (PWA)](#web-pwa))
 2. **Model** — Select a model from the auto-discovered list
 3. Test the connection, then start chatting
 
@@ -214,14 +250,14 @@ Characters can have multiple opening messages:
 - **ServerProfile consolidation:** `ServerConnectionDetails` removed; `ServerProfile` serves as connection details throughout
 - **Dependency wiring** in `lib/main.dart` via constructor injection
 - **Four root providers**: `SettingsViewModel`, `ChatViewModel`, `RoleplayViewModel`, `PersonaTemplateViewModel`
-- **SQLite** via `sqflite` (desktop uses `sqflite_common_ffi`, mobile uses native), schema version 13 (`threads`, `messages` with `variant_index`/`total_variants`/`sibling_ids` for conversation branching and `image_path` for image attachments, `characters`, `persona_templates` tables)
-- **Secure API keys** stored in OS Keychain/KeyStore via `SecureStorageService` (`flutter_secure_storage`)
+- **SQLite** via `sqflite` (desktop uses `sqflite_common_ffi`, mobile uses native, web uses `sqflite_common_ffi_web` — WASM in-browser engine persisted to IndexedDB), schema version 13 (`threads`, `messages` with `variant_index`/`total_variants`/`sibling_ids` for conversation branching and `image_path` for image attachments, `characters`, `persona_templates` tables). Web attachments live in a second `clan_ai_attachments.db` (BLOB store, same persistence).
+- **Secure API keys** stored in OS Keychain/KeyStore via `SecureStorageService` (`flutter_secure_storage`); on web the plugin falls back to localStorage-grade storage (obfuscated, not vault-grade)
 - **Single `CharacterRepository`** instance injected via constructor throughout the app
 - **Streaming** via Server-Sent Events with 20ms UI throttling to prevent frame drops
 - **Theme system**: `AppThemeMode` enum (dark/light/custom) with `CustomThemeColors` presets (Warm, Cool, Pastel). `ClanThemeColors` ThemeExtension on all `ThemeData` instances enables theme-aware color lookups (`context.clanTextPrimary`, `context.clanSurfaceVariant`, etc.). Custom theme colors persist to SharedPreferences. Settings → Theme section at bottom of settings screen.
 - **Reasoning pipeline**: `SseClient.parseStream()` extracts reasoning from multiple field names (`reasoning`, `reasoning_content`, `thought`). `SseClient.filterReasoning()` processes inline thinking tags and forwards dedicated reasoning fields through a stream pipeline. The OpenAI-compatible protocol supports the `reasoning` parameter.
 - **Thread isolation**: `ChatThread.characterId` distinguishes assistant vs roleplay threads
-- **FileSaver**: Native mobile save dialogs via platform channels (Android SAF, iOS UIDocumentPicker); desktop falls back to app documents directory
+- **FileSaver**: Native mobile save dialogs via platform channels (Android SAF, iOS UIDocumentPicker); desktop falls back to app documents directory; web triggers a browser download (`Blob` + object URL)
 - **SillyTavern Import**: `lib/core/utils/silly_tavern_card_parser.dart` parses `chara_card_v2` JSON; extracts `system_prompt`, `post_history_instructions`, and `alternate_greetings` in addition to core fields. Import opens an auto-edit dialog via `CharacterEditDialog` (proper StatefulWidget)
 - **Memory chip**: Assistant messages display a memory chip showing count of RAG memories used. Tapping reveals the actual memory content that was injected into the system prompt. `ragMemoryContents` field stores JSON-encoded memory strings on `ChatMessage`
 - **Memory management**: `lib/ui/features/roleplay/widgets/character_memories_dialog.dart` — Per-character memory viewer and pruner. List all vector embeddings for a character; delete individual memories or clear all. Accessible via character popup menu → "Manage Memories"
@@ -255,17 +291,17 @@ This produces files in the `dist/` directory:
 - `checksums.sha256` — SHA-256 verification hashes
 - `README.txt` — Installation instructions
 
-**CI/CD:** Pushing to `main`/`master` triggers an automated Windows build in GitHub Actions. Build artifacts are uploaded as downloadable files on the [Releases](https://github.com/CyberShockwave159/CLAN-AI/releases) page.
+**CI/CD:** Pushing to `main`/`master` triggers an automated Windows build in GitHub Actions. Build artifacts are uploaded as downloadable files on the [Releases](https://github.com/CyberShockwave159/CLAN-AI/releases) page. The web app is built by `.github/workflows/build-web.yml` on every push/PR (`flutter analyze` + `flutter test` + `flutter build web --release --no-web-resources-cdn`, artifact upload); a manual `workflow_dispatch` run with **deploy_pages** checked deploys it to GitHub Pages at `https://<user>.github.io/CLAN-AI/`.
 
 ```bash
 flutter analyze        # lint + typecheck
-flutter test           # runs all 28 test files (503 total tests)
+flutter test           # runs all 28 test files (505 total tests)
 flutter run            # launch app
 ```
 
 ### Testing
 
-28 test files, 503 total tests. All tests use fake repositories (no real SQLite or network). ViewModels expose private state via setters for test injection.
+28 test files, 505 total tests. All tests use fake repositories (no real SQLite or network). ViewModels expose private state via setters for test injection.
 
 **Coverage by layer:**
 - **Domain** — `GenerationParams` serialization (OpenAI payloads, TextSanitizer segment parsing, reasoning flags), model roundtrip serialization (ChatThread, ChatMessage, CharacterProfile, PersonaTemplate, ServerConfig)
@@ -281,14 +317,18 @@ flutter run            # launch app
 
 - **Conversation branching**: Regenerate and edit operations truncate at the parent message and create new sibling branches. Navigation between variants uses `variantIndex` + `siblingIds`. All variants in a regeneration group share a complete `siblingIds` array. `doSwitchVariant` loads all siblings from DB, sorts by `variantIndex`, and indexes into the sorted list. Regenerate builds a complete `allSiblingIds` set (filtered by `role == assistant` and shared `parentId`) and assigns it to every variant. Branches are linked via `branchFromThreadId` on `ChatThread`. In roleplay mode, the first assistant message (character's greeting) has the regenerate button disabled until the user has replied.
 - **Android networking**: `127.0.0.1` refers to the Android device's loopback, not your host machine. Use `10.0.2.2` for the Android emulator or your host's LAN IP for physical devices.
-- **SQLite desktop FFI**: On Linux/Windows/macOS, `sqflite_common_ffi` is initialized **once** in `main.dart` (`_initSqliteFfi()`). Do not call `sqfliteFfiInit()` again — it will trigger a warning.
+- **SQLite desktop FFI**: On Linux/Windows/macOS, `sqflite_common_ffi` is initialized **once** in `main.dart` (`_initSqliteFfi()`). Do not call `sqfliteFfiInit()` again — it will trigger a warning. On web the same function binds the WASM factory (`databaseFactoryFfiWeb` from `sqflite_common_ffi_web`) — native path is untouched.
 - **Database migration**: DB schema is version 13 (added `image_path` to messages in v13, `variant_index`, `total_variants`, `sibling_ids` columns to messages table for conversation branching in v12, `persona_name` to `persona_templates` in v11, `persona_name`/`persona_description` to `characters` in v10). If you encounter schema errors, clear the app's local storage or delete `clan_ai.db`.
 - **Reasoning block streaming**: The `ReasoningBlock` widget displays thinking/reasoning content when the "View Thinking" toggle is enabled in Settings. Models can provide reasoning via dedicated fields (`delta.reasoning`, `delta.reasoning_content`, `delta.thought`) or inline tags (```xml, `<thought>`, `<reasoning>`). The `filterReasoning` stream pipeline handles both formats. Older llama.cpp versions may not return reasoning content.
 - **Roleplay thread separation**: `ChatViewModel.loadThreads()` filters out threads with `characterId != null` (roleplay threads). `RoleplayViewModel.loadLastChat()` loads threads with `characterId != null` (or falls back for legacy threads).
 - **RAG isolation**: Each character's embeddings are stored with `character_id` in the vector store. Queries are strictly `WHERE character_id = ?` — no cross-character memory leakage.
 - **RAG params**: `ragTopK` (default 3) controls how many memories are retrieved. `ragMinScore` (default 0.0) filters memories below this cosine similarity threshold. Both configurable in Settings → Generation Parameters. `RoleplayContextBuilder.build()` accepts these as parameters.
 - **Memory chip**: Assistant messages show a chip with `ragMemoryCount` when RAG memories were injected. Tapping displays the actual memory content from `ragMemoryContents` field (JSON-encoded list). `vector_store.getAllMemories()` lists all embeddings for a character.
-- **Export**: Chat export is only available via context menus in the chat drawer and character drawer. On mobile, tapping export opens a native save dialog (Android SAF / iOS UIDocumentPicker) so users choose the destination. On desktop, files write to the app documents directory.
+- **Export**: Chat export is only available via context menus in the chat drawer and character drawer. On mobile, tapping export opens a native save dialog (Android SAF / iOS UIDocumentPicker) so users choose the destination. On desktop, files write to the app documents directory. On web, export triggers a browser download (a "Downloaded <file>" snackbar confirms it).
+- **Web — CORS**: Browsers enforce CORS. Run llama.cpp with `--cors <app-origin>` (e.g. `llama-server --cors http://localhost:8080`). An HTTPS-hosted app cannot fetch a plain `http://` LAN server (mixed content / Private Network Access) — serve the app locally or over HTTPS with the server.
+- **Web — data isolation & persistence**: All web data lives in the browser origin's IndexedDB, scoped to **origin + port** (e.g. `localhost:8080` ≠ `localhost:8081`; see plan §3.1 #4). It is completely separate from desktop `.db` files — use JSON Export/Import as the migration bridge. Chat history persists across reloads and offline app-shell launches as long as you use the same origin/port.
+- **Web — secure storage**: `flutter_secure_storage` works in the browser but is **localStorage-grade** security (obfuscated, not Keychain/KeyStore-grade). Consider it obfuscation, not a secure vault, on web.
+- **Web — SQLite WASM pair**: `web/sqlite3.wasm` + `web/sqflite_sw.js` are a locked pair, committed in the repo. Re-run `dart run sqflite_common_ffi_web:setup --force` after any `sqflite*`/`sqlite3` resolution change, or the app crashes at boot with a WebAssembly import error. Attachments live in a separate `clan_ai_attachments.db` and count toward the browser storage quota.
 - **Roleplay prompt placeholder**: The input field shows "Reply as \<persona name\>..." where \<persona name\> comes from the character's Persona Name field (falls back to "you" if unset).
 - **Roleplay system prompt**: In roleplay mode the system prompt is fully managed by the RAG context builder, which respects per-character `systemPrompt` overrides and appends `postHistoryInstructions`. The System Prompt Customization section in Settings is hidden when roleplay mode is active.
 - **Character fields**: `CharacterProfile` now includes `systemPrompt` (per-character system prompt override), `postHistoryInstructions` (text appended after AI responses), `alternateGreetings` (list of alternative opening messages), `personaName` (explicit name for `{{user}}` replacement), and `personaDescription` (full persona description). Stored in SQLite `characters` table (migrated from SharedPreferences in v8).

@@ -115,15 +115,17 @@ Principle: keep every native code path byte-identical; add web variants behind D
 
 ## 5. Phase 2 — PWA layer
 
+> ✅ **Implemented.** Manifest/icons (brand dark `#0F1117`, `any` + `maskable` from the 1024px app icon), PWA meta tags, `scripts/generate-web-icons.sh`, custom service worker (`web/clan_ai_sw.js` — 3.47.4's generated SW is a self-unregistering stub, see below), CI (`build-web.yml` with optional manual Pages deploy, local-CanvasKit builds), README + ARCHITECTURE updates. Gates: `flutter analyze` clean, 505 tests pass, `flutter build web --release` + `flutter build linux --release`, headless-Chrome boot + PWA probe (manifest/standalone/dark parsed from the served app, `clan_ai_sw.js` registered, sqlite SharedWorker boots).
+
 1. **`web/` scaffold** via Phase 0 (`flutter create --platforms web .`), then customize:
-   - `web/index.html`: title, description, `<meta name="theme-color">`, favicon, `apple-mobile-web-app-capable`; default `flutter_bootstrap` loader.
-   - `web/manifest.json`: `name`/`short_name` "CLAN AI", `start_url` (see hosting), `display: "standalone"`, `theme_color` + `background_color` (brand dark), icons **192 + 512** (`any` + `maskable`).
-   - `web/icons/`: generate from `msix/assets/icon100x100.png` (exists) — `scripts/generate-web-icons.sh` (ImageMagick; or committed PNGs).
-   - Service worker: Flutter generates `flutter_service_worker.js` + app-shell cache on `flutter build web` automatically. It caches only same-origin app assets — external llama.cpp calls stay network-only. No custom SW needed for v1. Note: `sqflite_sw.js` (from `sqflite_common_ffi_web:setup`) is a **SharedWorker**, not a service worker — unrelated to offline caching; must be committed alongside `sqlite3.wasm`.
+   - `web/index.html`: ✅ title/description "CLAN AI", `<meta name="theme-color" content="#0F1117">`, favicon 32x32, iOS `apple-mobile-web-app-*` tags, `apple-touch-icon` (generated 180x180); default `flutter_bootstrap` loader kept.
+   - `web/manifest.json`: ✅ `name`/`short_name` "CLAN AI", `id: clan-ai`, `start_url: "."` + `scope: "."` (relative — safe for root *and* project-Pages hosting), `display: "standalone"`, `theme_color`/`background_color` `#0F1117` (AppTheme.darkBg), `orientation` removed (desktop-capable), icons `any` 192/512 + `maskable` 192/512 with explicit `purpose`.
+   - `web/icons/`: ✅ `scripts/generate-web-icons.sh` (ImageMagick) generates from `macos/.../app_icon_1024.png` (highest-res rendering of the logo; falls back to `msix/assets/icon100x100.png`). Maskable = source scaled to 68% (inside the 80% safe zone) composited full-bleed over `#0F1117` so the OS mask never shows transparency; 8-bit PNGs.
+   - Service worker: ⚠️ **plan correction — verified against 3.47.4 build output.** Flutter no longer ships asset-precaching: the generated `flutter_service_worker.js` is a **self-unregistering stub** (31 lines; `activate` unregisters itself, no fetch handler — `flutter#156910`). Delivered instead: a small custom SW **`web/clan_ai_sw.js`** (committed, copied verbatim into `build/web/`; registered from `index.html`). It precaches the app shell, runtime-caches same-origin assets (stale-while-revalidate), network-first for navigations, keyed by app version from `version.json` (each release installs a fresh cache; `activate` drops old ones). Same-origin GET only — llama.cpp API/SSE calls stay network-only. Scoped to the app's directory so **project-Pages-safe**.
+   - CanvasKit: `flutter build web` **must** use `--no-web-resources-cdn` (`UseLocalCanvasKit`), otherwise the loader fetches `canvaskit.wasm` from the gstatic CDN and offline boot fails. CI + README use this flag.
 2. **Hosting & CI:**
-   - `.github/workflows/build-web.yml`: checkout → setup Flutter 3.47.x → `pub get` → `flutter build web --release` → upload artifact. Optional job: deploy to GitHub Pages (`actions/gh-pages` or `peaceiris/actions-gh-pages`) — Pages under a repo path requires `--base-href /<repo>/` at build time and matching `start_url`. Recommend Cloudflare/Vercel/Netlify for simplicity, or serve locally (`flutter run -d chrome` / `python3 -m http.server`).
-   - Add a web build job to CI so both `io` and `web` conditional variants are compiled on every PR.
-3. **Docs:** README — Platforms table adds "Web (PWA) — Beta"; install/run steps; PWA install (Chrome "Install app"); llama-server flags (`--cors <origin>`, note `--api-key`/preflight handled); HTTPS/mixed-content rules; data-isolation + JSON migration note; offline scope; storage-quota note. ARCHITECTURE.md — Platforms section, storage section (sqlite web VFS, attachment store variants), streaming section (web transport).
+   - ✅ `.github/workflows/build-web.yml`: checkout → Flutter 3.47.x → `pub get` → `flutter analyze` + `flutter test` (505 hermetic tests; both io/web conditional variants compiled per PR) → `flutter build web --release --no-web-resources-cdn` → upload artifact. Separate `deploy-pages` job gated to `workflow_dispatch` (manual checkbox) since project Pages serves under `/CLAN-AI/` and needs `flutter build web --release --base-href /CLAN-AI/` + matching `start_url`; recommend Cloudflare/Vercel/Netlify or local static hosting otherwise.
+3. **Docs:** ✅ README — Platforms table "Web (PWA) — Beta"; "Web (PWA)" install/run section (run, build+serve, PWA install, `llama-server --cors <origin>`, HTTPS/mixed-content rules, data-isolation + JSON migration, storage quota); build targets + Getting Started + Configuration base-URL; Features + Gotchas (web CORS/data isolation/secure-storage grade/WASM pair rule). ARCHITECTURE.md — HTTP Client transport table (io/web), SQLite FFI web path + WASM pair rule, new Attachment Storage section, Key Constraints §13–14.
 
 ---
 
@@ -160,7 +162,7 @@ Principle: keep every native code path byte-identical; add web variants behind D
 
 ## 8. Out of scope (v1)
 - Data sync between desktop and web app (use JSON import/export).
-- Custom service worker logic (offline-first beyond default app-shell cache).
+- Advanced service worker logic beyond the app-shell cache: background sync, push notifications, font-bundling, fine-grained runtime-cache policies (v1 ships the minimal `web/clan_ai_sw.js` — see §5).
 - WASM (dart2wasm) build target (JS target only; `package:web` keeps the door open).
 - Multi-tab write coordination.
 - PWA push notifications / background sync.

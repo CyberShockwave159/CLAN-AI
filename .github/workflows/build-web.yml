@@ -1,0 +1,93 @@
+name: Build Web (PWA)
+
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      deploy_pages:
+        description: 'Also deploy to GitHub Pages (repo must have Pages enabled; app is served under /CLAN-AI/)'
+        type: boolean
+        default: false
+        required: false
+
+env:
+  FLUTTER_VERSION: '3.47.x'
+
+jobs:
+  build-web:
+    name: Build Web (PWA)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+
+      - name: Fetch dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test (hermetic)
+        run: flutter test
+
+      # --no-web-resources-cdn bundles CanvasKit locally (offline app-shell
+      # reload does not depend on the gstatic CDN).
+      - name: Build web release
+        run: flutter build web --release --no-web-resources-cdn
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: clan-ai-web-${{ github.sha }}
+          path: build/web
+          retention-days: 14
+          if-no-files-found: error
+
+  deploy-pages:
+    name: Deploy to GitHub Pages (manual)
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy_pages == 'true'
+    needs: build-web
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+
+      - name: Fetch dependencies
+        run: flutter pub get
+
+      # Project Pages serve the app under /CLAN-AI/, so the base href must
+      # match or assets (main.dart.js, icons, sqlite3.wasm) 404. If you move
+      # to a custom domain or user Pages, rebuild with the matching base href.
+      - name: Build web release (base-href for project Pages)
+        run: flutter build web --release --base-href /CLAN-AI/ --no-web-resources-cdn
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: build/web
+          publish_branch: gh-pages
+          force_orphan: true

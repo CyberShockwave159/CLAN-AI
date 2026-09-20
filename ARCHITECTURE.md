@@ -302,6 +302,15 @@ ApiHttpClient
     └── AppException (all other errors)
 ```
 
+The underlying transport is a conditional-import facade (`export ... show` on `dart.library.io` / `dart.library.js_interop` — the VM resolves the io variant so native behavior is unchanged):
+
+| Variant | Implementation | Notes |
+|---|---|---|
+| `http_transport_io.dart` | `HttpClient()..connectionTimeout` + `IOClient` + `client.send()` | Byte-identical native path; 10s connect / 60s receive budgets |
+| `http_transport_web.dart` | `web.window.fetch` + `ReadableStreamDefaultReader` | XHR `BrowserClient` buffers whole responses, so token streaming needs incremental `read()`; consumer cancel aborts the fetch (`AbortController`), mirroring socket teardown. No TCP connect timeout in browsers — the existing `.timeout()` guards are the only bound. |
+
+`postStream()` returns a `StreamedApiResponse { statusCode, stream, bodyToString() }` — the `.stream` member matches `http.StreamedResponse`, so `LlamaApiService` and `SseClient.parseStream()` call sites are untouched.
+
 ### SSE Client
 
 ```
@@ -351,17 +360,37 @@ Dart: FileSaver.saveFile(content, filename, format)
     │   └── Writes to caches, presents picker, moves on confirm
     │
     └── Desktop: Falls back to app documents directory
+    └── Web: Browser download (Blob + object URL + anchor click)
 ```
+
+### Attachment Storage
+
+Message image attachments are stored through a conditional-import facade (`message_attachment_backend_{io,web,stub}.dart`) behind `MessageAttachmentStore`: the SQLite `messages.image_path` column holds an opaque ref (an absolute path on native, a DB key on web) — **schema unchanged**.
+
+| Variant | Storage | Notes |
+|---|---|---|
+| `io` (`FileAttachmentBackend`) | Files under `<documents>/attachments/` | Previous on-disk behavior, moved verbatim |
+| `web` (`SqliteAttachmentBackend`) | BLOBs in `clan_ai_attachments.db` (`id` TEXT PK, `bytes` BLOB, IndexedDB-backed) | Lazy-open, `INSERT OR REPLACE`/`DELETE`/`SELECT` keyed by `$fileId.$ext` |
+
+`AttachmentImage` is a stateful widget that renders `Image.file` on native and `Image.memory` (loaded via `store.readBytes(ref)`) on web; the read future is cached per `ref` so rebuilds do not re-query.
 
 ### SQLite FFI
 
 ```
-main.dart → _initSqliteFfi()  (once, on Linux/Windows/macOS)
+main.dart → _initSqliteFfi()  (once, at startup)
     │
-    ├── Desktop: sqflite_common_ffi (FFI bridge to SQLite)
+    ├── Desktop (Linux/Windows/macOS): sqflite_common_ffi (FFI bridge to SQLite)
     ├── Android/iOS: Native sqflite (bundled SQLite)
-    └── Web: Not supported (SQLite FFI requires native)
+    └── Web: databaseFactoryFfiWeb (sqflite_common_ffi_web)
+        └── sqlite3 compiled to WASM (web/sqlite3.wasm), driven from a
+            SharedWorker (web/sqflite_sw.js), persisted to the origin's IndexedDB
 ```
+
+Web specifics:
+
+- `web/sqlite3.wasm` (748,686 B) and `web/sqflite_sw.js` are a **locked pair** committed in the repo (`dart run sqflite_common_ffi_web:setup --force` regenerates both). Any `sqflite*`/`sqlite3` resolution change requires re-running setup, or boot fails with a WebAssembly import error (`Import #25 "env"` → `Unsupported operation: unsupported result null`).
+- DB identity is scoped to **origin + port**; in-browser paths from `local_storage.dart`/`vector_store.dart` produce real IndexedDB-backed databases.
+- `clan_ai_attachments.db` (attachment BLOB store) is a separate WASM sqlite DB — one shared persistence mechanism for all web data, kept out of the main DB to bound quota pressure.
 
 ---
 
@@ -387,7 +416,7 @@ All optional — defaults to production instances.
 
 1. **StreamMutationMixin** is shared by ChatViewModel and RoleplayViewModel — all streaming, undo, stopGeneration, and switchVariant logic lives here
 2. **Conversation branching**: Regenerate/edit operations create sibling variants that share a complete `siblingIds` array. `doSwitchVariant` loads siblings from DB via `getAllMessagesForThread()` (bypasses message deduplication), sorts by `variantIndex`, and indexes into the sorted list. Only messages with same `parentId` and `role == assistant` are considered variants. Regenerate builds `allSiblingIds` set (filtered by `role == assistant` and shared `parentId`) and assigns it to every variant in the group. Navigation uses `variantIndex + 1` for next, `variantIndex - 1` for previous. Branches are linked via `branchFromThreadId` on `ChatThread`.
-3. **SQLite FFI** must be initialized once — calling again triggers "You are changing sqflite default factory" warning
+3. **SQLite init** must happen once — `_initSqliteFfi()` (FFI on desktop, `databaseFactoryFfiWeb` on web). Calling the FFI init again triggers "You are changing sqflite default factory" warning
 4. **Thread isolation**: `characterId` null = assistant, non-null = roleplay — ChatViewModel filters by null, RoleplayViewModel filters by non-null
 5. **RAG isolation**: Embeddings stored with `character_id` — queries use `WHERE character_id = ?` — no cross-character leakage
 6. **Hash embedding**: Pure Dart 256-dim vectors via FNV-1a hash — deterministic, <5ms per vector, <1KB per vector
@@ -395,5 +424,7 @@ All optional — defaults to production instances.
 8. **Memory chip**: `ChatMessage.ragMemoryCount` shows count of injected memories. `ChatMessage.ragMemoryContents` stores JSON-encoded memory content strings. Displayed in MessageBubble as clickable chip.
 9. **Memory management**: `VectorStore.getAllMemories()` returns all embeddings for a character. `VectorStore.deleteEmbedding(id)` removes a single embedding. Accessed via `CharacterMemoriesDialog` from RoleplayDrawer character menu.
 10. **SharedPreferences** still used for: server profiles (`clan_server_profiles`), active profile ID (`clan_active_profile_id`), active server config (`clan_active_server_config`), theme mode (`clan_theme_mode`), custom theme colors (`clan_custom_theme_colors`), app mode (`clan_app_mode`), last roleplay thread ID (`clan_last_roleplay_thread_id`), system prompt templates (`clan_system_prompt_templates`). Characters and persona templates were migrated from SharedPreferences to SQLite in v7→v8 and are no longer stored there.
-11. **SQLite** used for: threads, messages, characters, persona templates, embeddings (separate database file)
-12. **Secure storage** used for: API keys (per profile, via `flutter_secure_storage`)
+11. **SQLite** used for: threads, messages, characters, persona templates, embeddings (separate database file). On web every DB is WASM + IndexedDB-backed (`clan_ai.db`, `clan_ai_vectors.db`, `clan_ai_attachments.db`) and scoped to origin + port
+12. **Secure storage** used for: API keys (per profile, via `flutter_secure_storage`) — Keychain/KeyStore/Secret Service on native, localStorage-grade (obfuscated) on web
+13. **Web transport** is the only streaming variance: `http_transport_web.dart` pumps a `ReadableStream` into `SseClient.parseStream` unchanged; consumer cancel aborts the fetch (stop-generation works); browsers impose CORS + mixed-content rules, so llama.cpp needs `--cors <origin>`
+14. **PWA**: `flutter build web --release` generates a **self-unregistering** `flutter_service_worker.js` stub (Flutter ~3.44+, `flutter#156910`) — no app-shell cache out of the box. CLAN AI ships its own `web/clan_ai_sw.js` (registered from `index.html`, copied verbatim into the build): precaches the shell, runtime-caches same-origin assets stale-while-revalidate, network-first navigations, cache keyed by app version, and never intercepts cross-origin llama.cpp traffic. Build with `--no-web-resources-cdn` so CanvasKit is local (offline boot doesn't depend on the gstatic CDN). `web/sqflite_sw.js` is the sqlite **SharedWorker** and is unrelated to offline caching.
