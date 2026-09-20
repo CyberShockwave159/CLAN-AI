@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:clan_ai/core/network/http_client.dart';
 import 'package:clan_ai/core/errors/app_exception.dart';
 
@@ -222,6 +224,57 @@ void main() {
         } on ServerOOMException catch (e) {
           expect(e.details, contains('HTTP 500'));
         }
+      });
+    });
+
+    group('postStream timeout budget', () {
+      test('waits for response headers within the receive timeout, not the connect timeout', () async {
+        // Headers arrive after 150ms — longer than connectTimeout (50ms) but
+        // well inside receiveTimeout (1s). This is the remote-server case: a
+        // healthy link where the server takes a while to start streaming.
+        // Regression guard: this used to throw at connectTimeout.
+        final mockClient = MockClient((request) async {
+          await Future<void>.delayed(const Duration(milliseconds: 150));
+          return http.Response('', 200);
+        });
+        final client = ApiHttpClient(
+          client: mockClient,
+          connectTimeout: const Duration(milliseconds: 50),
+          receiveTimeout: const Duration(seconds: 1),
+        );
+        addTearDown(client.close);
+
+        final response = await client.postStream(
+          Uri.parse('http://example.com/v1/chat/completions'),
+          body: {'stream': true},
+        );
+
+        expect(response.statusCode, equals(200));
+      });
+
+      test('throws a NetworkException when headers take longer than the receive timeout', () async {
+        final mockClient = MockClient((request) async {
+          await Future<void>.delayed(const Duration(milliseconds: 300));
+          return http.Response('', 200);
+        });
+        final client = ApiHttpClient(
+          client: mockClient,
+          connectTimeout: const Duration(milliseconds: 50),
+          receiveTimeout: const Duration(milliseconds: 150),
+        );
+        addTearDown(client.close);
+
+        await expectLater(
+          client.postStream(
+            Uri.parse('http://example.com/v1/chat/completions'),
+            body: {'stream': true},
+          ),
+          throwsA(
+            isA<NetworkException>()
+                .having((e) => e.message, 'message', contains('Streaming request timed out'))
+                .having((e) => e.details, 'details', contains('No response received within')),
+          ),
+        );
       });
     });
   });

@@ -103,6 +103,16 @@ class ApiHttpClient {
   }
 
   /// Sends a streaming POST request returning an [http.StreamedResponse].
+  ///
+  /// [http.Client.send] resolves once the response *headers* arrive, so the
+  /// guard below uses [receiveTimeout], not [connectTimeout]: the TCP/TLS
+  /// connect phase is already hard-bounded by [HttpClient.connectionTimeout],
+  /// while waiting for the server's response — which on a busy or slow server
+  /// includes slot queueing and prompt prefill before the first byte — is part
+  /// of receiving. Bounding the header wait with the tight 10s connect budget
+  /// made remote servers with a healthy link (low ping, prior exchanges fine)
+  /// falsely report a "connection" failure whenever first-token time crept
+  /// past 10 seconds.
   Future<http.StreamedResponse> postStream(
     Uri uri, {
     required Map<String, dynamic> body,
@@ -114,7 +124,7 @@ class ApiHttpClient {
         ..headers.addAll(_buildHeaders(apiKey: apiKey, extraHeaders: extraHeaders))
         ..body = jsonEncode(body);
 
-      final streamedResponse = await _client.send(request).timeout(connectTimeout);
+      final streamedResponse = await _client.send(request).timeout(receiveTimeout);
 
       if (streamedResponse.statusCode >= 400) {
         // bytesToString() already drains the response stream to completion
@@ -133,8 +143,8 @@ class ApiHttpClient {
       throw HostUnreachableException(host: uri.host, details: e.message);
     } on TimeoutException {
       throw NetworkException(
-        message: 'Streaming connection timed out for ${uri.host}',
-        details: 'Failed to establish stream connection within ${connectTimeout.inSeconds} seconds.',
+        message: 'Streaming request timed out for ${uri.host}',
+        details: 'No response received within ${receiveTimeout.inSeconds} seconds.',
       );
     } catch (e) {
       if (e is AppException) rethrow;
