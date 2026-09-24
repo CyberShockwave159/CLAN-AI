@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:clan_ai/data/models/chat_message.dart';
 import 'package:clan_ai/ui/features/chat/views/message_bubble.dart';
+import 'package:clan_ai/ui/features/chat/widgets/artifact_file_card.dart';
 
 void main() {
   group('MessageBubble', () {
@@ -174,6 +175,76 @@ void main() {
 
       expect(find.byType(RichText), findsWidgets);
     });
+
+    testWidgets('renders a stored A-PROX file artifact as a save-able object', (tester) async {
+      final message = buildAssistantMessage(
+        content: 'Here is the result.',
+        filePath: '/tmp/attachments/f_assistant-1.txt',
+        fileName: 'result.txt',
+        fileMime: 'text/plain',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MessageBubble(message: message, messageIndex: 0),
+          ),
+        ),
+      );
+
+      expect(find.text('Here is the result.'), findsOneWidget);
+      expect(find.byType(ArtifactFileCard), findsOneWidget);
+      expect(find.text('result.txt'), findsOneWidget);
+      expect(find.byIcon(Icons.download_rounded), findsOneWidget);
+    });
+
+    testWidgets('renders file URLs from markdown as save-able objects', (tester) async {
+      final message = buildAssistantMessage(content: 'Grab [result](http://host/out.txt)');
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MessageBubble(message: message, messageIndex: 0),
+          ),
+        ),
+      );
+
+      expect(find.byType(ArtifactFileCard), findsOneWidget);
+      expect(find.text('out.txt'), findsOneWidget);
+    });
+
+    testWidgets('does not render file objects for user messages', (tester) async {
+      final message = buildUserMessage(content: 'here is http://host/out.txt for you');
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MessageBubble(message: message, messageIndex: 0),
+          ),
+        ),
+      );
+
+      expect(find.byType(ArtifactFileCard), findsNothing);
+    });
+
+    testWidgets('does not duplicate a file already stored as an A-PROX artifact', (tester) async {
+      final message = buildAssistantMessage(
+        content: 'Result: [download](http://host/result.txt)',
+        filePath: '/tmp/attachments/f_assistant-1.txt',
+        fileName: 'result.txt',
+        fileMime: 'text/plain',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MessageBubble(message: message, messageIndex: 0),
+          ),
+        ),
+      );
+
+      expect(find.byType(ArtifactFileCard), findsOneWidget);
+    });
   });
 }
 
@@ -203,6 +274,9 @@ ChatMessage buildAssistantMessage({
   List<String> siblingIds = const [],
   bool isEdited = false,
   String reasoningContent = '',
+  String? filePath,
+  String? fileName,
+  String? fileMime,
 }) {
   return ChatMessage(
     id: 'assistant-1',
@@ -220,5 +294,8 @@ ChatMessage buildAssistantMessage({
     siblingIds: siblingIds,
     isEdited: isEdited,
     reasoningContent: reasoningContent,
+    filePath: filePath,
+    fileName: fileName,
+    fileMime: fileMime,
   );
 }

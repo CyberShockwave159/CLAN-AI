@@ -68,7 +68,26 @@ Complete portability refactor enabling a Progressive Web App build of CLAN AI. T
 - `lib/core/utils/message_attachment_store.dart` — images are stored as files on disk with only the absolute path in `messages.image_path` (mirrors `AvatarStorageService`); files are cleaned up automatically when their message or thread is deleted
 - The OpenAI payload embeds the attachment as a base64 `image_url` content part, so it works with any OpenAI-compatible vision-capable backend (e.g. llama.cpp llama-server with a multimodal model)
 - Magic-byte MIME sniffing (`mimeTypeFromBytes`) detects the true image format (PNG/JPEG/GIF/WebP) even when the file extension lies
-- **File & Image Artifacts (A-PROX `/flags`)** — streamed `delta.image_url` / `delta.file_url` (and `message.image_url`/`message.file_url` on non-streaming responses) are parsed in `SseClient._processDataBlock` (object `{url,name,mime}` and bare-string forms) and forwarded through `filterReasoning` reconstructed chunks. The shared `StreamMutationMixin` (chat + roleplay) downloads each artifact bytes once into `MessageAttachmentStore` and persists the path + original name + MIME to SQLite (schema v14 `file_path`/`file_name`/`file_mime` columns, migration v13→v14). Assistant images render inline; files render as a tap-to-download / share chip via `FileSaver.saveBytes`.
+- **File & Image Artifacts (A-PROX `/flags`)** — streamed `delta.image_url` / `delta.file_url` (and `message.image_url`/`message.file_url` on non-streaming responses) are parsed in `SseClient._processDataBlock` (object `{url,name,mime}` and bare-string forms) and forwarded through `filterReasoning` reconstructed chunks. The shared `StreamMutationMixin` (chat + roleplay) downloads each artifact bytes once into `MessageAttachmentStore` and persists the path + original name + MIME to SQLite (schema v14 `file_path`/`file_name`/`file_mime` columns, migration v13→v14). Assistant images render inline; files render as distinct, tappable document objects (see **Generated Files as Save-able Objects** below).
+
+**Clickable Hyperlinks in Assistant Responses**
+- Hyperlinks the model emits are now tappable on every platform, including the web/PWA build (`url_launcher ^6.3.1`)
+- `http`/`https`/`mailto`/`tel` links open in the platform browser (a new tab on web); unsupported schemes are ignored
+- Wired through `DynamicMarkdownView.onTapLink`, so both explicit `[label](url)` links and autolinked bare URLs are covered
+
+**Native Inline Rendering of Generated Images**
+- Raster image URLs the model puts in its response (markdown links or bare `http(s)` URLs ending in `.png`/`.jpeg`/`.jpg`/`.gif`/`.webp`/`.bmp`/`.avif`) now render as actual images in the chat log instead of as links; tap to open a full-screen, zoomable lightbox
+- `TextSanitizer.embedImageLinks` rewrites image URLs in markdown segments (code-block and math content untouched); `MarkdownImageView` fetches them with an HTTP client (cached per URL) and falls back to the plain link on failure or the debug network layer
+
+**Code Block Rendering Fix**
+- The first line of code stays inside the code body instead of being misread as the block's language; the header shows only the real language, ellipsized when very wide
+- `TextSanitizer.parseSegments` now keeps the opening fence + language line in the code-block segment payload (the renderer strips it), and the header language label is wrapped in `Expanded` so a pathological long label can no longer push the Copy button off-screen
+
+**Generated Files as Save-able Objects**
+- Every file an assistant produces now appears as a distinct document object at the **end** of the response: `TextSanitizer.extractFileRefs` lifts non-image artifact file URLs (extensions in `TextSanitizer.artifactExtensions` — `.txt`, `.md`, `.json`, `.csv`, `.pdf`, `.py`, `.zip`, ...) out of the markdown (code blocks and inline images excluded, deduplicated), merges them with the stored A-PROX `file_url` artifact, and prunes duplicates by filename
+- Each file renders as an `ArtifactFileCard` with a type-specific icon (`.txt` → generic text document, `.json` → data object, `.csv` → spreadsheet, `.pdf` → PDF, code → code, ...), the filename, MIME, and a save affordance
+- Tapping a card saves/exports the file through the same `FileSaver` path used for chat export — stored A-PROX bytes are read from the attachment store; content-derived URLs are downloaded on demand (nothing persisted) — then confirms with a "Saved to <path>" snackbar
+- Only assistant messages render file objects; user messages and plain web-page links are left untouched (those stay clickable hyperlinks)
 
 **Thread Menus in Drawers**
 - The "Show menu" (⋮) button now appears on every chat/thread row in both the assistant-mode drawer and the roleplay drawer, not just the active conversation

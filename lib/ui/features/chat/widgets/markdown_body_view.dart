@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:clan_ai/core/constants/app_theme.dart';
 import 'package:clan_ai/core/utils/text_sanitizer.dart';
 import 'package:clan_ai/ui/features/chat/widgets/code_block_view.dart';
+import 'package:clan_ai/ui/features/chat/widgets/markdown_image_view.dart';
 import 'package:clan_ai/ui/features/chat/widgets/math_view.dart';
+import 'package:clan_ai/ui/shared/snackbar_helper.dart';
 
 class DynamicMarkdownView extends StatelessWidget {
   final String data;
@@ -14,6 +17,26 @@ class DynamicMarkdownView extends StatelessWidget {
     required this.data,
     this.isUser = false,
   });
+
+  /// Opens [url] in the platform browser (new tab on web / PWA). Only well
+  /// known external schemes are forwarded; anything else is a no-op.
+  Future<void> _openUrl(BuildContext context, String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    const supported = {'http', 'https', 'mailto', 'tel'};
+    if (!supported.contains(uri.scheme)) return;
+    final host = uri.host.isNotEmpty ? uri.host : url;
+    try {
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!opened && context.mounted) {
+        showAppSnackBar(context, 'Could not open link: $host');
+      }
+    } catch (_) {
+      if (context.mounted) {
+        showAppSnackBar(context, 'Could not open link: $host');
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -69,6 +92,14 @@ class DynamicMarkdownView extends StatelessWidget {
         backgroundColor: isDark ? const Color(0xFF222634) : const Color(0xFFE2E8F0),
         color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7),
       ),
+      a: TextStyle(
+        fontSize: 15,
+        color: AppTheme.accentPrimary,
+        decoration: TextDecoration.underline,
+        decorationColor: isDark
+            ? AppTheme.accentPrimary.withValues(alpha: 0.7)
+            : AppTheme.accentPrimary,
+      ),
       codeblockDecoration: BoxDecoration(
         color: isDark ? const Color(0xFF141720) : const Color(0xFFF1F5F9),
         borderRadius: BorderRadius.circular(10),
@@ -123,9 +154,15 @@ class DynamicMarkdownView extends StatelessWidget {
 
           case SegmentType.markdown:
             return MarkdownBody(
-              data: segment.content,
+              data: TextSanitizer.embedImageLinks(segment.content),
               styleSheet: markdownStyle,
               selectable: true,
+              onTapLink: (text, href, title) => _openUrl(context, href ?? text),
+              sizedImageBuilder: (config) => MarkdownImageView(
+                uri: config.uri,
+                alt: config.alt,
+                onOpenUrl: (url) => _openUrl(context, url),
+              ),
             );
         }
       }).toList(),

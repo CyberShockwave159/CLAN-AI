@@ -1,10 +1,208 @@
+import 'package:clan_ai/core/utils/message_attachment_store.dart';
+
 /// Utility functions for text sanitization, Markdown/LaTeX normalization, and stream buffering.
 class TextSanitizer {
+  /// Matches a URL whose path ends with a common raster-image extension.
+  static final RegExp _imageUrlPattern = RegExp(
+    r'\.(png|jpe?g|gif|webp|bmp|avif)(?:[?#][^\s]*)?$',
+    caseSensitive: false,
+  );
+
+  /// File extensions treated as LLM-generated artifacts. URLs ending in one of
+  /// these are lifted out of the rendered markdown into a distinct tappable
+  /// "save file" object. Ordinary web pages (no extension, `.html`, ...) and
+  /// image files (rendered inline) are intentionally excluded.
+  static final Set<String> artifactExtensions = <String>{
+    'txt',
+    'md',
+    'markdown',
+    'log',
+    'tex',
+    'json',
+    'xml',
+    'yaml',
+    'yml',
+    'toml',
+    'sql',
+    'csv',
+    'tsv',
+    'xlsx',
+    'xls',
+    'doc',
+    'docx',
+    'pptx',
+    'pdf',
+    'ipynb',
+    'r',
+    'js',
+    'ts',
+    'jsx',
+    'tsx',
+    'dart',
+    'py',
+    'java',
+    'c',
+    'h',
+    'cpp',
+    'cc',
+    'hpp',
+    'go',
+    'rs',
+    'rb',
+    'php',
+    'sh',
+    'bat',
+    'ps1',
+    'swift',
+    'kt',
+    'cs',
+    'css',
+    'svg',
+    'zip',
+    'tar',
+    'gz',
+    '7z',
+    'rar',
+    'bz2',
+    'mp3',
+    'wav',
+    'm4a',
+    'ogg',
+    'flac',
+    'opus',
+    'mp4',
+    'mov',
+    'avi',
+    'mkv',
+    'webm',
+  };
+
   /// Cleans and formats markdown text for rendering.
   /// Handles common edge cases with LLM streaming outputs like unbalanced markdown fences.
   static String sanitizeMarkdown(String rawText) {
     if (rawText.isEmpty) return '';
     return rawText;
+  }
+
+  /// Returns `true` if [url] (after trailing sentence punctuation has been
+  /// dropped) points at an image file.
+  static bool _isImageFileUrl(String url) {
+    final trimmed = url.replaceFirst(RegExp(r'[,.;:!?]+$'), '');
+    return _imageUrlPattern.hasMatch(trimmed);
+  }
+
+  /// Rewrites URLs that point at image files into markdown image syntax so the
+  /// renderer can display them natively instead of as plain clickable links.
+  ///
+  /// Only `http`/`https` URLs are considered. Two shapes are handled:
+  ///   1. `[label](http://host/image.png)` markdown links → `![label](url)`
+  ///   2. bare `http://host/image.png` URLs         → `![url](url)`
+  ///
+  /// Existing markdown image syntax (`![alt](url)`) and URLs inside code blocks
+  /// (callers should only feed markdown segment text) are left untouched.
+  /// URLs that merely *contain* an image extension in the middle (`img.png.gz`)
+  /// are left untouched as well.
+  static String embedImageLinks(String text) {
+    if (text.isEmpty) return text;
+
+    // Fast path: nothing that looks like an image URL → unchanged.
+    if (!text.contains(RegExp(r'\.(png|jpe?g|gif|webp|bmp|avif)', caseSensitive: false))) {
+      return text;
+    }
+
+    // 1) [label](http://host/image.png) → ![label](http://host/image.png).
+    // The preceding-char group keeps already-rendered `![...](...)` untouched.
+    text = text.replaceAllMapped(
+      RegExp(
+        r'(^|[^!])\[([^\]]*)\]\((https?://[^\s)]+)\)',
+        caseSensitive: false,
+      ),
+      (m) {
+        final url = m[3]!;
+        if (!_isImageFileUrl(url)) return m[0]!;
+        return '${m[1]}![${m[2]}]($url)';
+      },
+    );
+
+    // 2) bare http(s) image URL → ![url](url). Leading chars are restricted so
+    // destinations already wrapped in `(...)` (markdown links/images) are not
+    // matched a second time.
+    text = text.replaceAllMapped(
+      RegExp(r'(^|[\s>])https?://[^\s()\[\]<`]+', caseSensitive: false),
+      (m) {
+        final prefix = m[1] ?? '';
+        final url = m[0]!.substring(prefix.length);
+        final trimmed = url.replaceFirst(RegExp(r'[,.;:!?]+$'), '');
+        if (!_imageUrlPattern.hasMatch(trimmed)) return m[0]!;
+        return '$prefix![$trimmed]($trimmed)';
+      },
+    );
+
+    return text;
+  }
+
+  /// Finds files the model asked the user to download: markdown links and bare
+  /// URLs that point at a non-image artifact file ([artifactExtensions]).
+  ///
+  /// Images are skipped (they render inline); URLs inside fenced code blocks
+  /// and ordinary web pages stay untouched. Results are deduplicated by URL.
+  /// Used to render generated files as distinct save-able objects at the end
+  /// of an assistant message.
+  static List<FileRef> extractFileRefs(String text) {
+    if (text.isEmpty) return [];
+
+    final refs = <FileRef>[];
+    final seen = <String>{};
+
+    void add(String url, String? label) {
+      final trimmed = url.replaceFirst(RegExp(r'[,.;:!?]+$'), '');
+      final ext = _fileExtensionOf(trimmed);
+      if (ext == null) return;
+      if (_imageUrlPattern.hasMatch(trimmed)) return;
+      if (!artifactExtensions.contains(ext)) return;
+      final key = trimmed.toLowerCase();
+      if (!seen.add(key)) return;
+      final name = MessageAttachmentStore.fileNameFromUrl(trimmed) ?? 'download.$ext';
+      refs.add(FileRef(url: trimmed, fileName: name, label: label));
+    }
+
+    for (final segment in parseSegments(text)) {
+      if (segment.type != SegmentType.markdown) continue;
+      final content = segment.content;
+
+      // 1) [label](http://host/file.txt)
+      content.replaceAllMapped(
+        RegExp(
+          r'\[([^\]]*)\]\((https?://[^\s)]+)\)',
+          caseSensitive: false,
+        ),
+        (m) {
+          add(m[2]!, m[1]);
+          return '';
+        },
+      );
+
+      // 2) bare http(s) file URL
+      content.replaceAllMapped(
+        RegExp(r'(^|[\s>])https?://[^\s()\[\]<`]+', caseSensitive: false),
+        (m) {
+          final prefix = m[1] ?? '';
+          add(m[0]!.substring(prefix.length), null);
+          return '';
+        },
+      );
+    }
+
+    return refs;
+  }
+
+  /// Extracts the file extension (lowercase, no dot) from a URL's path, or
+  /// `null` when the path has no extension. Query strings/fragments are ignored.
+  static String? _fileExtensionOf(String url) {
+    final path = url.split(RegExp(r'[?#]')).first.split('/').last;
+    final dot = path.lastIndexOf('.');
+    if (dot == -1 || dot == path.length - 1) return null;
+    return path.substring(dot + 1).toLowerCase();
   }
 
   /// Extracts LaTeX segments ($...$ or $$...$$) and code blocks for custom rendering.
@@ -40,12 +238,11 @@ class TextSanitizer {
             }
             state = _ParseState.inCodeBlock;
             codeBuffer.clear();
+            // Keep the opening fence + language line in the block content: the
+            // renderer extracts the language from it, and the first line of
+            // code must render inside the code block, not in its header.
+            codeBuffer.write('$backtick$backtick$backtick');
             i += 3;
-            // Skip language identifier (read until newline)
-            while (i < text.length && text[i] != '\n') {
-              i++;
-            }
-            if (i < text.length) i++; // skip \n
             continue;
           }
 
@@ -160,5 +357,19 @@ class TextSegment {
   const TextSegment({
     required this.type,
     required this.content,
+  });
+}
+
+/// A file an assistant message asks the user to download: the [url] plus the
+/// [fileName] derived from it and the optional markdown link [label].
+class FileRef {
+  final String url;
+  final String fileName;
+  final String? label;
+
+  const FileRef({
+    required this.url,
+    required this.fileName,
+    this.label,
   });
 }

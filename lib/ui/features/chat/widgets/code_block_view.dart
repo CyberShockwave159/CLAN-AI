@@ -66,12 +66,16 @@ class _CodeBlockViewState extends State<CodeBlockView> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  lang,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary,
+                Expanded(
+                  child: Text(
+                    lang,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary,
+                    ),
                   ),
                 ),
                 InkWell(

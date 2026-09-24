@@ -229,12 +229,12 @@ Supported build targets: `linux`, `macos`, `windows`, `apk` (Android), `ios`, `w
 - Client-Side RAG — Pure Dart feature hashing embeddings (256-dim, char trigrams) with SQLite cosine similarity; zero ML dependencies. Configurable Top-K (1-10) and minimum relevance threshold (0.0-1.0) in Generation Parameters sheet
 - **Conversation branching** — Regenerate and edit responses create sibling variants. All variants share a complete `siblingIds` array. Navigation loads siblings from DB, sorts by `variantIndex`, and indexes into the sorted list via `ChatRepository.getAllMessagesForThread()` (bypasses message deduplication).
 - **Image attachments** — Attach one image per user message (chat & roleplay). Images are stored on disk with only the absolute path in SQLite, sent as base64 `image_url` content parts over the OpenAI-compatible API (works with any vision-capable backend), tap to view in a full-screen lightbox, and auto-cleaned when messages/threads are deleted. Magic-byte sniffing detects the true format even when the file extension lies.
-- **File & image artifacts** — When the server (A-PROX `/flags`) emits `delta.image_url` / `delta.file_url` in the SSE stream (or `message.image_url`/`message.file_url` on non-streaming responses), the client downloads the artifact bytes once into the message attachment store and persists the local path + original filename + MIME in SQLite (schema v14 `file_path`/`file_name`/`file_mime` columns). Assistant images render inline (reusing the image attachment view); files render as a tap-to-download / share chip in the message bubble (`FileSaver.saveBytes`).
+- **File & image artifacts** — When the server (A-PROX `/flags`) emits `delta.image_url` / `delta.file_url` in the SSE stream (or `message.image_url`/`message.file_url` on non-streaming responses), the client downloads the artifact bytes once into the message attachment store and persists the local path + original filename + MIME in SQLite (schema v14 `file_path`/`file_name`/`file_mime` columns). Assistant images render inline; generated files appear as distinct, tappable document objects at the end of the response (`.txt` shows as a generic text document, `.json` as a data object, `.csv` as a spreadsheet, `.pdf` as a PDF, ...); tapping one saves/exports it through the same `FileSaver` path used for chat export. File URLs the model embeds in its markdown (extension in `TextSanitizer.artifactExtensions`) get the same object treatment, deduplicated against stored A-PROX artifacts.
 - SQLite local persistence with full thread/message history (schema v13)
 - Automatic server health polling with fallback endpoints (`/health` → `/props` → `/v1/models`)
 - Dark mode by default (OLED-optimized), configurable light and custom themes
 - Custom theme presets (Warm, Cool, Pastel) with persisted user color selections
-- Markdown, code block, and LaTeX math rendering in responses
+- Markdown with clickable hyperlinks, native inline rendering of generated image URLs, code block, and LaTeX math rendering in responses
 - Token speed and performance metrics per generation
 - Export conversations to TXT or JSON via drawer context menus (native save dialogs on mobile)
 
@@ -355,13 +355,13 @@ This produces files in the `dist/` directory:
 
 ```bash
 flutter analyze        # lint + typecheck
-flutter test           # runs all 31 test files (523 total tests)
+flutter test           # runs all 32 test files (561 total tests)
 flutter run            # launch app
 ```
 
 ### Testing
 
-31 test files, 523 total tests. All tests use fake repositories (no real SQLite or network). ViewModels expose private state via setters for test injection.
+32 test files, 561 total tests. All tests use fake repositories (no real SQLite or network). ViewModels expose private state via setters for test injection.
 
 **Coverage by layer:**
 - **Domain** — `GenerationParams` serialization (OpenAI payloads, TextSanitizer segment parsing, reasoning flags), model roundtrip serialization (ChatThread, ChatMessage, CharacterProfile, PersonaTemplate, ServerConfig)
