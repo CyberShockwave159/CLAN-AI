@@ -128,6 +128,8 @@ python3 -m http.server 8080 --directory build/web
 
 `--no-web-resources-cdn` bundles CanvasKit locally instead of loading it from Google's CDN — required for the offline app shell. (CI builds with the same flag.)
 
+**Stay up to date:** the service worker serves navigations network-first and revalidates every asset (`cache: 'no-store'`), so each reload boots the newest deployed build regardless of host `Cache-Control` (see the bundled `Caddyfile` for the recommended `no-cache`/1-day header policy). While the app stays open, it polls `version.json` every 5 minutes and shows a "A new version of CLAN AI is available" snackbar with a **Reload** button as soon as a newer release is detected. Bump the `version:` in `pubspec.yaml` on every release — it keys the service worker cache and the update prompt.
+
 **Install as a PWA:** open the served app in Chrome/Edge → the install icon appears in the address bar (or **⋮ → Install app / Cast, save & share → Install**). It launches in its own standalone window. After the first successful load, the app shell (Dart code, sqlite WASM + SharedWorker, local CanvasKit) is served from CLAN AI's service worker cache (`web/clan_ai_sw.js`), so reloads work offline; chat history lives in IndexedDB and persists too. Runtime-fetched Google Fonts are cached by the browser's HTTP cache, not the service worker. Live inference still needs a reachable server.
 
 **Connect to your llama.cpp server** — browsers enforce CORS and HTTPS/mixed-content rules:
@@ -163,13 +165,10 @@ For multi-device LAN access with a green lock on every device:
    # Produces: _cert.pem and _key.pem
    ```
 
-3. **Serve the app** with Caddy (`/etc/caddy/Caddyfile`):
-   ```
-   https://clan-lan {
-       root * /var/www/clan-ai
-       file_server
-       tls /path/to/_cert.pem /path/to/_key.pem
-   }
+3. **Serve the app** with Caddy — use the bundled [Caddyfile](Caddyfile), which also sets a short (`no-cache`/1-day) `Cache-Control` policy so browsers revalidate quickly after each release:
+   ```bash
+   sudo cp Caddyfile /etc/caddy/Caddyfile
+   # edit the `tls` line to point at your _cert.pem / _key.pem
    ```
    Start: `sudo caddy run --config /etc/caddy/Caddyfile`
 

@@ -7,28 +7,41 @@
 // self-unregistering stub (no caching, no fetch handler), so the app-shell
 // cache the PWA needs is provided here instead.
 //
-// Behaviour (v1):
+// Behaviour (v2):
 //   * Precache the app shell + manifest/icons on install.
 //   * Same-origin GET only. Cross-origin traffic (llama.cpp API/SSE calls,
 //     fonts, CDNs) is never intercepted.
 //   * Navigations are network-first (picks up redeploys immediately) with
 //     cache fallback for offline reload.
 //   * Static assets are stale-while-revalidate (offline-first after first use).
-//   * The cache is keyed by the app version read from `version.json`, so each
-//     release installs a fresh cache and activate() drops the previous one —
-//     no unbounded growth across releases.
+//   * Every network fetch uses `cache: 'no-store'`, so neither the browser HTTP
+//     cache nor the host's Cache-Control max-age can serve a stale shell or
+//     asset: the SW always revalidates against the server.
+//   * The cache is keyed by the app version read from `version.json`. activate()
+//     prunes old caches when the SW script itself changes; successful navigations
+//     re-key and sweep stale caches when a new release is deployed behind an
+//     unchanged script — no unbounded growth across releases and no waiting for
+//     a script rewrite to rotate the cache.
 
 const CACHE_PREFIX = 'clan-ai-v';
 
-async function currentCacheName() {
+// Reads the deployed `version.json` (network, non-cached). Resolves to the
+// version string, or null when the fetch fails (offline / missing file) —
+// callers treat null as "must not touch any cache".
+async function readRemoteVersion() {
   try {
     const response = await fetch('./version.json', { cache: 'no-store' });
     const info = await response.json();
-    const version = typeof info.version === 'string' ? info.version : '0';
-    return CACHE_PREFIX + version;
+    const version = typeof info.version === 'string' ? info.version : null;
+    return version && version.length > 0 ? version : null;
   } catch (_) {
-    return CACHE_PREFIX + '0';
+    return null;
   }
+}
+
+async function currentCacheName() {
+  const version = await readRemoteVersion();
+  return CACHE_PREFIX + (version || '0');
 }
 
 const PRECACHE_URLS = [
@@ -69,6 +82,38 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// Re-keys the runtime cache to the freshly deployed version and drops every
+// other clan-ai cache. Runs after a successful navigation so a release shipped
+// without changing this script still rotates caches promptly. Safe to call
+// repeatedly: a mutex guards concurrent sweeps and failures are swallowed
+// (offline or a failed version.json read simply leaves caches untouched).
+let sweeping = false;
+async function sweepStaleCaches() {
+  if (sweeping) return;
+  sweeping = true;
+  try {
+    const version = await readRemoteVersion();
+    if (version === null) {
+      return;
+    }
+    const expected = CACHE_PREFIX + version;
+    if (expected === cacheName) {
+      return;
+    }
+    cacheName = expected;
+    const keys = await caches.keys();
+    await Promise.all(
+      keys
+        .filter((key) => key.startsWith(CACHE_PREFIX) && key !== expected)
+        .map((key) => caches.delete(key))
+    );
+  } catch (_) {
+    // Best-effort: never let a sweep failure break navigation handling.
+  } finally {
+    sweeping = false;
+  }
+}
+
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') {
@@ -83,12 +128,17 @@ self.addEventListener('fetch', (event) => {
   if (request.mode === 'navigate') {
     event.respondWith(
       (async () => {
-        const cache = await caches.open(cacheName);
         try {
-          const fresh = await fetch(request);
+          // Always hit the server: a reload right after a deploy must see the
+          // newest index.html, independent of any HTTP cache the host sets.
+          const fresh = await fetch(request, { cache: 'no-store' });
+          const cache = await caches.open(cacheName);
           await cache.put(request, fresh.clone());
+          // Re-key + sweep when the server serves a newer release.
+          sweepStaleCaches();
           return fresh;
         } catch (_) {
+          const cache = await caches.open(cacheName);
           const cached = await cache.match(request);
           if (cached) {
             return cached;
@@ -100,12 +150,12 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static assets: stale-while-revalidate.
+  // Static assets: stale-while-revalidate, always revalidating on the network.
   event.respondWith(
     (async () => {
       const cache = await caches.open(cacheName);
       const cached = await cache.match(request);
-      const network = fetch(request)
+      const network = fetch(request, { cache: 'no-store' })
         .then((response) => {
           if (response && response.ok) {
             cache.put(request, response.clone());

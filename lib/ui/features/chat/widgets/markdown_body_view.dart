@@ -161,7 +161,6 @@ class DynamicMarkdownView extends StatelessWidget {
               sizedImageBuilder: (config) => MarkdownImageView(
                 uri: config.uri,
                 alt: config.alt,
-                onOpenUrl: (url) => _openUrl(context, url),
               ),
             );
         }

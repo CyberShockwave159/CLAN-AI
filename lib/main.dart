@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import 'package:clan_ai/core/constants/app_theme.dart';
 import 'package:clan_ai/core/network/http_client.dart';
 import 'package:clan_ai/core/utils/latency_meter.dart';
+import 'package:clan_ai/core/utils/pwa_update_checker.dart';
+import 'package:clan_ai/core/utils/web_page_reloader.dart';
 import 'package:clan_ai/data/datasources/llama_api_service.dart';
 import 'package:clan_ai/data/datasources/local_storage.dart';
 import 'package:clan_ai/data/models/app_mode.dart';
@@ -181,6 +183,8 @@ class _HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<_HomeScreen> {
+  PwaUpdateChecker? _updateChecker;
+
   @override
   void initState() {
     super.initState();
@@ -188,6 +192,37 @@ class _HomeScreenState extends State<_HomeScreen> {
     // (via addPostFrameCallback) is a side effect in build and re-registers on
     // every rebuild.
     context.read<SettingsViewModel>().setOnThemeChanged(widget.themeRefresh);
+
+    // Web only: poll version.json so users running an old build get prompted to
+    // reload as soon as a new release is deployed.
+    if (kIsWeb) {
+      _updateChecker = PwaUpdateChecker()..addListener(_onUpdateAvailable);
+      _updateChecker!.start();
+    }
+  }
+
+  void _onUpdateAvailable() {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: const Text('A new version of CLAN AI is available.'),
+          duration: const Duration(seconds: 30),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          action: SnackBarAction(label: 'Reload', onPressed: reloadAppPage),
+        ),
+      );
+  }
+
+  @override
+  void dispose() {
+    _updateChecker?.removeListener(_onUpdateAvailable);
+    _updateChecker?.dispose();
+    super.dispose();
   }
 
   @override

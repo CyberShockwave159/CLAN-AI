@@ -2,7 +2,10 @@ import 'dart:async';
 import 'package:clan_ai/core/network/sse_client.dart';
 import 'package:clan_ai/data/models/chat_message.dart';
 import 'package:clan_ai/data/models/chat_thread.dart';
+import 'package:clan_ai/data/models/server_config.dart';
+import 'package:clan_ai/data/models/server_profile.dart';
 import 'package:clan_ai/data/repositories/chat_repository.dart';
+import 'package:clan_ai/domain/models/generation_params.dart';
 import 'package:clan_ai/ui/shared/mixins/stream_mutation_mixin.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -101,6 +104,25 @@ class TestViewModel extends ChangeNotifier with StreamMutationMixin {
   @override
   void notifyListeners() {
     // No-op for testing
+  }
+}
+
+/// Fake repository whose stream events are controlled manually so tests can
+/// observe mid-stream state (e.g. a live-attached image before completion).
+class _GatedChatRepository extends FakeChatRepository {
+  final StreamController<StreamChunk> controller = StreamController<StreamChunk>();
+
+  @override
+  Stream<StreamChunk> streamCompletion({
+    required ServerConfig serverConfig,
+    required ServerProfile? connection,
+    required List<ChatMessage> history,
+    required String? systemPrompt,
+    GenerationParams? params,
+    CancelToken? cancelToken,
+    int? modelContextLength,
+  }) {
+    return controller.stream;
   }
 }
 
@@ -570,6 +592,170 @@ void main() {
       expect(result!.imagePath, isNull);
       expect(result.content, equals('Caption still arrives.'));
       expect(result.status, equals(MessageStatus.completed));
+    });
+
+    test('attaches imagePath live during streaming before the stream completes',
+        () async {
+      final repo = _GatedChatRepository();
+      final vm = TestViewModel(repo: repo);
+      final thread = buildThread(title: 'Test');
+      vm.setThread(thread);
+      vm.addMessage(buildMessage(
+        threadId: thread.id,
+        role: MessageRole.user,
+        id: 'user-1',
+      ));
+      vm.addMessage(buildMessage(
+        threadId: thread.id,
+        role: MessageRole.assistant,
+        id: 'assistant-1',
+        content: '',
+      ));
+      vm.stubbedImageRef = '/tmp/attachments/a1.png';
+
+      final serverConfig = buildServerConfig();
+      final streamFuture = vm.doStreamResponse(
+        assistantMessageId: 'assistant-1',
+        serverConfig: serverConfig,
+        connection: null,
+        customParams: null,
+        modelContextLength: null,
+      );
+
+      // Let the await-for subscribe before feeding events.
+      await Future<void>.delayed(Duration.zero);
+
+      repo.controller.add(const StreamChunk(text: '', imageUrl: 'http://host/img.png'));
+      await Future<void>.delayed(Duration.zero);
+
+      // The image is already attached while the caption stream is still open.
+      expect(vm.lastDownloadedImageUrl, equals('http://host/img.png'));
+      expect(
+        vm.getMessageById('assistant-1')!.imagePath,
+        equals('/tmp/attachments/a1.png'),
+      );
+
+      repo.controller.add(const StreamChunk(text: 'Caption.', isDone: true));
+      await repo.controller.close();
+      await streamFuture;
+
+      final result = vm.getMessageById('assistant-1');
+      expect(result!.content, equals('Caption.'));
+      expect(result.imagePath, equals('/tmp/attachments/a1.png'));
+      expect(result.status, equals(MessageStatus.completed));
+    });
+
+    test('promotes an image URL embedded only in markdown stream text', () async {
+      final repo = FakeChatRepository();
+      final vm = TestViewModel(repo: repo);
+      final thread = buildThread(title: 'Test');
+      vm.setThread(thread);
+      vm.addMessage(buildMessage(
+        threadId: thread.id,
+        role: MessageRole.user,
+        id: 'user-1',
+      ));
+      vm.addMessage(buildMessage(
+        threadId: thread.id,
+        role: MessageRole.assistant,
+        id: 'assistant-1',
+        content: '',
+      ));
+      repo.setStreamFragments(thread.id, [
+        const StreamChunk(text: 'Here is your image: ', isDone: false),
+        const StreamChunk(text: '![gen](http://host/gen_1.png)', isDone: false),
+        const StreamChunk(text: ' Let me know.', isDone: true),
+      ]);
+      vm.stubbedImageRef = '/tmp/attachments/a1.png';
+
+      final serverConfig = buildServerConfig();
+      await vm.doStreamResponse(
+        assistantMessageId: 'assistant-1',
+        serverConfig: serverConfig,
+        connection: null,
+        customParams: null,
+        modelContextLength: null,
+      );
+
+      final result = vm.getMessageById('assistant-1');
+      expect(vm.lastDownloadedImageUrl, equals('http://host/gen_1.png'));
+      expect(result!.imagePath, equals('/tmp/attachments/a1.png'));
+      // The markdown image syntax was stripped from the caption.
+      expect(result.content, equals('Here is your image:  Let me know.'));
+      expect(result.content, isNot(contains('http://host/gen_1.png')));
+    });
+
+    test('resolves a relative artifact URL against the connection baseUrl',
+        () async {
+      final repo = FakeChatRepository();
+      final vm = TestViewModel(repo: repo);
+      final thread = buildThread(title: 'Test');
+      vm.setThread(thread);
+      vm.addMessage(buildMessage(
+        threadId: thread.id,
+        role: MessageRole.user,
+        id: 'user-1',
+      ));
+      vm.addMessage(buildMessage(
+        threadId: thread.id,
+        role: MessageRole.assistant,
+        id: 'assistant-1',
+        content: '',
+      ));
+      repo.setStreamFragments(thread.id, [
+        const StreamChunk(text: '', imageUrl: '/images/gen_1.png', isDone: true),
+      ]);
+      vm.stubbedImageRef = '/tmp/attachments/a1.png';
+
+      final serverConfig = buildServerConfig();
+      final profile = buildServerProfile(baseUrl: 'http://10.0.2.2:8080');
+      await vm.doStreamResponse(
+        assistantMessageId: 'assistant-1',
+        serverConfig: serverConfig,
+        connection: profile,
+        customParams: null,
+        modelContextLength: null,
+      );
+
+      expect(vm.lastDownloadedImageUrl, equals('http://10.0.2.2:8080/images/gen_1.png'));
+    });
+
+    test('rewrites loopback image URLs to the connection host', () async {
+      final repo = FakeChatRepository();
+      final vm = TestViewModel(repo: repo);
+      final thread = buildThread(title: 'Test');
+      vm.setThread(thread);
+      vm.addMessage(buildMessage(
+        threadId: thread.id,
+        role: MessageRole.user,
+        id: 'user-1',
+      ));
+      vm.addMessage(buildMessage(
+        threadId: thread.id,
+        role: MessageRole.assistant,
+        id: 'assistant-1',
+        content: '',
+      ));
+      repo.setStreamFragments(thread.id, [
+        const StreamChunk(
+          text: '',
+          imageUrl: 'http://127.0.0.1:8000/images/gen_1.png',
+          isDone: true,
+        ),
+      ]);
+      vm.stubbedImageRef = '/tmp/attachments/a1.png';
+
+      final serverConfig = buildServerConfig();
+      final profile = buildServerProfile(baseUrl: 'http://10.0.2.2:8080');
+      await vm.doStreamResponse(
+        assistantMessageId: 'assistant-1',
+        serverConfig: serverConfig,
+        connection: profile,
+        customParams: null,
+        modelContextLength: null,
+      );
+
+      expect(vm.lastDownloadedImageUrl, equals('http://10.0.2.2:8000/images/gen_1.png'));
     });
   });
 

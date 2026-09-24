@@ -205,6 +205,81 @@ class TextSanitizer {
     return path.substring(dot + 1).toLowerCase();
   }
 
+  /// Finds the first image URL in [text]: a markdown image tag
+  /// (`![alt](http(s)://host/img.png)`), a markdown link to an image file
+  /// (`[alt](http(s)://host/img.png)`), or a bare `http(s)://host/img.png`.
+  ///
+  /// Only `http`/`https` URLs ending in a raster image extension
+  /// ([_imageUrlPattern]) are considered; URLs inside fenced code blocks are
+  /// ignored. Returns `null` when no such URL is present. Used by the streaming
+  /// layer to promote an image the model embedded in its caption text into a
+  /// native bubble attachment.
+  static String? extractFirstImageUrl(String text) {
+    if (text.isEmpty) return null;
+    if (!text.contains(RegExp(r'\.(png|jpe?g|gif|webp|bmp|avif)', caseSensitive: false))) {
+      return null;
+    }
+
+    for (final segment in parseSegments(text)) {
+      if (segment.type != SegmentType.markdown) continue;
+      final content = segment.content;
+
+      // 1) ![alt](http://host/img.png)
+      for (final m in RegExp(
+        r'!\[[^\]]*\]\((https?://[^\s)]+)\)',
+        caseSensitive: false,
+      ).allMatches(content)) {
+        final url = m[1]!;
+        if (_isImageFileUrl(url)) return url;
+      }
+
+      // 2) [alt](http://host/img.png). The preceding-char group keeps the
+      // already-rendered `![...](...)` form from matching here.
+      for (final m in RegExp(
+        r'(^|[^!])\[([^\]]*)\]\((https?://[^\s)]+)\)',
+        caseSensitive: false,
+      ).allMatches(content)) {
+        final url = m[3]!;
+        if (_isImageFileUrl(url)) return url;
+      }
+
+      // 3) bare http(s) image URL
+      for (final m in RegExp(
+        r'(^|[\s>])https?://[^\s()\[\]<`]+',
+        caseSensitive: false,
+      ).allMatches(content)) {
+        final prefix = m[1] ?? '';
+        final url = m[0]!.substring(prefix.length).replaceFirst(
+          RegExp(r'[,.;:!?]+$'),
+          '',
+        );
+        if (_isImageFileUrl(url)) return url;
+      }
+    }
+
+    return null;
+  }
+
+  /// Removes [imageUrl] and the markdown framing that wrapped it from [text]:
+  /// `![alt](url)` / `[alt](url)` image syntax and bare `url` occurrences.
+  ///
+  /// Used to hide a promoted image URL from the rendered caption so the user
+  /// doesn't see both a native attachment card and the raw markdown link below
+  /// it. [text] is returned unchanged when the URL is absent.
+  static String stripImageUrl(String text, String imageUrl) {
+    if (text.isEmpty || imageUrl.isEmpty) return text;
+    final url = imageUrl.replaceFirst(RegExp(r'[,.;:!?]+$'), '');
+    if (url.isEmpty) return text;
+    final escaped = RegExp.escape(url);
+    // Drop `![..](url)` / `[..](url)` framing first...
+    var result = text
+        .replaceAll(RegExp(r'!\[[^\]]*\]\(' + escaped + r'\)'), '')
+        .replaceAll(RegExp(r'\[[^\]]*\]\(' + escaped + r'\)'), '');
+    // ...then any bare or leftover occurrence, consuming immediately-following
+    // sentence punctuation so `see http://host/img.png.` becomes `see `.
+    return result.replaceAll(RegExp(escaped + r',?[.;:!?]*'), '');
+  }
+
   /// Extracts LaTeX segments ($...$ or $$...$$) and code blocks for custom rendering.
   /// Uses a state machine parser to avoid catastrophic backtracking from regex.
   static List<TextSegment> parseSegments(String text) {

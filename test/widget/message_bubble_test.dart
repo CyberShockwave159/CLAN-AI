@@ -3,8 +3,40 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:clan_ai/data/models/chat_message.dart';
 import 'package:clan_ai/ui/features/chat/views/message_bubble.dart';
 import 'package:clan_ai/ui/features/chat/widgets/artifact_file_card.dart';
+import 'package:clan_ai/ui/shared/widgets/attachment_image.dart';
+import 'package:url_launcher_platform_interface/link.dart';
+import 'package:url_launcher_platform_interface/url_launcher_platform_interface.dart';
+
+class _FakeUrlLauncher extends UrlLauncherPlatform {
+  final List<String> launched = <String>[];
+
+  @override
+  LinkDelegate? get linkDelegate => null;
+
+  @override
+  Future<bool> launch(
+    String url, {
+    required bool useSafariVC,
+    required bool useWebView,
+    required bool enableJavaScript,
+    required bool enableDomStorage,
+    required bool universalLinksOnly,
+    required Map<String, String> headers,
+    String? webOnlyWindowName,
+  }) async {
+    launched.add(url);
+    return true;
+  }
+}
 
 void main() {
+  final fakeLauncher = _FakeUrlLauncher();
+
+  setUp(() {
+    fakeLauncher.launched.clear();
+    UrlLauncherPlatform.instance = fakeLauncher;
+  });
+
   group('MessageBubble', () {
     testWidgets('renders user message correctly', (tester) async {
       final message = buildUserMessage();
@@ -245,6 +277,32 @@ void main() {
 
       expect(find.byType(ArtifactFileCard), findsOneWidget);
     });
+
+    testWidgets('renders an assistant image attachment natively without external launch', (tester) async {
+      final message = buildAssistantMessage(
+        content: 'Here is the generated image.',
+        imagePath: '/tmp/attachments/a_assistant-1.png',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MessageBubble(message: message, messageIndex: 0),
+          ),
+        ),
+      );
+
+      // Identical bubble treatment to user attachments: a thumbnail that opens
+      // the in-app fullscreen lightbox (no external browser redirect).
+      expect(find.byType(AttachmentImage), findsOneWidget);
+      expect(fakeLauncher.launched, isEmpty);
+
+      await tester.tap(find.byType(AttachmentImage));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(InteractiveViewer), findsOneWidget);
+      expect(fakeLauncher.launched, isEmpty);
+    });
   });
 }
 
@@ -277,6 +335,7 @@ ChatMessage buildAssistantMessage({
   String? filePath,
   String? fileName,
   String? fileMime,
+  String? imagePath,
 }) {
   return ChatMessage(
     id: 'assistant-1',
@@ -297,5 +356,6 @@ ChatMessage buildAssistantMessage({
     filePath: filePath,
     fileName: fileName,
     fileMime: fileMime,
+    imagePath: imagePath,
   );
 }

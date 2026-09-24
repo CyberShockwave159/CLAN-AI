@@ -1,0 +1,25 @@
+# CLAN AI — Caddyfile for LAN web deployment (see README "Web (PWA)").
+#
+# Cache policy keeps PWA users on the newest release:
+#   * index.html / service worker / version.json → no-cache (always revalidated)
+#   * everything else (content-hashed build assets)   → 1 day, revalidate
+# The app's service worker also fetches with cache:'no-store', so the SW always
+# revalidates against this server regardless of the max-age below.
+#
+# Usage: place the built app in /var/www/clan-ai and point the TLS certs at
+# your mkcert-generated _cert.pem / _key.pem.
+
+https://clan-lan {
+    root * /var/www/clan-ai
+    file_server
+
+    @critical {
+        path /index.html /clan_ai_sw.js /version.json /manifest.json
+    }
+    header @critical Cache-Control "no-cache, no-store, must-revalidate"
+
+    @statics path_regexp \.(js|json|css|png|jpg|jpeg|svg|ico|wasm)$
+    header @statics Cache-Control "public, max-age=86400, must-revalidate"
+
+    tls /path/to/_cert.pem /path/to/_key.pem
+}

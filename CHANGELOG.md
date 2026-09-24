@@ -93,6 +93,12 @@ Complete portability refactor enabling a Progressive Web App build of CLAN AI. T
 - The "Show menu" (⋮) button now appears on every chat/thread row in both the assistant-mode drawer and the roleplay drawer, not just the active conversation
 - Export/rename/delete menu actions operate on the tapped thread directly — exporting a non-active thread loads that thread's messages from the database instead of exporting the active conversation (it no longer needs to be selected first)
 
+**PWA Update Flow**
+- The web build now prompts users running an old build: `PwaUpdateChecker` polls the deployed `version.json` every 5 minutes and shows a "A new version of CLAN AI is available" snackbar with a **Reload** action as soon as a newer release is detected (web-only; immediate baseline on boot, offline boot never warns spuriously)
+- Service worker (`clan_ai_sw.js`) v2: navigation and asset fetches use `cache: 'no-store'`, so the browser HTTP cache / host `Cache-Control` can never serve a stale shell; successful navigations re-key the version cache and sweep stale `clan-ai-v*` caches even when the SW script ships unchanged
+- Added a bundled `Caddyfile` (no-cache for `index.html`/`clan_ai_sw.js`/`version.json`/`manifest.json`, `max-age=86400` for hashed assets) and documented the update flow in the README
+- `pubspec.yaml` version bumped to `1.3.0+1`
+
 ### 🔧 Changes
 
 **Windows CI/CD Pipeline**

@@ -121,6 +121,117 @@ void main() {
     });
   });
 
+  group('TextSanitizer.extractFirstImageUrl', () {
+    test('extracts a markdown image tag URL', () {
+      expect(
+        TextSanitizer.extractFirstImageUrl('Here: ![gen](http://host/gen_1.png)'),
+        'http://host/gen_1.png',
+      );
+    });
+
+    test('extracts a markdown link to an image file', () {
+      expect(
+        TextSanitizer.extractFirstImageUrl('See [image](http://host/img.jpeg)'),
+        'http://host/img.jpeg',
+      );
+    });
+
+    test('extracts a bare image URL', () {
+      expect(
+        TextSanitizer.extractFirstImageUrl(
+          'result: http://127.0.0.1:8000/images/gen_1.webp, nice',
+        ),
+        'http://127.0.0.1:8000/images/gen_1.webp',
+      );
+    });
+
+    test('returns the first image URL in order', () {
+      expect(
+        TextSanitizer.extractFirstImageUrl('![a](http://h/1.png) [b](http://h/2.jpg) http://h/3.gif'),
+        'http://h/1.png',
+      );
+    });
+
+    test('strips trailing sentence punctuation', () {
+      expect(
+        TextSanitizer.extractFirstImageUrl('see http://host/img.png.'),
+        'http://host/img.png',
+      );
+    });
+
+    test('supports uppercase and jpeg/gif/webp/bmp/avif extensions', () {
+      expect(TextSanitizer.extractFirstImageUrl('x https://h/a.JPG y'), 'https://h/a.JPG');
+      expect(TextSanitizer.extractFirstImageUrl('x https://h/a.avif y'), 'https://h/a.avif');
+      expect(TextSanitizer.extractFirstImageUrl('x https://h/a.gif y'), 'https://h/a.gif');
+    });
+
+    test('keeps query strings intact', () {
+      expect(
+        TextSanitizer.extractFirstImageUrl('![pic](https://h/img.jpeg?w=100)'),
+        'https://h/img.jpeg?w=100',
+      );
+    });
+
+    test('returns null for non-image or absent URLs', () {
+      expect(TextSanitizer.extractFirstImageUrl('just text'), isNull);
+      expect(TextSanitizer.extractFirstImageUrl('[OpenAI](https://openai.com)'), isNull);
+      expect(TextSanitizer.extractFirstImageUrl('https://host/img.png.gz'), isNull);
+    });
+
+    test('ignores image URLs inside fenced code blocks', () {
+      expect(
+        TextSanitizer.extractFirstImageUrl(
+          '```\nhttp://host/inside.png\n```\n\n![real](https://h/out.png)',
+        ),
+        'https://h/out.png',
+      );
+    });
+  });
+
+  group('TextSanitizer.stripImageUrl', () {
+    test('removes a bare image URL', () {
+      expect(
+        TextSanitizer.stripImageUrl('result: http://host/gen_1.png nice', 'http://host/gen_1.png'),
+        'result:  nice',
+      );
+    });
+
+    test('removes markdown image tag framing', () {
+      expect(
+        TextSanitizer.stripImageUrl('Here: ![gen](http://host/gen_1.png)', 'http://host/gen_1.png'),
+        'Here: ',
+      );
+    });
+
+    test('removes markdown link framing', () {
+      expect(
+        TextSanitizer.stripImageUrl('[image](http://host/img.png)', 'http://host/img.png'),
+        '',
+      );
+    });
+
+    test('removes the alt-echoing duplicated form', () {
+      expect(
+        TextSanitizer.stripImageUrl('![http://h/1.png](http://h/1.png)', 'http://h/1.png'),
+        '',
+      );
+    });
+
+    test('returns text unchanged when URL absent', () {
+      expect(
+        TextSanitizer.stripImageUrl('plain text', 'http://host/x.png'),
+        'plain text',
+      );
+    });
+
+    test('handles stray trailing punctuation in the input URL', () {
+      expect(
+        TextSanitizer.stripImageUrl('see http://host/img.png.', 'http://host/img.png.'),
+        'see ',
+      );
+    });
+  });
+
   group('TextSanitizer.extractFileRefs', () {
     test('extracts a markdown link to a text file', () {
       final refs = TextSanitizer.extractFileRefs('See [download](http://host/result.txt) done');

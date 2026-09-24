@@ -5,6 +5,7 @@ import 'package:clan_ai/core/constants/app_constants.dart';
 import 'package:clan_ai/core/errors/app_exception.dart';
 import 'package:clan_ai/core/network/sse_client.dart';
 import 'package:clan_ai/core/utils/message_attachment_store.dart';
+import 'package:clan_ai/core/utils/text_sanitizer.dart';
 import 'package:clan_ai/data/models/chat_message.dart';
 import 'package:clan_ai/data/models/chat_thread.dart';
 import 'package:clan_ai/data/models/server_config.dart';
@@ -91,6 +92,12 @@ mixin StreamMutationMixin on ChangeNotifier {
     Future<void>? imageDownload;
     Future<void>? fileDownload;
 
+    // The image URL promoted into a native attachment this response (from a
+    // `delta.image_url` or the caption-text fallback). Kept so any occurrence
+    // of it in the streamed markdown can be stripped, avoiding a duplicated
+    // orphaned link below the attachment card.
+    String? downloadedImageUrl;
+
     try {
       final stream = chatRepository.streamCompletion(
         serverConfig: serverConfig,
@@ -105,6 +112,31 @@ mixin StreamMutationMixin on ChangeNotifier {
       await for (final chunk in stream) {
         if (chunk.text.isNotEmpty) {
           pendingStreamBuffer += chunk.text;
+          // Hide an already-promoted image URL (SSE `image_url` path) from the
+          // caption so no orphaned markdown/raw link remains under the card.
+          if (downloadedImageUrl != null) {
+            _stripImageUrlFromStream(assistantMessageId, downloadedImageUrl);
+          }
+          // Text-ingest fallback: the server output the image URL only inside
+          // the caption (no `delta.image_url`). Detect it, strip it from the
+          // text, and promote it into a native attachment.
+          if (imageDownload == null && downloadedImageUrl == null) {
+            final idx = messages.indexWhere((m) => m.id == assistantMessageId);
+            if (idx >= 0 && idx < messages.length) {
+              final url = TextSanitizer.extractFirstImageUrl(
+                messages[idx].content + pendingStreamBuffer,
+              );
+              if (url != null) {
+                downloadedImageUrl = url;
+                _stripImageUrlFromStream(assistantMessageId, url);
+                imageDownload = _downloadImageArtifact(
+                  assistantMessageId,
+                  _resolveArtifactUrl(url, connection),
+                  (ref) => imageArtifactRef = ref,
+                );
+              }
+            }
+          }
         }
         if (chunk.reasoning != null && chunk.reasoning!.isNotEmpty) {
           pendingReasoningBuffer += chunk.reasoning!;
@@ -114,13 +146,18 @@ mixin StreamMutationMixin on ChangeNotifier {
         }
         // A-PROX artifacts: capture each at most once per response. The
         // download runs in the background so it never stalls the caption
-        // stream; the result is folded into the message before the final save.
+        // stream; the result is folded into the message as soon as it lands
+        // (live preview) and persisted before the final save.
         if (chunk.imageUrl != null &&
             chunk.imageUrl!.isNotEmpty &&
             imageDownload == null) {
-          final url = chunk.imageUrl!;
-          imageDownload = downloadImageArtifact(assistantMessageId, url)
-              .then((ref) => imageArtifactRef = ref);
+          final imageUrl = _resolveArtifactUrl(chunk.imageUrl!, connection);
+          downloadedImageUrl = imageUrl;
+          imageDownload = _downloadImageArtifact(
+            assistantMessageId,
+            imageUrl,
+            (ref) => imageArtifactRef = ref,
+          );
         }
         if (chunk.fileUrl != null &&
             chunk.fileUrl!.isNotEmpty &&
@@ -169,7 +206,12 @@ mixin StreamMutationMixin on ChangeNotifier {
       final finalMsgIndex = messages.indexWhere((m) => m.id == assistantMessageId);
       if (finalMsgIndex >= 0 && finalMsgIndex < messages.length) {
         final currentMsg = messages[finalMsgIndex];
-                final finalContent = currentMsg.content + pendingStreamBuffer;
+                var finalContent = currentMsg.content + pendingStreamBuffer;
+        // Ensure no orphaned image URL survives in the saved caption when the
+        // URL was only fully formed right at stream end.
+        if (downloadedImageUrl != null) {
+          finalContent = TextSanitizer.stripImageUrl(finalContent, downloadedImageUrl);
+        }
         pendingStreamBuffer = '';
 
         final completedMsg = currentMsg.copyWith(
@@ -206,6 +248,103 @@ mixin StreamMutationMixin on ChangeNotifier {
     return upToIndex != null
         ? messages.sublist(0, upToIndex)
         : messages.sublist(0, messages.indexWhere((m) => m.id == assistantMessageId));
+  }
+
+  /// Downloads an image artifact and, on success, immediately attaches its
+  /// [ref] to the streaming message so the bubble renders the image live while
+  /// the caption/reasoning text is still streaming. [onRef] (typically a
+  /// closure capturing `imageArtifactRef`) records the ref for the final save.
+  Future<void> _downloadImageArtifact(
+    String messageId,
+    String url,
+    FutureOr<void> Function(String? ref) onRef,
+  ) {
+    return downloadImageArtifact(messageId, url).then((ref) {
+      onRef(ref);
+      if (ref == null || ref.isEmpty) return;
+      final idx = messages.indexWhere((m) => m.id == messageId);
+      if (idx < 0 || idx >= messages.length) return;
+      final current = messages[idx];
+      if (current.imagePath != null && current.imagePath!.isNotEmpty) return;
+      messages[idx] = current.copyWith(imagePath: ref);
+      notifyListeners();
+    });
+  }
+
+  /// Resolves an artifact URL the server emitted against the active
+  /// [connection]: relative paths (`/images/gen_1.png`) are joined to the
+  /// connection's base URL, and loopback hostnames (`127.0.0.1`/`localhost`)
+  /// are rewritten to the connection host so mobile emulators and LAN clients
+  /// can reach the image. Non-absolute, already-absolute, or unknown shapes are
+  /// returned unchanged.
+  String _resolveArtifactUrl(String url, ServerProfile? connection) {
+    if (url.isEmpty) return url;
+    final base = connection?.baseUrl;
+    if (base == null || base.isEmpty) return url;
+
+    if (url.startsWith('/')) {
+      final baseUri = Uri.tryParse(base);
+      if (baseUri == null || baseUri.host.isEmpty) return url;
+      return baseUri.resolve(url).toString();
+    }
+
+    final urlUri = Uri.tryParse(url);
+    if (urlUri == null || !urlUri.hasScheme) return url;
+    final host = urlUri.host;
+    if (host != '127.0.0.1' && host != 'localhost' && host != '0.0.0.0') {
+      return url;
+    }
+    final baseUri = Uri.tryParse(base);
+    if (baseUri == null || baseUri.host.isEmpty) return url;
+    // Preserve the image URL's own port — the serving process may listen on a
+    // different port than the API base — but substitute the reachable host.
+    return urlUri.replace(host: baseUri.host).toString();
+  }
+
+  /// Removes [url] (and any `![..](url)` / `[..](url)` framing) from both the
+  /// already-flushed message content and the pending stream buffer, preserving
+  /// the content/buffer boundary even when the URL straddles it.
+  void _stripImageUrlFromStream(String assistantMessageId, String url) {
+    final idx = messages.indexWhere((m) => m.id == assistantMessageId);
+    if (idx < 0 || idx >= messages.length) return;
+    final content = messages[idx].content;
+    final buffer = pendingStreamBuffer;
+    if (content.isEmpty && buffer.isEmpty) return;
+
+    final combined = content + buffer;
+    final stripped = TextSanitizer.stripImageUrl(combined, url);
+    if (stripped == combined) return;
+
+    if (buffer.isEmpty) {
+      messages[idx] = messages[idx].copyWith(content: stripped);
+      notifyListeners();
+      return;
+    }
+
+    // Locate the span that was removed to split the stripped text back across
+    // the content/buffer boundary.
+    int diffAt = -1;
+    for (int i = 0; i < combined.length; i++) {
+      if (i >= stripped.length || combined[i] != stripped[i]) {
+        diffAt = i;
+        break;
+      }
+    }
+    if (diffAt == -1) return;
+    final removedLen = combined.length - stripped.length;
+    final removedEnd = diffAt + removedLen;
+    final overlap = removedEnd <= content.length
+        ? removedLen
+        : diffAt < content.length
+            ? content.length - diffAt
+            : 0;
+    final newBoundary = content.length - overlap;
+    if (newBoundary < 0 || newBoundary > stripped.length) return;
+    messages[idx] = messages[idx].copyWith(
+      content: stripped.substring(0, newBoundary),
+    );
+    pendingStreamBuffer = stripped.substring(newBoundary);
+    notifyListeners();
   }
 
   /// Downloads an A-PROX image artifact into the attachment store and returns

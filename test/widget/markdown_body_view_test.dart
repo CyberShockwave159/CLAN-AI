@@ -61,12 +61,13 @@ void main() {
 
     // Converted into a native inline image, not a standalone link.
     expect(find.byType(MarkdownImageView), findsOneWidget);
-    // The URL only surfaces inside the image widget itself (error fallback
-    // chip when the network image cannot load in a hermetic test).
+    // In a hermetic test the network image cannot load, so the in-app
+    // "unavailable" chip renders inside the image widget itself (no external
+    // browser redirect).
     expect(
       find.descendant(
         of: find.byType(MarkdownImageView),
-        matching: find.text(url),
+        matching: find.text('Image unavailable'),
       ),
       findsOneWidget,
     );
@@ -142,6 +143,28 @@ void main() {
     await tester.tap(find.textContaining('local'));
     await tester.pump();
 
+    expect(fakeLauncher.launched, isEmpty);
+  });
+
+  testWidgets('broken images never trigger external URL launches', (tester) async {
+    await tester.pumpWidget(wrap('![gen](http://host/gen_1.png)'));
+    await tester.pump();
+
+    // The thumbnail exists; the hermetic network failure surfaces as an in-app
+    // "unavailable" chip instead of an external browser redirect.
+    expect(find.byType(MarkdownImageView), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(MarkdownImageView),
+        matching: find.text('Image unavailable'),
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.byType(MarkdownImageView), warnIfMissed: false);
+    await tester.pumpAndSettle();
+
+    // Tapping opens the in-app fullscreen viewer — still no browser launch.
+    expect(find.byType(InteractiveViewer), findsOneWidget);
     expect(fakeLauncher.launched, isEmpty);
   });
 }
