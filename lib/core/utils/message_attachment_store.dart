@@ -29,6 +29,20 @@ class MessageAttachmentStore {
     'heif': 'image/heif',
   };
 
+  /// Reverse of [_mimeByExtension], used to recover an on-disk extension from
+  /// the MIME type a `data:` URL declares (`image/png` → `png`).
+  static const Map<String, String> _extensionByMime = {
+    'image/jpeg': 'jpg',
+    'image/jpg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'image/gif': 'gif',
+    'image/bmp': 'bmp',
+    'image/heic': 'heic',
+    'image/heif': 'heif',
+    'image/avif': 'avif',
+  };
+
   /// Saves [data] and returns an opaque reference that can later be passed to
   /// [readBytes] / [deleteIfExists]. The reference is derived from [fileId]
   /// (typically a message/variant id) with the original [extension] (without
@@ -62,12 +76,20 @@ class MessageAttachmentStore {
     );
   }
 
-  /// Fetches raw bytes from an HTTP(S) [url].
+  /// Fetches raw bytes from an HTTP(S) [url], or decodes an inline `data:`
+  /// URL (base64 or percent-encoded payload) without any network request.
+  ///
+  /// A-PROX can emit artifacts as base64 `data:` URIs
+  /// (`[image_generation]/[file_generation].inline_data_url`), which must be
+  /// decoded client-side instead of fetched. Pass through untouched otherwise.
   ///
   /// [client] is injectable for hermetic tests (e.g. `MockClient` from
   /// `package:http/testing`); when omitted a fresh client is used and closed
   /// before returning. Throws on non-200 responses / network failure.
   Future<Uint8List> fetchBytes(String url, {http.Client? client}) async {
+    final inlineBytes = dataUrlBytes(url);
+    if (inlineBytes != null) return inlineBytes;
+
     final httpClient = client ?? http.Client();
     try {
       final response = await httpClient
@@ -85,6 +107,30 @@ class MessageAttachmentStore {
         httpClient.close();
       }
     }
+  }
+
+  /// Decodes a `data:` URL (`data:<mime>[;base64],<payload>`) into raw bytes,
+  /// or `null` when [url] is not a data URL. Handles both base64 and
+  /// percent-encoded payloads; an unparseable data URL also yields `null`.
+  static Uint8List? dataUrlBytes(String url) {
+    if (!url.toLowerCase().startsWith('data:')) return null;
+    final uri = Uri.tryParse(url);
+    if (uri == null || uri.scheme != 'data') return null;
+    final data = uri.data;
+    if (data == null) return null;
+    try {
+      return data.contentAsBytes();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// The declared MIME type of a `data:` URL (e.g. `image/png`, `text/plain`),
+  /// or `null` when [url] is not a data URL.
+  static String? dataUrlMime(String url) {
+    final uri = Uri.tryParse(url);
+    if (uri == null || uri.scheme != 'data') return null;
+    return uri.data?.mimeType;
   }
 
   /// Downloads an A-PROX artifact from [url] into the store and returns an
@@ -109,8 +155,10 @@ class MessageAttachmentStore {
   }
 
   /// Extracts the file name from a URL (the path segment after the last `/`),
-  /// or null when the URL has none.
+  /// or null when the URL has none. Returns null for `data:` URLs — they have
+  /// no path, and their payload must not leak into a file name.
   static String? fileNameFromUrl(String url) {
+    if (url.toLowerCase().startsWith('data:')) return null;
     try {
       final uri = Uri.parse(url);
       final path = uri.path;
@@ -220,6 +268,20 @@ class MessageAttachmentStore {
     final dotIndex = path.lastIndexOf('.');
     if (dotIndex == -1 || dotIndex == path.length - 1) return 'jpg';
     return path.substring(dotIndex + 1);
+  }
+
+  /// Resolves a sensible image file extension for [url]: the MIME type a
+  /// `data:` URL declares (so `data:image/png;base64,…` saves as `.png`), or
+  /// [extensionOf] for a path-based URL.
+  static String extensionForUrl(String url) {
+    if (url.toLowerCase().startsWith('data:')) {
+      final mime = dataUrlMime(url)?.toLowerCase();
+      if (mime != null) {
+        final ext = _extensionByMime[mime];
+        if (ext != null) return ext;
+      }
+    }
+    return extensionOf(url);
   }
 
   static String _sanitizeExtension(String extension) {

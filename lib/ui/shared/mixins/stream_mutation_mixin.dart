@@ -350,13 +350,17 @@ mixin StreamMutationMixin on ChangeNotifier {
   /// Downloads an A-PROX image artifact into the attachment store and returns
   /// its local reference (or null on failure). Concrete VMs may override for
   /// hermetic tests.
+  ///
+  /// Accepts both served `http(s)` URLs and base64 `data:` URLs
+  /// (`[image_generation].inline_data_url`): the extension for the stored file
+  /// is derived from the artifact URL, so an inline PNG keeps its `.png`.
   Future<String?> downloadImageArtifact(String messageId, String url) async {
     try {
       final bytes = await MessageAttachmentStore.instance.fetchBytes(url);
       return await MessageAttachmentStore.instance.saveImage(
         fileId: messageId,
         data: bytes,
-        extension: MessageAttachmentStore.extensionOf(url),
+        extension: MessageAttachmentStore.extensionForUrl(url),
       );
     } catch (_) {
       return null;

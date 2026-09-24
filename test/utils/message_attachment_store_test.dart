@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -26,6 +27,50 @@ void main() {
           .fetchBytes('http://host/file.png', client: client);
 
       expect(bytes, equals([1, 2, 3, 4]));
+    });
+
+    test('fetchBytes decodes a base64 data URL without a network call', () async {
+      final payload = 'aGVsbG8gd29ybGQ='; // base64("hello world")
+      final inlineClient = MockClient((request) async {
+        fail('data: URLs must not hit the network');
+      });
+
+      final bytes = await MessageAttachmentStore.instance.fetchBytes(
+        'data:text/plain;base64,$payload',
+        client: inlineClient,
+      );
+
+      expect(utf8.decode(bytes), equals('hello world'));
+    });
+
+    test('fetchBytes decodes a percent-encoded data URL without a network call', () async {
+      final inlineClient = MockClient((request) async {
+        fail('data: URLs must not hit the network');
+      });
+
+      final bytes = await MessageAttachmentStore.instance.fetchBytes(
+        'data:text/plain,hello%20world',
+        client: inlineClient,
+      );
+
+      expect(utf8.decode(bytes), equals('hello world'));
+    });
+
+    test('dataUrlBytes returns null for non-data URLs', () {
+      expect(MessageAttachmentStore.dataUrlBytes('http://host/file.png'), isNull);
+      expect(MessageAttachmentStore.dataUrlBytes(''), isNull);
+    });
+
+    test('dataUrlMime returns the declared MIME type', () {
+      expect(
+        MessageAttachmentStore.dataUrlMime('data:image/png;base64,AAAA'),
+        equals('image/png'),
+      );
+      expect(
+        MessageAttachmentStore.dataUrlMime('data:text/plain;base64,AAAA'),
+        equals('text/plain'),
+      );
+      expect(MessageAttachmentStore.dataUrlMime('http://host/a.png'), isNull);
     });
 
     test('fetchBytes throws AppException on non-200', () async {
@@ -117,6 +162,17 @@ void main() {
       expect(MessageAttachmentStore.fileNameFromUrl(''), isNull);
     });
 
+    test('fileNameFromUrl returns null for data URLs', () {
+      expect(
+        MessageAttachmentStore.fileNameFromUrl('data:text/plain;base64,aGVsbG8='),
+        isNull,
+      );
+      expect(
+        MessageAttachmentStore.fileNameFromUrl('data:image/png;base64,AAAA'),
+        isNull,
+      );
+    });
+
     test('saveImage writes bytes under the attachments directory', () async {
       final bytes = Uint8List.fromList([1, 2, 3, 4]);
       final path = await store.saveImage(
@@ -175,6 +231,25 @@ void main() {
       expect(MessageAttachmentStore.extensionOf('/tmp/photo.png'), equals('png'));
       expect(MessageAttachmentStore.extensionOf('/tmp/photo.JPEG'), equals('JPEG'));
       expect(MessageAttachmentStore.extensionOf('/tmp/noextension'), equals('jpg'));
+    });
+
+    test('extensionForUrl derives the extension from a data URL mime', () {
+      expect(
+        MessageAttachmentStore.extensionForUrl('data:image/png;base64,aGVsbG8='),
+        equals('png'),
+      );
+      expect(
+        MessageAttachmentStore.extensionForUrl('data:image/jpeg;base64,aGVsbG8='),
+        equals('jpg'),
+      );
+      expect(
+        MessageAttachmentStore.extensionForUrl('data:image/webp;base64,aGVsbG8='),
+        equals('webp'),
+      );
+      expect(
+        MessageAttachmentStore.extensionForUrl('http://host/a.webp'),
+        equals('webp'),
+      );
     });
 
     group('mimeTypeFromBytes', () {

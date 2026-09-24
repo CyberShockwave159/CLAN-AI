@@ -8,6 +8,14 @@ class TextSanitizer {
     caseSensitive: false,
   );
 
+  /// Matches a `data:` URL whose MIME is a common raster-image type (used for
+  /// A-PROX `inline_data_url` artifacts that are embedded as base64 payloads
+  /// instead of served over HTTP).
+  static final RegExp _dataImageUrlPattern = RegExp(
+    r'^data:image/(?:png|jpe?g|gif|webp|bmp|avif)(?:;|,)',
+    caseSensitive: false,
+  );
+
   /// File extensions treated as LLM-generated artifacts. URLs ending in one of
   /// these are lifted out of the rendered markdown into a distinct tappable
   /// "save file" object. Ordinary web pages (no extension, `.html`, ...) and
@@ -91,10 +99,19 @@ class TextSanitizer {
     return _imageUrlPattern.hasMatch(trimmed);
   }
 
+  /// Returns `true` if [url] is a `data:` URL declaring a raster image MIME
+  /// type (e.g. `data:image/png;base64,…`).
+  static bool _isDataImageUrl(String url) {
+    final trimmed = url.replaceFirst(RegExp(r'[,.;:!?]+$'), '');
+    return _dataImageUrlPattern.hasMatch(trimmed);
+  }
+
   /// Rewrites URLs that point at image files into markdown image syntax so the
   /// renderer can display them natively instead of as plain clickable links.
   ///
-  /// Only `http`/`https` URLs are considered. Two shapes are handled:
+  /// Only `http`/`https` URLs are considered for path-extension detection; a
+  /// `data:` URL is treated as an image when it declares a raster MIME type
+  /// (`data:image/…`). Two shapes are handled:
   ///   1. `[label](http://host/image.png)` markdown links → `![label](url)`
   ///   2. bare `http://host/image.png` URLs         → `![url](url)`
   ///
@@ -106,7 +123,8 @@ class TextSanitizer {
     if (text.isEmpty) return text;
 
     // Fast path: nothing that looks like an image URL → unchanged.
-    if (!text.contains(RegExp(r'\.(png|jpe?g|gif|webp|bmp|avif)', caseSensitive: false))) {
+    if (!text.toLowerCase().contains('data:image/') &&
+        !text.contains(RegExp(r'\.(png|jpe?g|gif|webp|bmp|avif)', caseSensitive: false))) {
       return text;
     }
 
@@ -134,6 +152,29 @@ class TextSanitizer {
         final url = m[0]!.substring(prefix.length);
         final trimmed = url.replaceFirst(RegExp(r'[,.;:!?]+$'), '');
         if (!_imageUrlPattern.hasMatch(trimmed)) return m[0]!;
+        return '$prefix![$trimmed]($trimmed)';
+      },
+    );
+
+    // 3) [label](data:image/…) markdown links → ![label](url), mirroring rule 1
+    // for A-PROX inline (base64 data-URL) artifacts.
+    text = text.replaceAllMapped(
+      RegExp(r'(^|[^!])\[([^\]]*)\]\((data:[^)]+)\)', caseSensitive: false),
+      (m) {
+        final url = m[3]!;
+        if (!_isDataImageUrl(url)) return m[0]!;
+        return '${m[1]}![${m[2]}]($url)';
+      },
+    );
+
+    // 4) bare data:image/… URL → ![url](url).
+    text = text.replaceAllMapped(
+      RegExp(r'(^|[\s>])(data:image/[^\s()\[\]<`]+)', caseSensitive: false),
+      (m) {
+        final prefix = m[1] ?? '';
+        final url = m[2]!;
+        final trimmed = url.replaceFirst(RegExp(r'[,.;:!?]+$'), '');
+        if (!_isDataImageUrl(trimmed)) return m[0]!;
         return '$prefix![$trimmed]($trimmed)';
       },
     );
@@ -208,15 +249,18 @@ class TextSanitizer {
   /// Finds the first image URL in [text]: a markdown image tag
   /// (`![alt](http(s)://host/img.png)`), a markdown link to an image file
   /// (`[alt](http(s)://host/img.png)`), or a bare `http(s)://host/img.png`.
+  /// A `data:` URL declaring a raster image MIME type (`data:image/…`) is
+  /// treated as an image too, so A-PROX `inline_data_url` artifacts embedded
+  /// in a caption are still promoted into a native attachment.
   ///
-  /// Only `http`/`https` URLs ending in a raster image extension
-  /// ([_imageUrlPattern]) are considered; URLs inside fenced code blocks are
+  /// Only image URLs are considered; URLs inside fenced code blocks are
   /// ignored. Returns `null` when no such URL is present. Used by the streaming
   /// layer to promote an image the model embedded in its caption text into a
   /// native bubble attachment.
   static String? extractFirstImageUrl(String text) {
     if (text.isEmpty) return null;
-    if (!text.contains(RegExp(r'\.(png|jpe?g|gif|webp|bmp|avif)', caseSensitive: false))) {
+    if (!text.toLowerCase().contains('data:image/') &&
+        !text.contains(RegExp(r'\.(png|jpe?g|gif|webp|bmp|avif)', caseSensitive: false))) {
       return null;
     }
 
@@ -254,6 +298,36 @@ class TextSanitizer {
           '',
         );
         if (_isImageFileUrl(url)) return url;
+      }
+
+      // 4) ![alt](data:image/…) markdown image tag
+      for (final m in RegExp(
+        r'!\[[^\]]*\]\((data:[^)]+)\)',
+        caseSensitive: false,
+      ).allMatches(content)) {
+        final url = m[1]!;
+        if (_isDataImageUrl(url)) return url;
+      }
+
+      // 5) [alt](data:image/…) markdown link
+      for (final m in RegExp(
+        r'(^|[^!])\[([^\]]*)\]\((data:[^)]+)\)',
+        caseSensitive: false,
+      ).allMatches(content)) {
+        final url = m[3]!;
+        if (_isDataImageUrl(url)) return url;
+      }
+
+      // 6) bare data:image/… URL
+      for (final m in RegExp(
+        r'(^|[\s>])(data:image/[^\s()\[\]<`]+)',
+        caseSensitive: false,
+      ).allMatches(content)) {
+        final url = m[2]!.replaceFirst(
+          RegExp(r'[,.;:!?]+$'),
+          '',
+        );
+        if (_isDataImageUrl(url)) return url;
       }
     }
 

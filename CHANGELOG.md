@@ -77,6 +77,11 @@ Complete portability refactor enabling a Progressive Web App build of CLAN AI. T
 - Raster image URLs the model puts in its response (markdown links or bare `http(s)` URLs ending in `.png`/`.jpeg`/`.jpg`/`.gif`/`.webp`/`.bmp`/`.avif`) now render as actual images in the chat log instead of as links; tap to open a full-screen, zoomable lightbox
 - `TextSanitizer.embedImageLinks` rewrites image URLs in markdown segments (code-block and math content untouched); `MarkdownImageView` fetches them with an HTTP client (cached per URL) and falls back to the plain link on failure or the debug network layer
 
+**Inline `data:` URL Artifacts (A-PROX `inline_data_url`)**
+- A-PROX can emit `image_url` / `file_url` as base64 `data:` URLs (`[image_generation]/[file_generation].inline_data_url`) instead of served `http(s)://…/images|files/…` URLs — reachable even when `/images`/`/files` is firewalled or the server is behind no reverse proxy
+- `MessageAttachmentStore.fetchBytes` now decodes base64 and percent-encoded `data:` URLs client-side (no network call), so image artifacts (`delta.image_url`), file artifacts (`delta.file_url`), and caption-lifted downloads all work with inline payloads; `fileNameFromUrl` returns null for `data:` URLs and the stored image extension is derived from the declared MIME (`data:image/png` → `.png`)
+- `TextSanitizer.embedImageLinks` / `extractFirstImageUrl` promote `data:image/…` links, markdown images, and bare URLs into inline-rendered images (decoded via `Image.memory`) and native streaming attachment cards — non-image `data:` URLs (`data:text/…`) are left as plain text
+
 **Code Block Rendering Fix**
 - The first line of code stays inside the code body instead of being misread as the block's language; the header shows only the real language, ellipsized when very wide
 - `TextSanitizer.parseSegments` now keeps the opening fence + language line in the code-block segment payload (the renderer strips it), and the header language label is wrapped in `Expanded` so a pathological long label can no longer push the Copy button off-screen

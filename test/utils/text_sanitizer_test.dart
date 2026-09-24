@@ -92,6 +92,32 @@ void main() {
         '![a](http://h/1.png) and ![http://h/2.jpg](http://h/2.jpg) together ![b](http://h/3.gif)',
       );
     });
+
+    test('converts markdown links to data:image URLs into markdown images', () {
+      const dataUrl = 'data:image/png;base64,iVBORw0KGgo=';
+      expect(
+        TextSanitizer.embedImageLinks('[img]($dataUrl)'),
+        '![img]($dataUrl)',
+      );
+    });
+
+    test('converts bare data:image URLs into markdown images', () {
+      const dataUrl = 'data:image/png;base64,iVBORw0KGgo=';
+      expect(
+        TextSanitizer.embedImageLinks('see $dataUrl here'),
+        'see ![$dataUrl]($dataUrl) here',
+      );
+    });
+
+    test('leaves existing data:image markdown syntax untouched', () {
+      const input = '![alt](data:image/webp;base64,AAAA)';
+      expect(TextSanitizer.embedImageLinks(input), input);
+    });
+
+    test('leaves non-image data: URLs untouched', () {
+      const input = 'note: data:text/plain;base64,aGVsbG8= and [x](data:text/plain;base64,aGVsbG8=)';
+      expect(TextSanitizer.embedImageLinks(input), input);
+    });
   });
 
   group('TextSanitizer.parseSegments code blocks', () {
@@ -186,6 +212,47 @@ void main() {
         'https://h/out.png',
       );
     });
+
+    test('extracts a markdown image tag pointing at a data:image URL', () {
+      const dataUrl = 'data:image/png;base64,iVBORw0KGgo=';
+      expect(
+        TextSanitizer.extractFirstImageUrl('Here: ![$dataUrl]($dataUrl)'),
+        dataUrl,
+      );
+    });
+
+    test('extracts a markdown link to a data:image URL', () {
+      const dataUrl = 'data:image/webp;base64,AAAA';
+      expect(
+        TextSanitizer.extractFirstImageUrl('See [img]($dataUrl)'),
+        dataUrl,
+      );
+    });
+
+    test('extracts a bare data:image URL and strips trailing punctuation', () {
+      expect(
+        TextSanitizer.extractFirstImageUrl(
+          'result: data:image/jpeg;base64,${'A' * 8}.',
+        ),
+        'data:image/jpeg;base64,${'A' * 8}',
+      );
+    });
+
+    test('returns null for non-image data: URLs', () {
+      expect(
+        TextSanitizer.extractFirstImageUrl('note: data:text/plain;base64,aGVsbG8='),
+        isNull,
+      );
+    });
+
+    test('ignores data:image URLs inside fenced code blocks', () {
+      expect(
+        TextSanitizer.extractFirstImageUrl(
+          '```\ndata:image/png;base64,AAAA\n```\n\nsee ![real](data:image/png;base64,BBBB)',
+        ),
+        'data:image/png;base64,BBBB',
+      );
+    });
   });
 
   group('TextSanitizer.stripImageUrl', () {
@@ -228,6 +295,18 @@ void main() {
       expect(
         TextSanitizer.stripImageUrl('see http://host/img.png.', 'http://host/img.png.'),
         'see ',
+      );
+    });
+
+    test('removes a data:image URL and its markdown framing', () {
+      const dataUrl = 'data:image/png;base64,aGVsbG8=';
+      expect(
+        TextSanitizer.stripImageUrl('result: ![$dataUrl]($dataUrl) nice', dataUrl),
+        'result:  nice',
+      );
+      expect(
+        TextSanitizer.stripImageUrl('result: $dataUrl nice', dataUrl),
+        'result:  nice',
       );
     });
   });
