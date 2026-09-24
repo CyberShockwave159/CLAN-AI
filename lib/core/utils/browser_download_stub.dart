@@ -4,6 +4,7 @@ Future<String?> browserDownload({
   required String filename,
   required String content,
   required String mimeType,
+  List<int>? bytes,
 }) {
   throw UnsupportedError('browserDownload is only supported on web');
 }

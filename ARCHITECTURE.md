@@ -199,7 +199,7 @@ Assistant messages include a memory chip when `ragMemoryCount > 0`:
 
 ## SQLite Schema
 
-### Version 13 (Latest)
+### Version 14 (Latest)
 
 ```sql
 -- Thread table: conversation containers
@@ -238,6 +238,9 @@ CREATE TABLE messages (
   rag_memory_count INTEGER DEFAULT NULL, -- count of RAG memories injected
   reasoning_content TEXT NOT NULL DEFAULT "",  -- thinking block storage
   image_path TEXT,                       -- absolute path to image attachment file (user msgs)
+  file_path TEXT,                        -- absolute path to file artifact file (from image_url/file_url artifacts)
+  file_name TEXT,                        -- original filename of the file artifact
+  file_mime TEXT,                        -- MIME type of the file artifact
   FOREIGN KEY (thread_id) REFERENCES threads (id) ON DELETE CASCADE
 );
 
@@ -287,6 +290,7 @@ CREATE TABLE persona_templates (
 | v10 → v11 | Added `persona_name` column to persona_templates; auto-derives from `persona_text` for existing templates |
 | v11 → v12 | Added `variant_index`, `total_variants`, `sibling_ids` columns to messages for conversation branching |
 | v12 → v13 | Added `image_path` column to messages (absolute path to attached image file, user messages only) |
+| v13 → v14 | Added `file_path`, `file_name`, `file_mime` columns to messages (downloaded file artifacts from `image_url`/`file_url` SSE deltas) |
 
 ---
 

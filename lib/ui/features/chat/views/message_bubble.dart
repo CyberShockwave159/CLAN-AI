@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:clan_ai/core/constants/app_constants.dart';
 import 'package:clan_ai/core/constants/app_theme.dart';
 import 'package:clan_ai/core/constants/clan_theme_colors.dart';
+import 'package:clan_ai/core/utils/file_saver.dart';
+import 'package:clan_ai/core/utils/message_attachment_store.dart';
 import 'package:clan_ai/data/models/chat_message.dart';
 import 'package:clan_ai/ui/features/chat/widgets/markdown_body_view.dart';
 import 'package:clan_ai/ui/features/chat/widgets/token_speed_badge.dart';
@@ -335,6 +337,43 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
+  /// Saves a downloaded artifact file to a user-facing location. Uses the
+  /// app's [FileSaver] export path (no dedicated share plugin is shipped), so
+  /// the "download" and "share" actions resolve to the same save mechanism.
+  Future<void> _saveArtifactFile(BuildContext context, {required bool share}) async {
+    final ref = message.filePath;
+    if (ref == null || ref.isEmpty) return;
+    Uint8List? bytes;
+    try {
+      bytes = await MessageAttachmentStore.instance.readBytes(ref);
+    } catch (_) {}
+    if (!context.mounted) return;
+    if (bytes == null) {
+      showAppSnackBar(context, 'File no longer exists');
+      return;
+    }
+    final filename = message.fileName ??
+        MessageAttachmentStore.fileNameFromUrl(ref) ??
+        'artifact';
+    final mime = message.fileMime ?? 'application/octet-stream';
+    final saved = await FileSaver.saveBytes(
+      filename: filename,
+      bytes: bytes,
+      mimeType: mime,
+    );
+    if (context.mounted) {
+      if (saved == null || saved.isEmpty) {
+        showAppSnackBar(context, 'Could not save file');
+      } else {
+        showAppSnackBar(
+          context,
+          '${share ? 'Saved' : 'Downloaded'}: $saved',
+          duration: const Duration(seconds: 2),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isUser = message.role == MessageRole.user;
@@ -436,7 +475,7 @@ class MessageBubble extends StatelessWidget {
                         isUser: isUser,
                       ),
 
-                    // Image attachment (user messages only)
+                    // Image attachment
                     if (message.imagePath != null && message.imagePath!.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 6),
@@ -472,6 +511,48 @@ class MessageBubble extends StatelessWidget {
                                 ),
                               ),
                             ),
+                          ),
+                        ),
+                      ),
+
+                    // File artifact chip (assistant messages)
+                    if (!isUser && message.filePath != null && message.filePath!.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: context.clanSurfaceVariant,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.insert_drive_file_outlined, size: 18),
+                              const SizedBox(width: 8),
+                              ConstrainedBox(
+                                constraints: const BoxConstraints(maxWidth: 180),
+                                child: Text(
+                                  message.fileName ?? 'Attachment',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(fontSize: 13, color: context.clanTextPrimary),
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              IconButton(
+                                visualDensity: VisualDensity.compact,
+                                icon: const Icon(Icons.download_rounded, size: 18),
+                                tooltip: 'Download file',
+                                onPressed: () => _saveArtifactFile(context, share: false),
+                              ),
+                              IconButton(
+                                visualDensity: VisualDensity.compact,
+                                icon: const Icon(Icons.share_outlined, size: 18),
+                                tooltip: 'Share file',
+                                onPressed: () => _saveArtifactFile(context, share: true),
+                              ),
+                            ],
                           ),
                         ),
                       ),

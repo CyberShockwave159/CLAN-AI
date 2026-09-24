@@ -68,6 +68,7 @@ Complete portability refactor enabling a Progressive Web App build of CLAN AI. T
 - `lib/core/utils/message_attachment_store.dart` — images are stored as files on disk with only the absolute path in `messages.image_path` (mirrors `AvatarStorageService`); files are cleaned up automatically when their message or thread is deleted
 - The OpenAI payload embeds the attachment as a base64 `image_url` content part, so it works with any OpenAI-compatible vision-capable backend (e.g. llama.cpp llama-server with a multimodal model)
 - Magic-byte MIME sniffing (`mimeTypeFromBytes`) detects the true image format (PNG/JPEG/GIF/WebP) even when the file extension lies
+- **File & Image Artifacts (A-PROX `/flags`)** — streamed `delta.image_url` / `delta.file_url` (and `message.image_url`/`message.file_url` on non-streaming responses) are parsed in `SseClient._processDataBlock` (object `{url,name,mime}` and bare-string forms) and forwarded through `filterReasoning` reconstructed chunks. The shared `StreamMutationMixin` (chat + roleplay) downloads each artifact bytes once into `MessageAttachmentStore` and persists the path + original name + MIME to SQLite (schema v14 `file_path`/`file_name`/`file_mime` columns, migration v13→v14). Assistant images render inline; files render as a tap-to-download / share chip via `FileSaver.saveBytes`.
 
 **Thread Menus in Drawers**
 - The "Show menu" (⋮) button now appears on every chat/thread row in both the assistant-mode drawer and the roleplay drawer, not just the active conversation

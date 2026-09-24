@@ -229,6 +229,7 @@ Supported build targets: `linux`, `macos`, `windows`, `apk` (Android), `ios`, `w
 - Client-Side RAG — Pure Dart feature hashing embeddings (256-dim, char trigrams) with SQLite cosine similarity; zero ML dependencies. Configurable Top-K (1-10) and minimum relevance threshold (0.0-1.0) in Generation Parameters sheet
 - **Conversation branching** — Regenerate and edit responses create sibling variants. All variants share a complete `siblingIds` array. Navigation loads siblings from DB, sorts by `variantIndex`, and indexes into the sorted list via `ChatRepository.getAllMessagesForThread()` (bypasses message deduplication).
 - **Image attachments** — Attach one image per user message (chat & roleplay). Images are stored on disk with only the absolute path in SQLite, sent as base64 `image_url` content parts over the OpenAI-compatible API (works with any vision-capable backend), tap to view in a full-screen lightbox, and auto-cleaned when messages/threads are deleted. Magic-byte sniffing detects the true format even when the file extension lies.
+- **File & image artifacts** — When the server (A-PROX `/flags`) emits `delta.image_url` / `delta.file_url` in the SSE stream (or `message.image_url`/`message.file_url` on non-streaming responses), the client downloads the artifact bytes once into the message attachment store and persists the local path + original filename + MIME in SQLite (schema v14 `file_path`/`file_name`/`file_mime` columns). Assistant images render inline (reusing the image attachment view); files render as a tap-to-download / share chip in the message bubble (`FileSaver.saveBytes`).
 - SQLite local persistence with full thread/message history (schema v13)
 - Automatic server health polling with fallback endpoints (`/health` → `/props` → `/v1/models`)
 - Dark mode by default (OLED-optimized), configurable light and custom themes
@@ -309,7 +310,7 @@ Characters can have multiple opening messages:
 - **ServerProfile consolidation:** `ServerConnectionDetails` removed; `ServerProfile` serves as connection details throughout
 - **Dependency wiring** in `lib/main.dart` via constructor injection
 - **Four root providers**: `SettingsViewModel`, `ChatViewModel`, `RoleplayViewModel`, `PersonaTemplateViewModel`
-- **SQLite** via `sqflite` (desktop uses `sqflite_common_ffi`, mobile uses native, web uses `sqflite_common_ffi_web` — WASM in-browser engine persisted to IndexedDB), schema version 13 (`threads`, `messages` with `variant_index`/`total_variants`/`sibling_ids` for conversation branching and `image_path` for image attachments, `characters`, `persona_templates` tables). Web attachments live in a second `clan_ai_attachments.db` (BLOB store, same persistence).
+- **SQLite** via `sqflite` (desktop uses `sqflite_common_ffi`, mobile uses native, web uses `sqflite_common_ffi_web` — WASM in-browser engine persisted to IndexedDB), schema version 14 (`threads`, `messages` with `variant_index`/`total_variants`/`sibling_ids` for conversation branching and `image_path`/`file_path`/`file_name`/`file_mime` for image & file artifact attachments, `characters`, `persona_templates` tables). Web attachments live in a second `clan_ai_attachments.db` (BLOB store, same persistence).
 - **Secure API keys** stored in OS Keychain/KeyStore via `SecureStorageService` (`flutter_secure_storage`); on web the plugin falls back to localStorage-grade storage (obfuscated, not vault-grade)
 - **Single `CharacterRepository`** instance injected via constructor throughout the app
 - **Streaming** via Server-Sent Events with 20ms UI throttling to prevent frame drops
@@ -354,13 +355,13 @@ This produces files in the `dist/` directory:
 
 ```bash
 flutter analyze        # lint + typecheck
-flutter test           # runs all 28 test files (505 total tests)
+flutter test           # runs all 31 test files (523 total tests)
 flutter run            # launch app
 ```
 
 ### Testing
 
-28 test files, 505 total tests. All tests use fake repositories (no real SQLite or network). ViewModels expose private state via setters for test injection.
+31 test files, 523 total tests. All tests use fake repositories (no real SQLite or network). ViewModels expose private state via setters for test injection.
 
 **Coverage by layer:**
 - **Domain** — `GenerationParams` serialization (OpenAI payloads, TextSanitizer segment parsing, reasoning flags), model roundtrip serialization (ChatThread, ChatMessage, CharacterProfile, PersonaTemplate, ServerConfig)
@@ -377,7 +378,7 @@ flutter run            # launch app
 - **Conversation branching**: Regenerate and edit operations truncate at the parent message and create new sibling branches. Navigation between variants uses `variantIndex` + `siblingIds`. All variants in a regeneration group share a complete `siblingIds` array. `doSwitchVariant` loads all siblings from DB, sorts by `variantIndex`, and indexes into the sorted list. Regenerate builds a complete `allSiblingIds` set (filtered by `role == assistant` and shared `parentId`) and assigns it to every variant. Branches are linked via `branchFromThreadId` on `ChatThread`. In roleplay mode, the first assistant message (character's greeting) has the regenerate button disabled until the user has replied.
 - **Android networking**: `127.0.0.1` refers to the Android device's loopback, not your host machine. Use `10.0.2.2` for the Android emulator or your host's LAN IP for physical devices.
 - **SQLite desktop FFI**: On Linux/Windows/macOS, `sqflite_common_ffi` is initialized **once** in `main.dart` (`_initSqliteFfi()`). Do not call `sqfliteFfiInit()` again — it will trigger a warning. On web the same function binds the WASM factory (`databaseFactoryFfiWeb` from `sqflite_common_ffi_web`) — native path is untouched.
-- **Database migration**: DB schema is version 13 (added `image_path` to messages in v13, `variant_index`, `total_variants`, `sibling_ids` columns to messages table for conversation branching in v12, `persona_name` to `persona_templates` in v11, `persona_name`/`persona_description` to `characters` in v10). If you encounter schema errors, clear the app's local storage or delete `clan_ai.db`.
+- **Database migration**: DB schema is version 14 (added `file_path`, `file_name`, `file_mime` to messages in v14, `image_path` to messages in v13, `variant_index`, `total_variants`, `sibling_ids` columns to messages table for conversation branching in v12, `persona_name` to `persona_templates` in v11, `persona_name`/`persona_description` to `characters` in v10). If you encounter schema errors, clear the app's local storage or delete `clan_ai.db`.
 - **Reasoning block streaming**: The `ReasoningBlock` widget displays thinking/reasoning content when the "View Thinking" toggle is enabled in Settings. Models can provide reasoning via dedicated fields (`delta.reasoning`, `delta.reasoning_content`, `delta.thought`) or inline tags (```xml, `<thought>`, `<reasoning>`). The `filterReasoning` stream pipeline handles both formats. Older llama.cpp versions may not return reasoning content.
 - **Roleplay thread separation**: `ChatViewModel.loadThreads()` filters out threads with `characterId != null` (roleplay threads). `RoleplayViewModel.loadLastChat()` loads threads with `characterId != null` (or falls back for legacy threads).
 - **RAG isolation**: Each character's embeddings are stored with `character_id` in the vector store. Queries are strictly `WHERE character_id = ?` — no cross-character memory leakage.

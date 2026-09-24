@@ -58,6 +58,32 @@ class TestViewModel extends ChangeNotifier with StreamMutationMixin {
   @override
   ChatRepository get chatRepository => _repo;
 
+  String? stubbedImageRef;
+  String? stubbedFileRef;
+  String? lastDownloadedImageUrl;
+  String? lastDownloadedFileUrl;
+  String? lastDownloadedFileName;
+  String? lastDownloadedFileMime;
+
+  @override
+  Future<String?> downloadImageArtifact(String messageId, String url) async {
+    lastDownloadedImageUrl = url;
+    return stubbedImageRef;
+  }
+
+  @override
+  Future<String?> downloadFileArtifact(
+    String messageId,
+    String url,
+    String? fileName,
+    String? mime,
+  ) async {
+    lastDownloadedFileUrl = url;
+    lastDownloadedFileName = fileName;
+    lastDownloadedFileMime = mime;
+    return stubbedFileRef;
+  }
+
   void setThread(ChatThread thread) => _activeThread = thread;
 
   void addMessage(ChatMessage msg) {
@@ -386,6 +412,164 @@ void main() {
 
       final result = vm.getMessageById('assistant-1');
       expect(result!.reasoningContent, equals('Previous reasoningNew reasoning'));
+    });
+
+    test('captures image artifact from empty-text chunk and persists imagePath',
+        () async {
+      final repo = FakeChatRepository();
+      final vm = TestViewModel(repo: repo);
+      final thread = buildThread(title: 'Test');
+      vm.setThread(thread);
+      vm.addMessage(buildMessage(
+        threadId: thread.id,
+        role: MessageRole.user,
+        id: 'user-1',
+      ));
+      vm.addMessage(buildMessage(
+        threadId: thread.id,
+        role: MessageRole.assistant,
+        id: 'assistant-1',
+        content: '',
+      ));
+      repo.setStreamFragments(thread.id, [
+        const StreamChunk(text: '', imageUrl: 'http://host/img.png', isDone: true),
+      ]);
+      vm.stubbedImageRef = '/tmp/attachments/a1.png';
+
+      final serverConfig = buildServerConfig();
+      await vm.doStreamResponse(
+        assistantMessageId: 'assistant-1',
+        serverConfig: serverConfig,
+        connection: null,
+        customParams: null,
+        modelContextLength: null,
+      );
+
+      final result = vm.getMessageById('assistant-1');
+      expect(vm.lastDownloadedImageUrl, equals('http://host/img.png'));
+      expect(result!.imagePath, equals('/tmp/attachments/a1.png'));
+      expect(result.status, equals(MessageStatus.completed));
+    });
+
+    test('captures file artifact with name/mime and persists file fields',
+        () async {
+      final repo = FakeChatRepository();
+      final vm = TestViewModel(repo: repo);
+      final thread = buildThread(title: 'Test');
+      vm.setThread(thread);
+      vm.addMessage(buildMessage(
+        threadId: thread.id,
+        role: MessageRole.user,
+        id: 'user-1',
+      ));
+      vm.addMessage(buildMessage(
+        threadId: thread.id,
+        role: MessageRole.assistant,
+        id: 'assistant-1',
+        content: '',
+      ));
+      repo.setStreamFragments(thread.id, [
+        const StreamChunk(
+          text: '',
+          fileUrl: 'http://host/export.csv',
+          fileName: 'export.csv',
+          fileMime: 'text/csv',
+        ),
+        const StreamChunk(text: 'Your export.', isDone: true),
+      ]);
+      vm.stubbedFileRef = '/tmp/attachments/f_a1.csv';
+
+      final serverConfig = buildServerConfig();
+      await vm.doStreamResponse(
+        assistantMessageId: 'assistant-1',
+        serverConfig: serverConfig,
+        connection: null,
+        customParams: null,
+        modelContextLength: null,
+      );
+
+      final result = vm.getMessageById('assistant-1');
+      expect(vm.lastDownloadedFileUrl, equals('http://host/export.csv'));
+      expect(vm.lastDownloadedFileName, equals('export.csv'));
+      expect(vm.lastDownloadedFileMime, equals('text/csv'));
+      expect(result!.filePath, equals('/tmp/attachments/f_a1.csv'));
+      expect(result.fileName, equals('export.csv'));
+      expect(result.fileMime, equals('text/csv'));
+      expect(result.content, equals('Your export.'));
+    });
+
+    test('captures image artifact at most once per response', () async {
+      final repo = FakeChatRepository();
+      final vm = TestViewModel(repo: repo);
+      final thread = buildThread(title: 'Test');
+      vm.setThread(thread);
+      vm.addMessage(buildMessage(
+        threadId: thread.id,
+        role: MessageRole.user,
+        id: 'user-1',
+      ));
+      vm.addMessage(buildMessage(
+        threadId: thread.id,
+        role: MessageRole.assistant,
+        id: 'assistant-1',
+        content: '',
+      ));
+      repo.setStreamFragments(thread.id, [
+        const StreamChunk(text: '', imageUrl: 'http://host/a.png'),
+        const StreamChunk(text: '', imageUrl: 'http://host/b.png'),
+        const StreamChunk(text: '', isDone: true),
+      ]);
+      vm.stubbedImageRef = '/tmp/attachments/a1.png';
+
+      final serverConfig = buildServerConfig();
+      await vm.doStreamResponse(
+        assistantMessageId: 'assistant-1',
+        serverConfig: serverConfig,
+        connection: null,
+        customParams: null,
+        modelContextLength: null,
+      );
+
+      expect(vm.lastDownloadedImageUrl, equals('http://host/a.png'));
+      expect(vm.getMessageById('assistant-1')!.imagePath,
+          equals('/tmp/attachments/a1.png'));
+    });
+
+    test('completes gracefully when artifact download fails', () async {
+      final repo = FakeChatRepository();
+      final vm = TestViewModel(repo: repo);
+      final thread = buildThread(title: 'Test');
+      vm.setThread(thread);
+      vm.addMessage(buildMessage(
+        threadId: thread.id,
+        role: MessageRole.user,
+        id: 'user-1',
+      ));
+      vm.addMessage(buildMessage(
+        threadId: thread.id,
+        role: MessageRole.assistant,
+        id: 'assistant-1',
+        content: '',
+      ));
+      repo.setStreamFragments(thread.id, [
+        const StreamChunk(text: '', imageUrl: 'http://host/missing.png'),
+        const StreamChunk(text: 'Caption still arrives.', isDone: true),
+      ]);
+      vm.stubbedImageRef = null;
+
+      final serverConfig = buildServerConfig();
+      await vm.doStreamResponse(
+        assistantMessageId: 'assistant-1',
+        serverConfig: serverConfig,
+        connection: null,
+        customParams: null,
+        modelContextLength: null,
+      );
+
+      final result = vm.getMessageById('assistant-1');
+      expect(result!.imagePath, isNull);
+      expect(result.content, equals('Caption still arrives.'));
+      expect(result.status, equals(MessageStatus.completed));
     });
   });
 

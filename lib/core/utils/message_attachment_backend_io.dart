@@ -40,6 +40,22 @@ class FileAttachmentBackend implements AttachmentBackend {
   }
 
   @override
+  Future<String> saveFile({
+    required String fileId,
+    required Uint8List data,
+    String? fileName,
+    String? mime,
+  }) async {
+    final dir = await _getAttachmentDir();
+    final ext = _sanitizeExtension(_extensionFor(fileName, mime));
+    // `f_` prefix keeps generic artifact files distinct from user image
+    // attachments in the same directory.
+    final file = File(p.join(dir.path, 'f_$fileId.$ext'));
+    await file.writeAsBytes(data);
+    return file.path;
+  }
+
+  @override
   Future<void> deleteIfExists(String? path) async {
     if (path == null || path.trim().isEmpty) return;
     try {
@@ -73,6 +89,32 @@ class FileAttachmentBackend implements AttachmentBackend {
       ext = ext.substring(0, dotIndex);
     }
     return ext;
+  }
+
+  static const Map<String, String> _extensionByMime = {
+    'application/pdf': 'pdf',
+    'application/zip': 'zip',
+    'application/json': 'json',
+    'text/plain': 'txt',
+    'text/csv': 'csv',
+    'text/markdown': 'md',
+    'audio/mpeg': 'mp3',
+    'audio/wav': 'wav',
+    'video/mp4': 'mp4',
+    'video/webm': 'webm',
+  };
+
+  static String _extensionFor(String? fileName, String? mime) {
+    if (fileName != null && fileName.isNotEmpty) {
+      final dotIndex = fileName.lastIndexOf('.');
+      if (dotIndex != -1 && dotIndex < fileName.length - 1) {
+        return fileName.substring(dotIndex + 1);
+      }
+    }
+    if (mime != null && mime.isNotEmpty) {
+      return _extensionByMime[mime.toLowerCase()] ?? 'bin';
+    }
+    return 'bin';
   }
 }
 

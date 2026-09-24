@@ -49,6 +49,25 @@ class SqliteAttachmentBackend implements AttachmentBackend {
   }
 
   @override
+  Future<String> saveFile({
+    required String fileId,
+    required Uint8List data,
+    String? fileName,
+    String? mime,
+  }) async {
+    // `f_` prefix keeps generic artifact keys distinct from user image
+    // attachment keys in the same table.
+    final id = 'f_$fileId.${_extensionFor(fileName, mime)}';
+    final db = await _getDb();
+    await db.insert(
+      'attachments',
+      {'id': id, 'bytes': data},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    return id;
+  }
+
+  @override
   Future<void> deleteIfExists(String? ref) async {
     if (ref == null || ref.trim().isEmpty) return;
     try {
@@ -88,6 +107,32 @@ class SqliteAttachmentBackend implements AttachmentBackend {
       ext = ext.substring(0, dotIndex);
     }
     return ext;
+  }
+
+  static const Map<String, String> _extensionByMime = {
+    'application/pdf': 'pdf',
+    'application/zip': 'zip',
+    'application/json': 'json',
+    'text/plain': 'txt',
+    'text/csv': 'csv',
+    'text/markdown': 'md',
+    'audio/mpeg': 'mp3',
+    'audio/wav': 'wav',
+    'video/mp4': 'mp4',
+    'video/webm': 'webm',
+  };
+
+  static String _extensionFor(String? fileName, String? mime) {
+    if (fileName != null && fileName.isNotEmpty) {
+      final dotIndex = fileName.lastIndexOf('.');
+      if (dotIndex != -1 && dotIndex < fileName.length - 1) {
+        return fileName.substring(dotIndex + 1);
+      }
+    }
+    if (mime != null && mime.isNotEmpty) {
+      return _extensionByMime[mime.toLowerCase()] ?? 'bin';
+    }
+    return 'bin';
   }
 }
 

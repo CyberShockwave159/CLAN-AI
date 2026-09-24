@@ -84,6 +84,12 @@ mixin StreamMutationMixin on ChangeNotifier {
 
     StreamMetrics? finalMetrics;
     String? errorMessage;
+    String? imageArtifactRef;
+    String? fileArtifactRef;
+    String? fileArtifactName;
+    String? fileArtifactMime;
+    Future<void>? imageDownload;
+    Future<void>? fileDownload;
 
     try {
       final stream = chatRepository.streamCompletion(
@@ -106,6 +112,29 @@ mixin StreamMutationMixin on ChangeNotifier {
         if (chunk.metrics != null) {
           finalMetrics = chunk.metrics;
         }
+        // A-PROX artifacts: capture each at most once per response. The
+        // download runs in the background so it never stalls the caption
+        // stream; the result is folded into the message before the final save.
+        if (chunk.imageUrl != null &&
+            chunk.imageUrl!.isNotEmpty &&
+            imageDownload == null) {
+          final url = chunk.imageUrl!;
+          imageDownload = downloadImageArtifact(assistantMessageId, url)
+              .then((ref) => imageArtifactRef = ref);
+        }
+        if (chunk.fileUrl != null &&
+            chunk.fileUrl!.isNotEmpty &&
+            fileDownload == null) {
+          final url = chunk.fileUrl!;
+          fileArtifactName = chunk.fileName;
+          fileArtifactMime = chunk.fileMime;
+          fileDownload = downloadFileArtifact(
+            assistantMessageId,
+            url,
+            chunk.fileName,
+            chunk.fileMime,
+          ).then((ref) => fileArtifactRef = ref);
+        }
       }
     } on RequestCancelledException {
       // Stopped gracefully by user
@@ -117,6 +146,25 @@ mixin StreamMutationMixin on ChangeNotifier {
     } finally {
             uiThrottleTimer?.cancel();
       uiThrottleTimer = null;
+
+      String? resolvedImagePath;
+      String? resolvedFilePath;
+      if (imageDownload != null) {
+        try {
+          await imageDownload.timeout(const Duration(seconds: 30));
+          resolvedImagePath = imageArtifactRef;
+        } catch (_) {
+          // Artifact download failure is non-fatal — the caption still saves.
+        }
+      }
+      if (fileDownload != null) {
+        try {
+          await fileDownload.timeout(const Duration(seconds: 30));
+          resolvedFilePath = fileArtifactRef;
+        } catch (_) {
+          // Artifact download failure is non-fatal — the caption still saves.
+        }
+      }
 
       final finalMsgIndex = messages.indexWhere((m) => m.id == assistantMessageId);
       if (finalMsgIndex >= 0 && finalMsgIndex < messages.length) {
@@ -133,6 +181,10 @@ mixin StreamMutationMixin on ChangeNotifier {
           totalTokens: finalMetrics?.completionTokens,
           timeToFirstTokenMs: finalMetrics?.timeToFirstTokenMs,
           generationTimeSec: finalMetrics?.generationTimeSec,
+          imagePath: resolvedImagePath ?? currentMsg.imagePath,
+          filePath: resolvedFilePath ?? currentMsg.filePath,
+          fileName: fileArtifactName ?? currentMsg.fileName,
+          fileMime: fileArtifactMime ?? currentMsg.fileMime,
         );
 
         messages[finalMsgIndex] = completedMsg;
@@ -154,6 +206,45 @@ mixin StreamMutationMixin on ChangeNotifier {
     return upToIndex != null
         ? messages.sublist(0, upToIndex)
         : messages.sublist(0, messages.indexWhere((m) => m.id == assistantMessageId));
+  }
+
+  /// Downloads an A-PROX image artifact into the attachment store and returns
+  /// its local reference (or null on failure). Concrete VMs may override for
+  /// hermetic tests.
+  Future<String?> downloadImageArtifact(String messageId, String url) async {
+    try {
+      final bytes = await MessageAttachmentStore.instance.fetchBytes(url);
+      return await MessageAttachmentStore.instance.saveImage(
+        fileId: messageId,
+        data: bytes,
+        extension: MessageAttachmentStore.extensionOf(url),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Downloads an A-PROX file artifact into the attachment store and returns
+  /// its local reference (or null on failure). Concrete VMs may override for
+  /// hermetic tests.
+  Future<String?> downloadFileArtifact(
+    String messageId,
+    String url,
+    String? fileName,
+    String? mime,
+  ) async {
+    try {
+      final resolvedName = fileName ?? MessageAttachmentStore.fileNameFromUrl(url);
+      final bytes = await MessageAttachmentStore.instance.fetchBytes(url);
+      return await MessageAttachmentStore.instance.saveFile(
+        fileId: messageId,
+        data: bytes,
+        fileName: resolvedName,
+        mime: mime,
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   // --- Shared mutation methods ---

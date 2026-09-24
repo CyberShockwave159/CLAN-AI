@@ -9,6 +9,7 @@ import 'package:clan_ai/ui/features/chat/view_models/chat_view_model.dart';
 import 'package:clan_ai/ui/features/settings/view_models/settings_view_model.dart';
 import 'package:clan_ai/ui/features/settings/views/settings_screen.dart';
 import 'package:clan_ai/ui/shared/conversation_import.dart';
+import 'package:clan_ai/ui/shared/widgets/aprox_help_dialog.dart';
 import 'package:clan_ai/ui/shared/widgets/confirm_delete_dialog.dart';
 import 'package:clan_ai/ui/shared/widgets/drawer_export_menu.dart';
 
@@ -392,6 +393,11 @@ class _ChatDrawerState extends State<ChatDrawer> {
                   MaterialPageRoute(builder: (_) => const SettingsScreen()),
                 );
               },
+            ),
+            ListTile(
+              leading: const Icon(Icons.info_outline_rounded, size: 20),
+              title: const Text('Artifacts & /flags', style: TextStyle(fontWeight: FontWeight.w500)),
+              onTap: () => showAproxHelpDialog(context),
             ),
           ],
         ),

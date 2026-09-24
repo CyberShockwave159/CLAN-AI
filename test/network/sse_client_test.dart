@@ -107,5 +107,93 @@ void main() {
       expect(reasoning, isEmpty);
       expect(text, equals('Visible answer.'));
     });
+
+    test('parses delta.image_url object form with caption text', () async {
+      final sseData = [
+        'data: {"choices":[{"delta":{"image_url":{"url":"http://localhost:8080/image.png"}},"finish_reason":null}]}\n\n',
+        'data: {"choices":[{"delta":{"content":"Here is the image."},"finish_reason":"stop"}]}\n\n',
+        'data: [DONE]\n\n',
+      ];
+
+      final chunks = await _parseChunks(sseData);
+
+      expect(chunks[0].imageUrl, equals('http://localhost:8080/image.png'));
+      expect(chunks[0].text, isEmpty);
+      expect(chunks.map((c) => c.text).join(), equals('Here is the image.'));
+    });
+
+    test('parses delta.image_url bare-string form', () async {
+      final sseData = [
+        'data: {"choices":[{"delta":{"image_url":"http://host/banner.jpg"},"finish_reason":null}]}\n\n',
+        'data: [DONE]\n\n',
+      ];
+
+      final chunks = await _parseChunks(sseData);
+      expect(chunks[0].imageUrl, equals('http://host/banner.jpg'));
+    });
+
+    test('parses delta.file_url with name and mime fields', () async {
+      final sseData = [
+        'data: {"choices":[{"delta":{"file_url":{"url":"http://host/export.csv","name":"export.csv","mime":"text/csv"}},"finish_reason":null}]}\n\n',
+        'data: {"choices":[{"delta":{"content":"Your export."},"finish_reason":"stop"}]}\n\n',
+        'data: [DONE]\n\n',
+      ];
+
+      final chunks = await _parseChunks(sseData);
+
+      expect(chunks[0].fileUrl, equals('http://host/export.csv'));
+      expect(chunks[0].fileName, equals('export.csv'));
+      expect(chunks[0].fileMime, equals('text/csv'));
+      expect(chunks.map((c) => c.text).join(), equals('Your export.'));
+    });
+
+    test('parses outer message.file_url on a non-streaming style response', () async {
+      final sseData = [
+        'data: {"choices":[{"message":{"content":"Done","file_url":{"url":"http://host/data.pdf","name":"data.pdf","mime":"application/pdf"}},"finish_reason":"stop"}]}\n\n',
+      ];
+
+      final chunks = await _parseChunks(sseData);
+
+      expect(chunks.single.fileUrl, equals('http://host/data.pdf'));
+      expect(chunks.single.fileName, equals('data.pdf'));
+      expect(chunks.single.fileMime, equals('application/pdf'));
+      expect(chunks.single.text, equals('Done'));
+    });
+
+    test('filterReasoning forwards artifacts across reconstructed chunks', () async {
+      final inputChunks = [
+        const StreamChunk(
+          text: ' thinkingdraft response',
+          imageUrl: 'http://host/img.png',
+        ),
+        const StreamChunk(
+          text: '',
+          isDone: true,
+          fileUrl: 'http://host/doc.txt',
+          fileName: 'doc.txt',
+          fileMime: 'text/plain',
+        ),
+      ];
+
+      final filtered = await SseClient.filterReasoning(
+        Stream.fromIterable(inputChunks),
+        enableReasoning: true,
+      ).toList();
+
+      expect(filtered.where((c) => c.imageUrl != null), hasLength(1));
+      expect(filtered.first.imageUrl, equals('http://host/img.png'));
+      expect(filtered.last.fileUrl, equals('http://host/doc.txt'));
+      expect(filtered.last.fileName, equals('doc.txt'));
+      expect(filtered.last.fileMime, equals('text/plain'));
+    });
   });
+}
+
+Future<List<StreamChunk>> _parseChunks(List<String> sseData) async {
+  final controller = StreamController<List<int>>();
+  for (final chunk in sseData) {
+    controller.add(utf8.encode(chunk));
+  }
+  controller.close();
+  return SseClient.parseStream(controller.stream).toList();
 }

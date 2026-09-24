@@ -52,6 +52,45 @@ class FileSaver {
     return _saveToDocuments(filename: filename, content: content);
   }
 
+  /// Saves arbitrary binary [bytes] (e.g. a downloaded artifact file) through
+  /// the same platform paths as [saveFile]. Returns the final file path on
+  /// success (the suggested filename on web), or `null` on failure.
+  static Future<String?> saveBytes({
+    required String filename,
+    required Uint8List bytes,
+    required String mimeType,
+  }) {
+    if (kIsWeb) {
+      return browserDownload(
+        filename: filename,
+        content: '',
+        bytes: bytes,
+        mimeType: mimeType,
+      );
+    }
+    if (Platform.isAndroid || Platform.isIOS) {
+      final base64Content = base64Encode(bytes);
+      return _channel.invokeMethod<String>('saveFile', {
+        'filename': filename,
+        'content': base64Content,
+        'mimeType': mimeType,
+      });
+    }
+
+    // Desktop fallback: write to app documents directory
+    return _saveBytesToDocuments(filename: filename, bytes: bytes);
+  }
+
+  static Future<String> _saveBytesToDocuments({
+    required String filename,
+    required Uint8List bytes,
+  }) async {
+    final dir = await getApplicationDocumentsDirectory();
+    final file = File('${dir.path}/$filename');
+    await file.writeAsBytes(bytes);
+    return file.path;
+  }
+
   static Future<String> _saveToDocuments({
     required String filename,
     required String content,

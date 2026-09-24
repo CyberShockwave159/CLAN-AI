@@ -24,6 +24,16 @@ abstract interface class AttachmentBackend {
     String? extension,
   });
 
+  /// Saves generic artifact [data] (any file type) with its original
+  /// [fileName] / [mime] (when known) and returns an opaque reference string
+  /// that can later be passed to [readBytes] / [deleteIfExists].
+  Future<String> saveFile({
+    required String fileId,
+    required Uint8List data,
+    String? fileName,
+    String? mime,
+  });
+
   /// Best-effort deletion. No-op for null/blank references.
   Future<void> deleteIfExists(String? ref);
 

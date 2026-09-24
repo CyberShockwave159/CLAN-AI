@@ -50,6 +50,9 @@ class ChatMessage {
   final String? ragMemoryContents;
   final String reasoningContent;
   final String? imagePath;
+  final String? filePath;
+  final String? fileName;
+  final String? fileMime;
 
   ChatMessage({
     String? id,
@@ -73,6 +76,9 @@ class ChatMessage {
     this.ragMemoryContents,
     this.reasoningContent = '',
     this.imagePath,
+    this.filePath,
+    this.fileName,
+    this.fileMime,
   })  : id = id ?? const Uuid().v4(),
         createdAt = createdAt ?? DateTime.now();
 
@@ -98,6 +104,9 @@ class ChatMessage {
     String? ragMemoryContents,
     String? reasoningContent,
     String? imagePath,
+    String? filePath,
+    String? fileName,
+    String? fileMime,
   }) {
     return ChatMessage(
       id: id ?? this.id,
@@ -121,6 +130,9 @@ class ChatMessage {
       ragMemoryContents: ragMemoryContents ?? this.ragMemoryContents,
       reasoningContent: reasoningContent ?? this.reasoningContent,
       imagePath: imagePath ?? this.imagePath,
+      filePath: filePath ?? this.filePath,
+      fileName: fileName ?? this.fileName,
+      fileMime: fileMime ?? this.fileMime,
     );
   }
 
@@ -147,6 +159,9 @@ class ChatMessage {
       'rag_memory_contents': ragMemoryContents,
       'reasoning_content': reasoningContent,
       'image_path': imagePath,
+      'file_path': filePath,
+      'file_name': fileName,
+      'file_mime': fileMime,
     };
   }
 
@@ -183,6 +198,9 @@ class ChatMessage {
       ragMemoryContents: map['rag_memory_contents'] as String?,
       reasoningContent: (map['reasoning_content'] as String?) ?? '',
       imagePath: map['image_path'] as String?,
+      filePath: map['file_path'] as String?,
+      fileName: map['file_name'] as String?,
+      fileMime: map['file_mime'] as String?,
     );
   }
 }

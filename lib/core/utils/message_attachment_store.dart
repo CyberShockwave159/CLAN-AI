@@ -1,6 +1,8 @@
 import 'dart:typed_data';
 
+import 'package:clan_ai/core/errors/app_exception.dart';
 import 'package:clan_ai/core/utils/message_attachment_backend.dart';
+import 'package:http/http.dart' as http;
 
 /// Persists message image attachment bytes and resolves their mime types.
 ///
@@ -41,6 +43,85 @@ class MessageAttachmentStore {
       data: data,
       extension: extension,
     );
+  }
+
+  /// Saves generic artifact [data] (any file type) into the store and returns
+  /// its opaque reference (absolute file path on native, logical key on web).
+  /// [fileName] / [mime] (when known) drive the on-disk extension.
+  Future<String> saveFile({
+    required String fileId,
+    required Uint8List data,
+    String? fileName,
+    String? mime,
+  }) {
+    return _backend.saveFile(
+      fileId: fileId,
+      data: data,
+      fileName: fileName,
+      mime: mime,
+    );
+  }
+
+  /// Fetches raw bytes from an HTTP(S) [url].
+  ///
+  /// [client] is injectable for hermetic tests (e.g. `MockClient` from
+  /// `package:http/testing`); when omitted a fresh client is used and closed
+  /// before returning. Throws on non-200 responses / network failure.
+  Future<Uint8List> fetchBytes(String url, {http.Client? client}) async {
+    final httpClient = client ?? http.Client();
+    try {
+      final response = await httpClient
+          .get(Uri.parse(url))
+          .timeout(const Duration(seconds: 30));
+      if (response.statusCode != 200) {
+        throw AppException(
+          message: 'Artifact download failed',
+          details: 'HTTP ${response.statusCode} for $url',
+        );
+      }
+      return response.bodyBytes;
+    } finally {
+      if (client == null) {
+        httpClient.close();
+      }
+    }
+  }
+
+  /// Downloads an A-PROX artifact from [url] into the store and returns an
+  /// opaque reference to the stored bytes. [fileName] / [mime] from the server
+  /// metadata are forwarded to the backend for extension resolution.
+  ///
+  /// [client] is injectable for hermetic tests.
+  Future<String> downloadArtifact({
+    required String fileId,
+    required String url,
+    String? fileName,
+    String? mime,
+    http.Client? client,
+  }) async {
+    final bytes = await fetchBytes(url, client: client);
+    return saveFile(
+      fileId: fileId,
+      data: bytes,
+      fileName: fileName ?? fileNameFromUrl(url),
+      mime: mime,
+    );
+  }
+
+  /// Extracts the file name from a URL (the path segment after the last `/`),
+  /// or null when the URL has none.
+  static String? fileNameFromUrl(String url) {
+    try {
+      final uri = Uri.parse(url);
+      final path = uri.path;
+      if (path.isEmpty) return null;
+      final segments = path.split('/').where((s) => s.isNotEmpty).toList();
+      if (segments.isEmpty) return null;
+      final last = segments.last;
+      return last.isNotEmpty ? last : null;
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Deletes the attachment at [ref] if it exists. No-op for null refs.

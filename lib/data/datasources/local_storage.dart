@@ -49,7 +49,7 @@ class LocalDatabase {
 
     return await openDatabase(
       path,
-      version: 13,
+      version: 14,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
       onConfigure: (db) async {
@@ -206,6 +206,32 @@ class LocalDatabase {
         await db.execute('ALTER TABLE messages ADD COLUMN image_path TEXT');
       }
     }
+    if (oldVersion < 14) {
+      final columns = await db.rawQuery("PRAGMA table_info(messages)");
+      final hasFilePath = (columns as List<dynamic>)
+          .any((col) => (col as Map<String, dynamic>)['name'] == 'file_path');
+      if (!hasFilePath) {
+        await db.execute('ALTER TABLE messages ADD COLUMN file_path TEXT');
+      }
+      final hasFileName = (columns as List<dynamic>)
+          .any((col) => (col as Map<String, dynamic>)['name'] == 'file_name');
+      if (!hasFileName) {
+        await db.execute('ALTER TABLE messages ADD COLUMN file_name TEXT');
+      }
+      final hasFileMime = (columns as List<dynamic>)
+          .any((col) => (col as Map<String, dynamic>)['name'] == 'file_mime');
+      if (!hasFileMime) {
+        await db.execute('ALTER TABLE messages ADD COLUMN file_mime TEXT');
+      }
+    }
+  }
+
+  /// Test-only entry point that runs the schema migration from [oldVersion] on
+  /// an arbitrary (e.g. in-memory) [Database]. Production code only ever calls
+  /// the private [_upgradeDB] through `onUpgrade`.
+  @visibleForTesting
+  Future<void> runMigrationForTesting(Database db, int oldVersion) {
+    return _upgradeDB(db, oldVersion, 14);
   }
 
   Future<void> _createDB(Database db, int version) async {
@@ -249,6 +275,9 @@ class LocalDatabase {
         rag_memory_contents TEXT DEFAULT NULL,
         reasoning_content TEXT NOT NULL DEFAULT "",
         image_path TEXT,
+        file_path TEXT,
+        file_name TEXT,
+        file_mime TEXT,
         FOREIGN KEY (thread_id) REFERENCES threads (id) ON DELETE CASCADE
       )
     ''');

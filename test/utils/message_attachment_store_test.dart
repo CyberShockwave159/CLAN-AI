@@ -1,8 +1,11 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:clan_ai/core/errors/app_exception.dart';
 import 'package:clan_ai/core/utils/message_attachment_store.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 
 import '../helpers/mock_path_provider.dart';
 
@@ -12,6 +15,107 @@ void main() {
     setupMockPathProvider();
 
     final store = MessageAttachmentStore.instance;
+
+    test('fetchBytes returns response bytes for a 200', () async {
+      final client = MockClient((request) async {
+        expect(request.url.toString(), equals('http://host/file.png'));
+        return http.Response.bytes([1, 2, 3, 4], 200);
+      });
+
+      final bytes = await MessageAttachmentStore.instance
+          .fetchBytes('http://host/file.png', client: client);
+
+      expect(bytes, equals([1, 2, 3, 4]));
+    });
+
+    test('fetchBytes throws AppException on non-200', () async {
+      final client = MockClient((request) async {
+        return http.Response('not found', 404);
+      });
+
+      expect(
+        () => MessageAttachmentStore.instance
+            .fetchBytes('http://host/missing.bin', client: client),
+        throwsA(isA<AppException>()),
+      );
+    });
+
+    test('saveFile writes bytes under the attachments directory', () async {
+      final path = await store.saveFile(
+        fileId: 'msg-1',
+        data: Uint8List.fromList([1, 2, 3]),
+        fileName: 'report.pdf',
+        mime: 'application/pdf',
+      );
+
+      expect(path, endsWith('attachments/f_msg-1.pdf'));
+      expect(File(path).existsSync(), isTrue);
+      expect(await File(path).readAsBytes(), equals([1, 2, 3]));
+    });
+
+    test('downloadArtifact fetches, saves, and returns the local path', () async {
+      final client = MockClient((request) async {
+        expect(request.url.toString(), equals('http://host/summary.txt'));
+        return http.Response.bytes('hello'.codeUnits, 200);
+      });
+
+      final path = await MessageAttachmentStore.instance.downloadArtifact(
+        fileId: 'msg-2',
+        url: 'http://host/summary.txt',
+        fileName: 'summary.txt',
+        mime: 'text/plain',
+        client: client,
+      );
+
+      expect(path, endsWith('attachments/f_msg-2.txt'));
+      expect(await File(path).readAsString(), equals('hello'));
+    });
+
+    test('downloadArtifact falls back to a URL-derived filename', () async {
+      final client = MockClient((request) async {
+        return http.Response.bytes([7], 200);
+      });
+
+      final path = await MessageAttachmentStore.instance.downloadArtifact(
+        fileId: 'msg-3',
+        url: 'http://host/report.pdf?token=abc',
+        fileName: null,
+        client: client,
+      );
+
+      expect(path, endsWith('attachments/f_msg-3.pdf'));
+    });
+
+    test('downloadArtifact throws AppException when the fetch fails', () async {
+      final client = MockClient((request) async {
+        return http.Response('gone', 410);
+      });
+
+      expect(
+        () => MessageAttachmentStore.instance.downloadArtifact(
+          fileId: 'msg-4',
+          url: 'http://host/nope.bin',
+          client: client,
+        ),
+        throwsA(isA<AppException>()),
+      );
+    });
+
+    test('fileNameFromUrl extracts the last path segment', () {
+      expect(
+        MessageAttachmentStore.fileNameFromUrl('http://host/dir/file.txt'),
+        equals('file.txt'),
+      );
+      expect(
+        MessageAttachmentStore.fileNameFromUrl('http://host/file.txt?token=1'),
+        equals('file.txt'),
+      );
+      expect(
+        MessageAttachmentStore.fileNameFromUrl('http://host/nopath'),
+        equals('nopath'),
+      );
+      expect(MessageAttachmentStore.fileNameFromUrl(''), isNull);
+    });
 
     test('saveImage writes bytes under the attachments directory', () async {
       final bytes = Uint8List.fromList([1, 2, 3, 4]);
