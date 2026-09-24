@@ -6,7 +6,7 @@ Flutter (Dart SDK ^3.13) cross-platform llama.cpp client — OpenAI-compatible e
 ```
 flutter pub get          # required after every git pull
 flutter analyze          # lint + typecheck (flutter_lints)
-flutter test             # 32 test files, 561 tests, all hermetic
+flutter test             # 35 test files, 586 tests, all hermetic
 flutter test test/domain/generation_params_test.dart   # single file
 flutter test test/integration/   # suite subset
 flutter run -d linux     # linux | macos | windows | <android-id> | chrome
@@ -65,4 +65,4 @@ Pure-Dart 256-dim trigram hash embeddings (`HashEmbedding`, FNV-1a, no ML deps).
 - `analysis_options.yaml` excludes platform/build dirs. Do not downgrade Dart SDK below ^3.13.
 
 ## Testing
-32 test files, 561 tests — all pass; fully hermetic (**no real SQLite or network**). Fakes in `test/helpers/`: `FakeChatRepository`, `FakeCharacterRepository` (thread-scoped embeddings), `FakeVectorStore`, `FakeServerRepository`, `FakePersonaTemplateRepository`, `FakeSystemPromptTemplatesRepository`, `test_model_factories`, `mock_path_provider`. `FakeChatRepository`/`FakeServerRepository` **`implements`** their concrete repo (not `extends`) so they don't inherit the real constructor — don't switch them back, the real constructors now require an injected `LlamaApiService`. ViewModels expose private state via setters for injection. Suites: `domain/`, `network/`, `utils/` (incl. vector_store, ST parser, conversation_export, text_sanitizer), `mixin/`, `repository/`, `view_model/`, `widget/` (message_bubble, artifact_file_card, markdown_body_view, reasoning, character_edit_dialog, alternate_greeting_selector), `integration/`, `integration_test/` (web QA journey, storage QA, smoke). `flutter analyze` is clean (0 issues).
+35 test files, 586 tests — all pass; fully hermetic (**no real SQLite or network**). Fakes in `test/helpers/`: `FakeChatRepository`, `FakeCharacterRepository` (thread-scoped embeddings), `FakeVectorStore`, `FakeServerRepository`, `FakePersonaTemplateRepository`, `FakeSystemPromptTemplatesRepository`, `test_model_factories`, `mock_path_provider`. `FakeChatRepository`/`FakeServerRepository` **`implements`** their concrete repo (not `extends`) so they don't inherit the real constructor — don't switch them back, the real constructors now require an injected `LlamaApiService`. ViewModels expose private state via setters for injection. Suites: `domain/`, `network/`, `utils/` (incl. vector_store, ST parser, conversation_export, text_sanitizer), `mixin/`, `repository/`, `view_model/`, `widget/` (message_bubble, artifact_file_card, markdown_body_view, reasoning, character_edit_dialog, alternate_greeting_selector), `integration/`, `integration_test/` (web QA journey, storage QA, smoke). `flutter analyze` is clean (0 issues).

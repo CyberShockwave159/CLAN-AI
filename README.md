@@ -229,7 +229,7 @@ Supported build targets: `linux`, `macos`, `windows`, `apk` (Android), `ios`, `w
 - **Conversation branching** — Regenerate and edit responses create sibling variants. All variants share a complete `siblingIds` array. Navigation loads siblings from DB, sorts by `variantIndex`, and indexes into the sorted list via `ChatRepository.getAllMessagesForThread()` (bypasses message deduplication).
 - **Image attachments** — Attach one image per user message (chat & roleplay). Images are stored on disk with only the absolute path in SQLite, sent as base64 `image_url` content parts over the OpenAI-compatible API (works with any vision-capable backend), tap to view in a full-screen lightbox, and auto-cleaned when messages/threads are deleted. Magic-byte sniffing detects the true format even when the file extension lies.
 - **File & image artifacts** — When the server (A-PROX `/flags`) emits `delta.image_url` / `delta.file_url` in the SSE stream (or `message.image_url`/`message.file_url` on non-streaming responses), the client downloads the artifact bytes once into the message attachment store and persists the local path + original filename + MIME in SQLite (schema v14 `file_path`/`file_name`/`file_mime` columns). Assistant images render inline; generated files appear as distinct, tappable document objects at the end of the response (`.txt` shows as a generic text document, `.json` as a data object, `.csv` as a spreadsheet, `.pdf` as a PDF, ...); tapping one saves/exports it through the same `FileSaver` path used for chat export. File URLs the model embeds in its markdown (extension in `TextSanitizer.artifactExtensions`) get the same object treatment, deduplicated against stored A-PROX artifacts.
-- SQLite local persistence with full thread/message history (schema v13)
+- SQLite local persistence with full thread/message history (schema v14)
 - Automatic server health polling with fallback endpoints (`/health` → `/props` → `/v1/models`)
 - Dark mode by default (OLED-optimized), configurable light and custom themes
 - Custom theme presets (Warm, Cool, Pastel) with persisted user color selections
@@ -354,13 +354,13 @@ This produces files in the `dist/` directory:
 
 ```bash
 flutter analyze        # lint + typecheck
-flutter test           # runs all 32 test files (561 total tests)
+flutter test           # runs all 35 test files (586 total tests)
 flutter run            # launch app
 ```
 
 ### Testing
 
-32 test files, 561 total tests. All tests use fake repositories (no real SQLite or network). ViewModels expose private state via setters for test injection.
+35 test files, 586 total tests. All tests use fake repositories (no real SQLite or network). ViewModels expose private state via setters for test injection.
 
 **Coverage by layer:**
 - **Domain** — `GenerationParams` serialization (OpenAI payloads, TextSanitizer segment parsing, reasoning flags), model roundtrip serialization (ChatThread, ChatMessage, CharacterProfile, PersonaTemplate, ServerConfig)

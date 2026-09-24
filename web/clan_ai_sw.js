@@ -7,7 +7,7 @@
 // self-unregistering stub (no caching, no fetch handler), so the app-shell
 // cache the PWA needs is provided here instead.
 //
-// Behaviour (v2):
+// Behaviour (v3):
 //   * Precache the app shell + manifest/icons on install.
 //   * Same-origin GET only. Cross-origin traffic (llama.cpp API/SSE calls,
 //     fonts, CDNs) is never intercepted.
@@ -17,11 +17,17 @@
 //   * Every network fetch uses `cache: 'no-store'`, so neither the browser HTTP
 //     cache nor the host's Cache-Control max-age can serve a stale shell or
 //     asset: the SW always revalidates against the server.
-//   * The cache is keyed by the app version read from `version.json`. activate()
-//     prunes old caches when the SW script itself changes; successful navigations
-//     re-key and sweep stale caches when a new release is deployed behind an
-//     unchanged script — no unbounded growth across releases and no waiting for
-//     a script rewrite to rotate the cache.
+//   * The cache is keyed by the app version read from `version.json`. The cache
+//     name is re-keyed and stale caches are swept **before** the freshly
+//     fetched navigation response is handed to the page, so the bundle files
+//     the new page then requests always resolve against the current (empty)
+//     version cache — returning PWA users never race ahead of the sweep and
+//     boot a previous release's UI. The sweep is idempotent and safe to call
+//     from concurrent handlers.
+//   * Caches are only ever addressed with a resolved version name. A cold
+//     worker (cache name not yet known) serves assets straight from the
+//     network and never fabricates a nameless cache; the legacy `"null"` cache
+//     created by older SW code is deleted during re-keying.
 
 const CACHE_PREFIX = 'clan-ai-v';
 
@@ -39,11 +45,6 @@ async function readRemoteVersion() {
   }
 }
 
-async function currentCacheName() {
-  const version = await readRemoteVersion();
-  return CACHE_PREFIX + (version || '0');
-}
-
 const PRECACHE_URLS = [
   './',
   './index.html',
@@ -57,12 +58,53 @@ const PRECACHE_URLS = [
   './icons/apple-touch-icon.png',
 ];
 
+// Active version-keyed cache name. Resolved on install, eagerly on cold start,
+// and re-keyed on every successful navigation. Never null once known.
 let cacheName = null;
+
+// Returns the cache name for the deployed version and drops every other clan-ai
+// cache plus the legacy "null" cache. Returns the current cache name, or null
+// when the version cannot be read (offline) — callers then leave caches
+// untouched. Idempotent and safe to call concurrently: concurrent sweeps
+// converge on the same target and redundant deletes are harmless.
+async function rekeyToDeployed(version) {
+  if (version === null) {
+    return cacheName;
+  }
+  const expected = CACHE_PREFIX + version;
+  if (expected === cacheName) {
+    return expected;
+  }
+  cacheName = expected;
+  const keys = await caches.keys();
+  await Promise.all(
+    keys
+      .filter(
+        (key) =>
+          key === 'null' || (key.startsWith(CACHE_PREFIX) && key !== expected)
+      )
+      .map((key) => caches.delete(key))
+  );
+  return cacheName;
+}
+
+// Eagerly adopt the deployed version's cache name on cold start so the very
+// first asset request of a returning session targets the current version cache
+// instead of racing the navigation's re-key, and sweep any stale release
+// caches (including the legacy "null" cache) immediately. Only fills an empty
+// name: if a navigation already re-keyed `cacheName` (possibly to an even
+// newer deploy that started mid-session), nothing is downgraded.
+readRemoteVersion().then((version) => {
+  if (version !== null && cacheName === null) {
+    rekeyToDeployed(version);
+  }
+});
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     (async () => {
-      cacheName = await currentCacheName();
+      const version = await readRemoteVersion();
+      cacheName = CACHE_PREFIX + (version || '0');
       const cache = await caches.open(cacheName);
       await cache.addAll(PRECACHE_URLS);
       await self.skipWaiting();
@@ -75,43 +117,29 @@ self.addEventListener('activate', (event) => {
     (async () => {
       const keys = await caches.keys();
       await Promise.all(
-        keys.filter((key) => key !== cacheName).map((key) => caches.delete(key))
+        keys
+          .filter((key) => key !== cacheName)
+          .map((key) => caches.delete(key))
       );
       await self.clients.claim();
     })()
   );
 });
 
-// Re-keys the runtime cache to the freshly deployed version and drops every
-// other clan-ai cache. Runs after a successful navigation so a release shipped
-// without changing this script still rotates caches promptly. Safe to call
-// repeatedly: a mutex guards concurrent sweeps and failures are swallowed
-// (offline or a failed version.json read simply leaves caches untouched).
-let sweeping = false;
-async function sweepStaleCaches() {
-  if (sweeping) return;
-  sweeping = true;
-  try {
-    const version = await readRemoteVersion();
-    if (version === null) {
-      return;
+// Best-effort offline fallback: returns the first cached response for request
+// found in any clan-ai version cache (newest first), or null.
+async function matchAnyCachedPage(request) {
+  const keys = (await caches.keys())
+    .filter((key) => key.startsWith(CACHE_PREFIX) || key === 'null')
+    .sort();
+  for (const key of keys.reverse()) {
+    const cache = await caches.open(key);
+    const cached = await cache.match(request);
+    if (cached) {
+      return cached;
     }
-    const expected = CACHE_PREFIX + version;
-    if (expected === cacheName) {
-      return;
-    }
-    cacheName = expected;
-    const keys = await caches.keys();
-    await Promise.all(
-      keys
-        .filter((key) => key.startsWith(CACHE_PREFIX) && key !== expected)
-        .map((key) => caches.delete(key))
-    );
-  } catch (_) {
-    // Best-effort: never let a sweep failure break navigation handling.
-  } finally {
-    sweeping = false;
   }
+  return null;
 }
 
 self.addEventListener('fetch', (event) => {
@@ -128,23 +156,43 @@ self.addEventListener('fetch', (event) => {
   if (request.mode === 'navigate') {
     event.respondWith(
       (async () => {
+        // Probe the deployed version in parallel with the network fetch.
+        const versionPromise = readRemoteVersion();
+        let fresh;
         try {
           // Always hit the server: a reload right after a deploy must see the
           // newest index.html, independent of any HTTP cache the host sets.
-          const fresh = await fetch(request, { cache: 'no-store' });
-          const cache = await caches.open(cacheName);
-          await cache.put(request, fresh.clone());
-          // Re-key + sweep when the server serves a newer release.
-          sweepStaleCaches();
-          return fresh;
+          fresh = await fetch(request, { cache: 'no-store' });
         } catch (_) {
+          fresh = null;
+        }
+        // Re-key + sweep BEFORE serving the fresh page: the bundle/assets it
+        // requests next must resolve against the current, empty version cache.
+        // This is what keeps returning installs on the newest build on their
+        // very first post-deploy load.
+        await rekeyToDeployed(await versionPromise);
+
+        if (fresh) {
+          if (cacheName !== null) {
+            const cache = await caches.open(cacheName);
+            await cache.put(request, fresh.clone());
+          }
+          return fresh;
+        }
+
+        // Offline: fall back to the re-keyed cache, then any older version.
+        if (cacheName !== null) {
           const cache = await caches.open(cacheName);
           const cached = await cache.match(request);
           if (cached) {
             return cached;
           }
-          throw new Error('CLAN AI offline and no cached app shell');
         }
+        const legacy = await matchAnyCachedPage(request);
+        if (legacy) {
+          return legacy;
+        }
+        throw new Error('CLAN AI offline and no cached app shell');
       })()
     );
     return;
@@ -153,6 +201,11 @@ self.addEventListener('fetch', (event) => {
   // Static assets: stale-while-revalidate, always revalidating on the network.
   event.respondWith(
     (async () => {
+      if (cacheName === null) {
+        // Cold worker before any navigation has confirmed the deployed version:
+        // never open an unnamed cache — serve the freshest network copy.
+        return fetch(request, { cache: 'no-store' });
+      }
       const cache = await caches.open(cacheName);
       const cached = await cache.match(request);
       const network = fetch(request, { cache: 'no-store' })

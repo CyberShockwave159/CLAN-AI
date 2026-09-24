@@ -31,7 +31,7 @@ Complete portability refactor enabling a Progressive Web App build of CLAN AI. T
 **Database**
 - Foreign-key enforcement enabled via `PRAGMA foreign_keys = ON` (messages→threads `ON DELETE CASCADE` is now live)
 - Thread search is a single assistant-scoped SQL `LIKE` query (`LocalDatabase.searchThreads`) instead of a per-thread N+1 loop
-- Schema v12 adds the variant columns; schema v13 adds the `image_path` column for image attachments; migrations guard with `PRAGMA table_info`
+- Schema v12 adds the variant columns; schema v13 adds the `image_path` column for image attachments; schema v14 adds `file_path`/`file_name`/`file_mime` for downloaded file artifacts; migrations guard with `PRAGMA table_info`
 
 **HTTP**
 - Real TCP/TLS connect timeout via `HttpClient.connectionTimeout`; resilient error-body reading with bounded extraction from `error`/`message`/`detail` shapes
@@ -57,15 +57,13 @@ Complete portability refactor enabling a Progressive Web App build of CLAN AI. T
 - Dialog shows `New Chat`, `Search Threads`, `Open Settings`, `Keyboard Shortcuts Help`, and `Stop Generation` with platform-aware labels (`Cmd` on macOS, `Ctrl` on other platforms)
 - Replaces the previous help button with keyboard shortcut trigger
 
-**Avatar File Storage Service**
-- `lib/core/utils/avatar_storage_service.dart` — stores large character avatars as files on disk instead of inline in SQLite
-- Avatars under 500KB stay inline in the database; larger avatars are written to an `avatars/` directory in the app documents folder
-- `saveAvatar()`, `getAvatarBytes()`, `deleteAvatar()`, `clearAllAvatars()` methods
+**Avatar Storage**
+- Character avatars are stored inline as BLOBs in the `characters.avatar_data` column (SQLite) — there is no file-based avatar storage (the earlier file-backed `avatar_storage_service.dart` was removed in a repo-wide dead-code sweep)
 
 **Image Attachments**
 - Attach one image per user message (chat and roleplay modes) via the attach button in the prompt input bar, with an inline preview chip before sending
 - Tap an attached image in a message bubble to open a full-screen lightbox viewer
-- `lib/core/utils/message_attachment_store.dart` — images are stored as files on disk with only the absolute path in `messages.image_path` (mirrors `AvatarStorageService`); files are cleaned up automatically when their message or thread is deleted
+- `lib/core/utils/message_attachment_store.dart` — images are stored as files on disk with only the absolute path in `messages.image_path`; files are cleaned up automatically when their message or thread is deleted
 - The OpenAI payload embeds the attachment as a base64 `image_url` content part, so it works with any OpenAI-compatible vision-capable backend (e.g. llama.cpp llama-server with a multimodal model)
 - Magic-byte MIME sniffing (`mimeTypeFromBytes`) detects the true image format (PNG/JPEG/GIF/WebP) even when the file extension lies
 - **File & Image Artifacts (A-PROX `/flags`)** — streamed `delta.image_url` / `delta.file_url` (and `message.image_url`/`message.file_url` on non-streaming responses) are parsed in `SseClient._processDataBlock` (object `{url,name,mime}` and bare-string forms) and forwarded through `filterReasoning` reconstructed chunks. The shared `StreamMutationMixin` (chat + roleplay) downloads each artifact bytes once into `MessageAttachmentStore` and persists the path + original name + MIME to SQLite (schema v14 `file_path`/`file_name`/`file_mime` columns, migration v13→v14). Assistant images render inline; files render as distinct, tappable document objects (see **Generated Files as Save-able Objects** below).
@@ -96,6 +94,7 @@ Complete portability refactor enabling a Progressive Web App build of CLAN AI. T
 **PWA Update Flow**
 - The web build now prompts users running an old build: `PwaUpdateChecker` polls the deployed `version.json` every 5 minutes and shows a "A new version of CLAN AI is available" snackbar with a **Reload** action as soon as a newer release is detected (web-only; immediate baseline on boot, offline boot never warns spuriously)
 - Service worker (`clan_ai_sw.js`) v2: navigation and asset fetches use `cache: 'no-store'`, so the browser HTTP cache / host `Cache-Control` can never serve a stale shell; successful navigations re-key the version cache and sweep stale `clan-ai-v*` caches even when the SW script ships unchanged
+- **Fix (v3): returning PWA users were being served the previous release's bundle.** The old SW opened a cache named literally `"null"` whenever it addressed the cache before resolving `version.json` (worker restarts reset the module-level cache name), and that cache — which held stale `main.dart.js`/`flutter_bootstrap.js` copies from earlier visits — was never swept because the sweep only dropped `clan-ai-v*` keys. On the first navigation after a deploy, the still-unawaited sweep raced the new page's asset requests and stale-while-revalidate served the old bundle, so fresh `index.html` booted the old UI. Now: caches are only ever opened under a resolved version name (no nameless cache is fabricated), the navigation handler awaits the re-key + sweep **before** handing the fresh page to the browser, the legacy `"null"` cache is deleted during re-keying, and the deployed version is adopted eagerly on cold start so the first asset requests of a returning session already target the current (empty) version cache
 - Added a bundled `Caddyfile` (no-cache for `index.html`/`clan_ai_sw.js`/`version.json`/`manifest.json`, `max-age=86400` for hashed assets) and documented the update flow in the README
 - `pubspec.yaml` version bumped to `1.3.0+1`
 
@@ -199,6 +198,16 @@ Complete portability refactor enabling a Progressive Web App build of CLAN AI. T
 - Built-in presets (Default, Code Architect, Concise Expert, Creative Writer) load as default templates
 - Conversations remember their system prompt independently — switching threads loads each thread's saved prompt
 
+**SillyTavern `.json` Character Card Import**
+- Import button in roleplay drawer sidebar opens file picker filtered to `.json` files
+- `lib/core/utils/silly_tavern_card_parser.dart` — Parses SillyTavern `chara_card_v2` (spec_version 2.0) JSON files
+- Maps `.data.description` → personality, `.data.first_mes` → firstMessage, `.data.scenario` → setting
+- `{{char}}` → replaced with character name; `{{user}}` → replaced with user persona (or "User" fallback)
+- Full content preserved — personality truncation limits removed
+- Auto-edit dialog (`CharacterEditDialog`) opens after import so users can review/adjust fields (including avatar selection) before starting roleplay
+- Import flow: pick JSON → parse → save → auto-open edit dialog → start roleplay
+- `_showEditDialog` returns `Future<CharacterProfile>`; passes `CharacterRepository` as parameter to avoid context issues
+
 ### 🔧 Changes
 
 **Generation Parameters**
@@ -243,7 +252,6 @@ Complete portability refactor enabling a Progressive Web App build of CLAN AI. T
 - `lib/core/utils/hash_embedding.dart` — Pure Dart 256-dim feature hashing via char trigrams
 - `lib/core/utils/file_saver.dart` — Platform channel file saver (SAF on Android, UIDocumentPicker on iOS)
 - `lib/data/datasources/vector_store.dart` — SQLite vector store with cosine similarity
-- `lib/data/datasources/embedding_service.dart` — Embedding service layer (hash-based)
 - `lib/core/utils/roleplay_prompt_formatter.dart` — System prompt with RAG memories
 - `lib/data/datasources/secure_storage_service.dart` — Secure API key storage via `flutter_secure_storage`
 - `lib/core/utils/roleplay_context_builder.dart` — RAG pipeline orchestration
@@ -278,34 +286,3 @@ Complete portability refactor enabling a Progressive Web App build of CLAN AI. T
 - Fixed `tryRead` non-existent method (changed to `read`)
 - Fixed type cast error in edit dialog return type (`as Future<CharacterProfile>` → `.then((value) => value ?? character)`)
 - Fixed `ScaffoldMessenger.of(context)` "deactivated widget ancestor" errors by adding `context.mounted` guards
-
-## [v1.0.1] - SillyTavern Character Import
-
-### ✨ New Features
-
-**SillyTavern `.json` Character Card Import**
-- Import button in roleplay drawer sidebar opens file picker filtered to `.json` files
-- `lib/core/utils/silly_tavern_card_parser.dart` — Parses SillyTavern `chara_card_v2` (spec_version 2.0) JSON files
-- Maps `.data.description` → personality, `.data.first_mes` → firstMessage, `.data.scenario` → setting
-- `{{char}}` → replaced with character name; `{{user}}` → replaced with user persona (or "User" fallback)
-- Personality truncated to 4000 chars; mes_example appended if non-empty
-- Auto-edit dialog opens after import so users can review/adjust fields before starting roleplay
-- `lib/core/utils/st_avatar_downloader.dart` — Downloads avatar bytes from URL with 30s timeout; validates PNG/JPEG/WebP magic bytes
-- `lib/ui/features/roleplay/widgets/silly_tavern_import_dialog.dart` — Preview/edit dialog for imported characters with text editors for all fields
-- `lib/ui/features/roleplay/views/roleplay_drawer.dart` — Import flow: pick JSON → parse → save → auto-open edit dialog → start roleplay
-- `_showEditDialog` returns `Future<CharacterProfile>`; passes `CharacterRepository` as parameter to avoid context issues
-
-### 🔧 Dependencies
-- Added `flutter_secure_storage: ^9.2.2` for secure API key storage (iOS Keychain / Android KeyStore / Linux Secret Service)
-- Added `file_picker: ^8.1.2` for JSON file selection
-- Uses existing `http` package for avatar downloads
-
-### 🏗 New Files
-- `lib/core/utils/silly_tavern_card_parser.dart`
-- `lib/core/utils/st_avatar_downloader.dart`
-- `lib/ui/features/roleplay/widgets/silly_tavern_import_dialog.dart`
-
-### 🐛 Bug Fixes
-- Fixed type cast error when edit dialog returns null
-- Fixed "deactivated widget ancestor" errors in async import flow
-- Fixed edit dialog `context.read<CharacterRepository>()` issues by passing repo as parameter
