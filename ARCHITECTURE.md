@@ -291,6 +291,7 @@ CREATE TABLE persona_templates (
 | v11 → v12 | Added `variant_index`, `total_variants`, `sibling_ids` columns to messages for conversation branching |
 | v12 → v13 | Added `image_path` column to messages (absolute path to attached image file, user messages only) |
 | v13 → v14 | Added `file_path`, `file_name`, `file_mime` columns to messages (downloaded file artifacts from `image_url`/`file_url` SSE deltas) |
+| v14 → v15 | Added `image_url` column to messages (client-facing artifact URL, always surfaced as a tappable link under the rendered image) |
 
 ---
 

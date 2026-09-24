@@ -89,5 +89,45 @@ void main() {
 
       await db.close();
     });
+
+    test('migration 14 -> 15 adds image_url column', () async {
+      final db = await databaseFactoryFfi.openDatabase(
+        inMemoryDatabasePath,
+        options: OpenDatabaseOptions(version: 14, singleInstance: false),
+      );
+      await db.execute('''
+        CREATE TABLE messages (
+          id TEXT PRIMARY KEY,
+          thread_id TEXT NOT NULL,
+          role TEXT NOT NULL,
+          content TEXT NOT NULL,
+          status TEXT NOT NULL,
+          variant_index INTEGER NOT NULL DEFAULT 0,
+          total_variants INTEGER NOT NULL DEFAULT 1,
+          sibling_ids TEXT,
+          image_path TEXT,
+          file_path TEXT,
+          file_name TEXT,
+          file_mime TEXT
+        )
+      ''');
+      await db.execute("INSERT INTO messages (id, thread_id, role, content, status) "
+          "VALUES ('m3', 't1', 'assistant', 'Hello', 'completed')");
+
+      await LocalDatabase.instance.runMigrationForTesting(db, 14);
+
+      final columns = await db.rawQuery('PRAGMA table_info(messages)');
+      final names = columns.map((c) => c['name'] as String).toList();
+      expect(names, contains('image_url'));
+
+      await db.execute(
+        'UPDATE messages SET image_url = ? WHERE id = ?',
+        ['http://192.168.1.64:8000/images/gen_1.png', 'm3'],
+      );
+      final row = (await db.query('messages')).single;
+      expect(row['image_url'], equals('http://192.168.1.64:8000/images/gen_1.png'));
+
+      await db.close();
+    });
   });
 }

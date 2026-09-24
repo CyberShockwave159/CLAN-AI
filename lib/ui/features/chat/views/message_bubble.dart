@@ -16,6 +16,7 @@ import 'package:clan_ai/ui/features/chat/widgets/reasoning_block.dart';
 import 'package:clan_ai/ui/shared/avatar_utils.dart';
 import 'package:clan_ai/ui/shared/snackbar_helper.dart';
 import 'package:clan_ai/ui/shared/widgets/attachment_image.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Debug context data for message copy-to-clipboard.
 class MessageDebugContext {
@@ -339,6 +340,15 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
+  /// Opens an http(s) artifact URL in the system browser. Non-http(s) links
+  /// (e.g. stray `data:` URLs) never reach the launcher.
+  void _openExternalLink(BuildContext context, String url) {
+    final uri = Uri.tryParse(url);
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) return;
+    showAppSnackBar(context, 'Opening $url');
+    launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
   /// Renders the files an assistant message produced: the A-PROX `file_url`
   /// artifact persisted on the message plus any non-image file URLs the model
   /// embedded in its markdown. Each file appears as a distinct, tappable
@@ -575,6 +585,45 @@ class MessageBubble extends StatelessWidget {
                                   ],
                                 ),
                               ),
+                            ),
+                          ),
+                        ),
+                      ),
+
+                    // Always-surface the image artifact URL (tappable) so the
+                    // link is visible even when the inline render failed or the
+                    // download hasn't completed yet.
+                    if (message.imageUrl != null && message.imageUrl!.isNotEmpty)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(4),
+                          onTap: () => _openExternalLink(context, message.imageUrl!),
+                          child: Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.link,
+                                  size: 14,
+                                  color: context.clanTextSecondary,
+                                ),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Text(
+                                    message.imageUrl!,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: context.clanTextSecondary,
+                                      decoration: TextDecoration.underline,
+                                      decorationColor: context.clanTextSecondary,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),

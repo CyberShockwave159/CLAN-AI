@@ -49,7 +49,7 @@ class LocalDatabase {
 
     return await openDatabase(
       path,
-      version: 14,
+      version: 15,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
       onConfigure: (db) async {
@@ -224,6 +224,14 @@ class LocalDatabase {
         await db.execute('ALTER TABLE messages ADD COLUMN file_mime TEXT');
       }
     }
+    if (oldVersion < 15) {
+      final columns = await db.rawQuery("PRAGMA table_info(messages)");
+      final hasImageUrl = (columns as List<dynamic>)
+          .any((col) => (col as Map<String, dynamic>)['name'] == 'image_url');
+      if (!hasImageUrl) {
+        await db.execute('ALTER TABLE messages ADD COLUMN image_url TEXT');
+      }
+    }
   }
 
   /// Test-only entry point that runs the schema migration from [oldVersion] on
@@ -231,7 +239,7 @@ class LocalDatabase {
   /// the private [_upgradeDB] through `onUpgrade`.
   @visibleForTesting
   Future<void> runMigrationForTesting(Database db, int oldVersion) {
-    return _upgradeDB(db, oldVersion, 14);
+    return _upgradeDB(db, oldVersion, 15);
   }
 
   Future<void> _createDB(Database db, int version) async {
@@ -275,6 +283,7 @@ class LocalDatabase {
         rag_memory_contents TEXT DEFAULT NULL,
         reasoning_content TEXT NOT NULL DEFAULT "",
         image_path TEXT,
+        image_url TEXT,
         file_path TEXT,
         file_name TEXT,
         file_mime TEXT,

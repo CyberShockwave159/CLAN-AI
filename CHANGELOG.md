@@ -31,7 +31,10 @@ Complete portability refactor enabling a Progressive Web App build of CLAN AI. T
 **Database**
 - Foreign-key enforcement enabled via `PRAGMA foreign_keys = ON` (messages→threads `ON DELETE CASCADE` is now live)
 - Thread search is a single assistant-scoped SQL `LIKE` query (`LocalDatabase.searchThreads`) instead of a per-thread N+1 loop
-- Schema v12 adds the variant columns; schema v13 adds the `image_path` column for image attachments; schema v14 adds `file_path`/`file_name`/`file_mime` for downloaded file artifacts; migrations guard with `PRAGMA table_info`
+- Schema v12 adds the variant columns; schema v13 adds the `image_path` column for image attachments; schema v14 adds `file_path`/`file_name`/`file_mime` for downloaded file artifacts; schema v15 adds the `image_url` column that persists the client-facing artifact URL; migrations guard with `PRAGMA table_info`
+
+**Artifact UX**
+- The A-PROX `image_url` / `file_url` artifact URLs are now always visible: the client-facing URL is persisted on the message (`image_url`) and rendered as a small tappable link under the inline image, so a tap-through path remains available even if the inline render or download fails
 
 **HTTP**
 - Real TCP/TLS connect timeout via `HttpClient.connectionTimeout`; resilient error-body reading with bounded extraction from `error`/`message`/`detail` shapes

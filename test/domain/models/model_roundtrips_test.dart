@@ -305,6 +305,28 @@ void main() {
       expect(msg.toMap()['image_path'], isNull);
     });
 
+    test('toMap/fromMap preserves imageUrl', () {
+      final msg = ChatMessage(
+        threadId: 't1',
+        role: MessageRole.assistant,
+        content: 'Here you go',
+        imagePath: '/app/documents/attachments/abc123.png',
+        imageUrl: 'http://192.168.1.64:8000/images/gen_1.png',
+      );
+
+      final map = msg.toMap();
+      expect(map['image_url'], equals('http://192.168.1.64:8000/images/gen_1.png'));
+
+      final restored = ChatMessage.fromMap(map);
+      expect(restored.imageUrl, equals('http://192.168.1.64:8000/images/gen_1.png'));
+    });
+
+    test('imageUrl defaults to null', () {
+      final msg = ChatMessage(threadId: 't1', role: MessageRole.user, content: 'Hi');
+      expect(msg.imageUrl, isNull);
+      expect(msg.toMap()['image_url'], isNull);
+    });
+
     test('fromMap handles missing image_path', () {
       final map = <String, dynamic>{
         'id': 'm1',

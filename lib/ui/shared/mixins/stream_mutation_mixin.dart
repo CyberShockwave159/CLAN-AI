@@ -224,6 +224,7 @@ mixin StreamMutationMixin on ChangeNotifier {
           timeToFirstTokenMs: finalMetrics?.timeToFirstTokenMs,
           generationTimeSec: finalMetrics?.generationTimeSec,
           imagePath: resolvedImagePath ?? currentMsg.imagePath,
+          imageUrl: downloadedImageUrl ?? currentMsg.imageUrl,
           filePath: resolvedFilePath ?? currentMsg.filePath,
           fileName: fileArtifactName ?? currentMsg.fileName,
           fileMime: fileArtifactMime ?? currentMsg.fileMime,
@@ -265,8 +266,16 @@ mixin StreamMutationMixin on ChangeNotifier {
       final idx = messages.indexWhere((m) => m.id == messageId);
       if (idx < 0 || idx >= messages.length) return;
       final current = messages[idx];
-      if (current.imagePath != null && current.imagePath!.isNotEmpty) return;
-      messages[idx] = current.copyWith(imagePath: ref);
+      if (current.imagePath != null &&
+          current.imagePath!.isNotEmpty &&
+          current.imageUrl != null &&
+          current.imageUrl!.isNotEmpty) {
+        return;
+      }
+      messages[idx] = current.copyWith(
+        imagePath: current.imagePath ?? ref,
+        imageUrl: current.imageUrl ?? url,
+      );
       notifyListeners();
     });
   }

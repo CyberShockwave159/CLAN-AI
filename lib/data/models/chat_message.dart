@@ -50,6 +50,7 @@ class ChatMessage {
   final String? ragMemoryContents;
   final String reasoningContent;
   final String? imagePath;
+  final String? imageUrl;
   final String? filePath;
   final String? fileName;
   final String? fileMime;
@@ -76,6 +77,7 @@ class ChatMessage {
     this.ragMemoryContents,
     this.reasoningContent = '',
     this.imagePath,
+    this.imageUrl,
     this.filePath,
     this.fileName,
     this.fileMime,
@@ -104,6 +106,7 @@ class ChatMessage {
     String? ragMemoryContents,
     String? reasoningContent,
     String? imagePath,
+    String? imageUrl,
     String? filePath,
     String? fileName,
     String? fileMime,
@@ -130,6 +133,7 @@ class ChatMessage {
       ragMemoryContents: ragMemoryContents ?? this.ragMemoryContents,
       reasoningContent: reasoningContent ?? this.reasoningContent,
       imagePath: imagePath ?? this.imagePath,
+      imageUrl: imageUrl ?? this.imageUrl,
       filePath: filePath ?? this.filePath,
       fileName: fileName ?? this.fileName,
       fileMime: fileMime ?? this.fileMime,
@@ -159,6 +163,7 @@ class ChatMessage {
       'rag_memory_contents': ragMemoryContents,
       'reasoning_content': reasoningContent,
       'image_path': imagePath,
+      'image_url': imageUrl,
       'file_path': filePath,
       'file_name': fileName,
       'file_mime': fileMime,
@@ -198,6 +203,7 @@ class ChatMessage {
       ragMemoryContents: map['rag_memory_contents'] as String?,
       reasoningContent: (map['reasoning_content'] as String?) ?? '',
       imagePath: map['image_path'] as String?,
+      imageUrl: map['image_url'] as String?,
       filePath: map['file_path'] as String?,
       fileName: map['file_name'] as String?,
       fileMime: map['file_mime'] as String?,
