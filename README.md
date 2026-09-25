@@ -236,7 +236,6 @@ Supported build targets: `linux`, `macos`, `windows`, `apk` (Android), `ios`, `w
 - Markdown with clickable hyperlinks, native inline rendering of generated image URLs, code block, and LaTeX math rendering in responses
 - Token speed and performance metrics per generation
 - Export conversations to TXT or JSON via drawer context menus (native save dialogs on mobile)
-- **Background request completion (async)** — Submit a chat completion to A-PROX and the server processes it independently. If the app is backgrounded, killed, or the user navigates away, A-PROX keeps the request alive (up to 1 hour default TTL), processes it through the full agentic loop (including image/file generation), and caches the result. When the user returns, CLAN-AI automatically reconnects to the SSE stream and resumes rendering from where it left off. Supports all streaming requests (chat, roleplay, image generation, file generation). Thread edits during background processing cancel the old request and queue a new one at the end of the queue.
 
 ## Prerequisites
 

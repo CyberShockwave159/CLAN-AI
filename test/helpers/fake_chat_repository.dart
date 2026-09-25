@@ -2,7 +2,6 @@ import 'package:clan_ai/data/models/chat_message.dart';
 import 'package:clan_ai/data/models/chat_thread.dart';
 import 'package:clan_ai/data/models/server_config.dart';
 import 'package:clan_ai/data/models/server_profile.dart';
-import 'package:clan_ai/data/models/pending_request.dart';
 import 'package:clan_ai/data/repositories/chat_repository.dart';
 import 'package:clan_ai/core/network/sse_client.dart';
 import 'package:clan_ai/domain/models/generation_params.dart';
@@ -193,116 +192,5 @@ class FakeChatRepository implements ChatRepository {
     }
 
     return Stream.fromIterable(fragments);
-  }
-
-  // --- Pending Async Requests ---
-
-  final Map<String, PendingRequest> _pendingRequests = {};
-
-  @override
-  Future<void> savePendingRequest(PendingRequest request) async {
-    _pendingRequests[request.requestId] = request;
-  }
-
-  @override
-  Future<PendingRequest?> getPendingRequest(String requestId) async {
-    return _pendingRequests[requestId];
-  }
-
-  @override
-  Future<PendingRequest?> getPendingRequestByAssistantMessageId(String assistantMessageId) async {
-    try {
-      return _pendingRequests.values.firstWhere(
-        (r) => r.assistantMessageId == assistantMessageId,
-      );
-    } catch (_) {
-      return null;
-    }
-  }
-
-  @override
-  Future<List<PendingRequest>> getPendingRequestsByThread(String threadId) async {
-    return _pendingRequests.values
-        .where((r) => r.threadId == threadId)
-        .toList()
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-  }
-
-  @override
-  Future<List<PendingRequest>> getPendingRequestsByStatus(PendingRequestStatus status) async {
-    return _pendingRequests.values
-        .where((r) => r.status == status)
-        .toList();
-  }
-
-  @override
-  Future<void> deletePendingRequest(String requestId) async {
-    _pendingRequests.remove(requestId);
-  }
-
-  @override
-  Future<void> cleanupExpiredPendingRequests() async {
-    final now = DateTime.now();
-    _pendingRequests.removeWhere((_, r) => r.expiresAt.isBefore(now));
-  }
-
-  // --- Async Completion API ---
-
-  @override
-  Future<String> submitAsyncCompletion({
-    required ServerConfig serverConfig,
-    required ServerProfile? connection,
-    required List<ChatMessage> history,
-    required String? systemPrompt,
-    GenerationParams? params,
-    String? requestId,
-    int? modelContextLength,
-  }) async {
-    // Generate a mock request ID for testing
-    return 'test-request-${DateTime.now().millisecondsSinceEpoch}';
-  }
-
-  @override
-  Stream<StreamChunk> streamAsyncCompletion({
-    required String cleanBase,
-    required String requestId,
-    required String? apiKey,
-    CancelToken? cancelToken,
-  }) {
-    final threadId = _pendingRequests[requestId]?.threadId ?? 'unknown';
-    final fragments = _streamFragments[threadId] ?? [];
-
-    if (fragments.isEmpty && _streamFragments.isNotEmpty) {
-      final first = _streamFragments.entries.first;
-      if (first.value.isNotEmpty) {
-        return Stream.fromIterable(first.value);
-      }
-    }
-
-    if (_shouldThrowStreamError) {
-      return Stream.fromIterable([
-        const StreamChunk(text: 'Error response', isDone: true),
-      ]);
-    }
-
-    return Stream.fromIterable(fragments);
-  }
-
-  @override
-  Future<Map<String, dynamic>?> fetchAsyncResult({
-    required String cleanBase,
-    required String requestId,
-    required String? apiKey,
-  }) async {
-    return null;
-  }
-
-  @override
-  Future<void> cancelAsyncRequest({
-    required String cleanBase,
-    required String requestId,
-    required String? apiKey,
-  }) async {
-    _pendingRequests.remove(requestId);
   }
 }

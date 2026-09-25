@@ -2,7 +2,6 @@
 class ApiEndpoints {
   // OpenAI compatible endpoints
   static const String chatCompletions = '/v1/chat/completions';
-  static const String chatCompletionsAsync = '/v1/chat/completions/async';
   static const String completions = '/v1/completions';
   static const String models = '/v1/models';
 

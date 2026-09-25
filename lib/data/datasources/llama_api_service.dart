@@ -77,6 +77,22 @@ class LlamaApiService {
     // Apply server-level reasoning setting to params
     effectiveParams = effectiveParams.copyWith(reasoning: serverConfig.reasoning);
 
+    // Best-effort context fit: cap contextSize to model's actual capacity
+    int adjustedContextSize = effectiveParams.contextSize;
+    if (modelContextLength != null && modelContextLength > 0) {
+      // Reserve some tokens for generation output (at least 256)
+      final reservedForOutput = effectiveParams.maxTokens > 0
+          ? effectiveParams.maxTokens
+          : reservedOutputTokensDefault;
+      final maxAllowed = modelContextLength - reservedForOutput;
+      if (adjustedContextSize > maxAllowed) {
+        adjustedContextSize = maxAllowed;
+      }
+      adjustedContextSize = adjustedContextSize.clamp(minContextSize, maxContextSize);
+    }
+
+    final adjustedParams = effectiveParams.copyWith(contextSize: adjustedContextSize);
+
     final connDetails = connection ?? ServerProfile(name: 'Default', baseUrl: defaultBaseUrl);
     final cleanBase = ApiEndpoints.normalizeBaseUrl(connDetails.baseUrl);
 
@@ -89,9 +105,8 @@ class LlamaApiService {
       connection: connDetails,
       history: history,
       systemPrompt: systemPrompt,
-      params: effectiveParams,
+      params: adjustedParams,
       cancelToken: cancelToken,
-      modelContextLength: modelContextLength,
     );
   }
 
@@ -103,24 +118,19 @@ class LlamaApiService {
     required String? systemPrompt,
     required GenerationParams params,
     CancelToken? cancelToken,
-    int? modelContextLength,
   }) async* {
     final uri = ApiEndpoints.buildUri(cleanBase, ApiEndpoints.chatCompletions);
 
-    // Build messages while tracking image token consumption for context fit.
     final List<Map<String, dynamic>> messages = [];
     if (systemPrompt != null && systemPrompt.trim().isNotEmpty) {
       messages.add({'role': 'system', 'content': systemPrompt.trim()});
     }
 
-    int imageTokenCount = 0;
     for (final msg in history) {
       if (msg.role == MessageRole.user || msg.role == MessageRole.assistant) {
-        final content = await _serializeOpenAiContent(msg);
-        imageTokenCount += _estimateImageTokens(content);
         final Map<String, dynamic> openAiMsg = {
           'role': msg.role.value,
-          'content': content,
+          'content': await _serializeOpenAiContent(msg),
         };
         if (msg.reasoningContent.isNotEmpty) {
           openAiMsg['reasoning'] = msg.reasoningContent;
@@ -129,24 +139,7 @@ class LlamaApiService {
       }
     }
 
-    // Context-fit with image token awareness: subtract estimated image token
-    // usage from the available budget so the KV cache doesn't overflow when
-    // base64 image payloads are included in the prompt.
-    int adjustedContextSize = params.contextSize;
-    if (modelContextLength != null && modelContextLength > 0) {
-      final reservedForOutput = params.maxTokens > 0
-          ? params.maxTokens
-          : reservedOutputTokensDefault;
-      final maxAllowed = modelContextLength - reservedForOutput - imageTokenCount;
-      if (adjustedContextSize > maxAllowed) {
-        adjustedContextSize = maxAllowed;
-      }
-      adjustedContextSize = adjustedContextSize.clamp(minContextSize, maxContextSize);
-    }
-
-    final adjustedParams = params.copyWith(contextSize: adjustedContextSize);
-
-    final payload = adjustedParams.toOpenAiPayload(
+    final payload = params.toOpenAiPayload(
       messages: messages,
       model: serverConfig.selectedModel ?? 'default',
       stream: true,
@@ -169,50 +162,20 @@ class LlamaApiService {
     );
   }
 
-  /// Estimates the number of tokens an image payload will consume in the KV
-  /// cache.
-  ///
-  /// For LLaVA-style vision models (the predominant format supported by
-  /// llama.cpp), images are tiled into patches processed by the vision encoder.
-  /// A 1024×1024 image typically consumes ~9 000 tokens; a 2048×2048 image
-  /// can consume ~30 000+. This heuristic divides the base64 data length by
-  /// 30, which maps roughly to the patch-count × tokens-per-patch product
-  /// for common models (LLaVA-1.5, LLaVA-Next, Qwen2-VL).
-  static int _estimateImageTokens(dynamic content) {
-    if (content is! List) return 0;
-    int tokens = 0;
-    for (final part in content) {
-      if (part is Map<String, dynamic> &&
-          part['type'] == 'image_url' &&
-          part['image_url'] is Map<String, dynamic>) {
-        final url = part['image_url']['url'] as String?;
-        if (url != null) {
-          final commaIndex = url.indexOf(',');
-          if (commaIndex != -1) {
-            final base64Data = url.substring(commaIndex + 1);
-            tokens += base64Data.length ~/ 30;
-          }
-        }
-      }
-    }
-    return tokens;
-  }
-
   /// Serializes a message's content for the OpenAI-compatible chat format.
   ///
   /// Returns the plain text string when the message carries no image, or an
-  /// array of typed content parts (`text` + `image_url`) when a message (user
-  /// or assistant) has an image attachment. Assistant images — typically A-
-  /// PROX generated artifacts — are re-attached so that image-to-image edit
-  /// workflows can reference them without overloading the KV cache (see
-  /// [_estimateImageTokens] for the context-fit math). The image bytes are
-  /// read through the attachment store and encoded as a base64 data URI — the
-  /// format accepted by llama.cpp llama-server, Ollama, LM Studio, vLLM, and
-  /// OpenAI. A missing/unreadable attachment falls back to the plain text so
-  /// a broken attachment never breaks the request.
+  /// array of typed content parts (`text` + `image_url`) when a user message
+  /// has an image attachment. The image bytes are read through the attachment
+  /// store and encoded as a base64 data URI — the format accepted by llama.cpp
+  /// llama-server, Ollama, LM Studio, vLLM, and OpenAI. A missing/unreadable
+  /// attachment falls back to the plain text so a broken attachment never
+  /// breaks the request.
   Future<dynamic> _serializeOpenAiContent(ChatMessage msg) async {
     final imagePath = msg.imagePath;
-    if (imagePath == null || imagePath.trim().isEmpty) {
+    if (msg.role != MessageRole.user ||
+        imagePath == null ||
+        imagePath.trim().isEmpty) {
       return msg.content;
     }
 
@@ -236,94 +199,5 @@ class LlamaApiService {
     } catch (_) {
       return msg.content;
     }
-  }
-
-  /// Submits a chat completion request asynchronously.
-  ///
-  /// Returns the request ID that can be used to poll for status or stream the result.
-  Future<String> submitAsyncCompletion({
-    required ServerConfig serverConfig,
-    required ServerProfile? connection,
-    required List<ChatMessage> history,
-    required String? systemPrompt,
-    GenerationParams? params,
-    String? requestId,
-    int? modelContextLength,
-  }) async {
-    try {
-      var effectiveParams = params ?? serverConfig.defaultParams;
-      effectiveParams = effectiveParams.copyWith(reasoning: serverConfig.reasoning);
-
-      final connDetails = connection ?? ServerProfile(name: 'Default', baseUrl: defaultBaseUrl);
-      final cleanBase = ApiEndpoints.normalizeBaseUrl(connDetails.baseUrl);
-      final uri = ApiEndpoints.buildUri(cleanBase, ApiEndpoints.chatCompletionsAsync);
-
-      // Build payload same as streaming
-      final List<Map<String, dynamic>> messages = [];
-      if (systemPrompt != null && systemPrompt.trim().isNotEmpty) {
-        messages.add({'role': 'system', 'content': systemPrompt.trim()});
-      }
-      for (final msg in history) {
-        if (msg.role == MessageRole.user || msg.role == MessageRole.assistant) {
-          final content = await _serializeOpenAiContent(msg);
-          final Map<String, dynamic> openAiMsg = {
-            'role': msg.role.value,
-            'content': content,
-          };
-          if (msg.reasoningContent.isNotEmpty) {
-            openAiMsg['reasoning'] = msg.reasoningContent;
-          }
-          messages.add(openAiMsg);
-        }
-      }
-
-      final payload = effectiveParams.toOpenAiPayload(
-        messages: messages,
-        model: serverConfig.selectedModel ?? 'default',
-        stream: true,
-      );
-
-      if (requestId != null) {
-        payload['request_id'] = requestId;
-      }
-
-      final response = await _httpClient.postAsync(uri, body: payload, apiKey: connDetails.apiKey);
-      return response['request_id'] as String;
-    } catch (e) {
-      rethrow;
-    }
-  }
-
-  /// Streams the result of an async request.
-  Stream<StreamChunk> streamAsyncCompletion({
-    required String cleanBase,
-    required String requestId,
-    required String? apiKey,
-    CancelToken? cancelToken,
-  }) async* {
-    final uri = ApiEndpoints.buildUri(cleanBase, '${ApiEndpoints.chatCompletionsAsync}/$requestId/stream');
-    final streamedResponse = await _httpClient.getStream(uri, apiKey: apiKey);
-    final rawStream = SseClient.parseStream(streamedResponse.stream, cancelToken: cancelToken);
-    yield* SseClient.filterReasoning(rawStream, enableReasoning: true);
-  }
-
-  /// Fetches the final result of a completed async request.
-  Future<Map<String, dynamic>?> fetchAsyncResult({
-    required String cleanBase,
-    required String requestId,
-    required String? apiKey,
-  }) async {
-    final uri = ApiEndpoints.buildUri(cleanBase, '${ApiEndpoints.chatCompletionsAsync}/$requestId/result');
-    return await _httpClient.get(uri, apiKey: apiKey);
-  }
-
-  /// Cancels an async request.
-  Future<void> cancelAsyncRequest({
-    required String cleanBase,
-    required String requestId,
-    required String? apiKey,
-  }) async {
-    final uri = ApiEndpoints.buildUri(cleanBase, '${ApiEndpoints.chatCompletionsAsync}/$requestId');
-    await _httpClient.delete(uri, apiKey: apiKey);
   }
 }

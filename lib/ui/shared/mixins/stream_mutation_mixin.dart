@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import 'package:clan_ai/core/constants/app_constants.dart';
-import 'package:clan_ai/core/constants/api_endpoints.dart';
 import 'package:clan_ai/core/errors/app_exception.dart';
 import 'package:clan_ai/core/network/sse_client.dart';
 import 'package:clan_ai/core/utils/message_attachment_store.dart';
@@ -11,7 +10,6 @@ import 'package:clan_ai/data/models/chat_message.dart';
 import 'package:clan_ai/data/models/chat_thread.dart';
 import 'package:clan_ai/data/models/server_config.dart';
 import 'package:clan_ai/data/models/server_profile.dart';
-import 'package:clan_ai/data/models/pending_request.dart';
 import 'package:clan_ai/data/repositories/chat_repository.dart';
 import 'package:clan_ai/domain/models/generation_params.dart';
 
@@ -61,66 +59,6 @@ mixin StreamMutationMixin on ChangeNotifier {
     final historySlice = _messagesSublist(upToIndex, assistantMessageId);
     final effectiveSystemPrompt = activeThread?.systemPrompt ?? serverConfig.systemPrompt;
 
-    // Compute cleanBase from connection for async API
-    final cleanBase = ApiEndpoints.normalizeBaseUrl(
-      connection?.baseUrl ?? defaultBaseUrl,
-    );
-
-    // Check for existing pending request to resume
-    final pendingRequest = await chatRepository.getPendingRequestByAssistantMessageId(
-      assistantMessageId,
-    );
-
-    // Generate request ID if resuming existing request
-    final String requestId = pendingRequest?.requestId ?? const Uuid().v4();
-
-    // Determine if we're resuming an existing request
-    final bool isResuming = pendingRequest != null &&
-        pendingRequest.status != PendingRequestStatus.completed &&
-        pendingRequest.status != PendingRequestStatus.failed;
-
-    if (isResuming) {
-      // Mark as streaming
-      await chatRepository.savePendingRequest(pendingRequest.copyWith(
-        status: PendingRequestStatus.streaming,
-      ));
-    } else if (pendingRequest != null) {
-      // Old completed/failed request exists, delete it to submit fresh
-      await chatRepository.deletePendingRequest(pendingRequest.requestId);
-    }
-
-    // Prepare the payload params for submission (if not resuming)
-    final effectiveParams = customParams ?? activeThread?.customParams ?? serverConfig.defaultParams;
-    final paramsWithReasoning = effectiveParams.copyWith(reasoning: serverConfig.reasoning);
-
-    // Submit new async request if not resuming
-    if (!isResuming) {
-      final submittedRequestId = await chatRepository.submitAsyncCompletion(
-        serverConfig: serverConfig,
-        connection: connection,
-        history: historySlice,
-        systemPrompt: effectiveSystemPrompt,
-        params: paramsWithReasoning,
-        requestId: requestId,
-        modelContextLength: modelContextLength,
-      );
-
-      // Save pending request record
-      final now = DateTime.now();
-      final ttlHours = 1; // Default 1 hour TTL
-      await chatRepository.savePendingRequest(PendingRequest(
-        requestId: submittedRequestId,
-        threadId: activeThread?.id ?? '',
-        assistantMessageId: assistantMessageId,
-        payload: {}, // Payload not needed for resume; LlamaApiService rebuilds it
-        status: PendingRequestStatus.streaming,
-        createdAt: now,
-        updatedAt: now,
-        expiresAt: now.add(Duration(hours: ttlHours)),
-        serverBaseUrl: connection?.baseUrl ?? defaultBaseUrl,
-      ));
-    }
-
         uiThrottleTimer = Timer.periodic(uiThrottleInterval, (_) {
             final currentMsgIndex = messages.indexWhere((m) => m.id == assistantMessageId);
             if (pendingStreamBuffer.isNotEmpty &&
@@ -160,16 +98,15 @@ mixin StreamMutationMixin on ChangeNotifier {
     // orphaned link below the attachment card.
     String? downloadedImageUrl;
 
-    final String apiKey = connection?.apiKey ?? '';
-    Stream<StreamChunk> stream;
-
     try {
-      // Use async streaming API
-      stream = chatRepository.streamAsyncCompletion(
-        cleanBase: cleanBase,
-        requestId: requestId,
-        apiKey: apiKey.isEmpty ? null : apiKey,
+      final stream = chatRepository.streamCompletion(
+        serverConfig: serverConfig,
+        connection: connection,
+        history: historySlice,
+        systemPrompt: effectiveSystemPrompt,
+        params: customParams ?? activeThread?.customParams ?? serverConfig.defaultParams,
         cancelToken: currentCancelToken,
+        modelContextLength: modelContextLength,
       );
 
       await for (final chunk in stream) {

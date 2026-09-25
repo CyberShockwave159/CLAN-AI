@@ -124,16 +124,6 @@ class _GatedChatRepository extends FakeChatRepository {
   }) {
     return controller.stream;
   }
-
-  @override
-  Stream<StreamChunk> streamAsyncCompletion({
-    required String cleanBase,
-    required String requestId,
-    required String? apiKey,
-    CancelToken? cancelToken,
-  }) {
-    return controller.stream;
-  }
 }
 
 void main() {

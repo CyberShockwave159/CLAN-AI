@@ -66,13 +66,3 @@ Pure-Dart 256-dim trigram hash embeddings (`HashEmbedding`, FNV-1a, no ML deps).
 
 ## Testing
 35 test files, 602 tests — all pass; fully hermetic (**no real SQLite or network**). Fakes in `test/helpers/`: `FakeChatRepository`, `FakeCharacterRepository` (thread-scoped embeddings), `FakeVectorStore`, `FakeServerRepository`, `FakePersonaTemplateRepository`, `FakeSystemPromptTemplatesRepository`, `test_model_factories`, `mock_path_provider`. `FakeChatRepository`/`FakeServerRepository` **`implements`** their concrete repo (not `extends`) so they don't inherit the real constructor — don't switch them back, the real constructors now require an injected `LlamaApiService`. ViewModels expose private state via setters for injection. Suites: `domain/`, `network/`, `utils/` (incl. vector_store, ST parser, conversation_export, text_sanitizer), `mixin/`, `repository/`, `view_model/`, `widget/` (message_bubble, artifact_file_card, markdown_body_view, reasoning, character_edit_dialog, alternate_greeting_selector), `integration/`, `integration_test/` (web QA journey, storage QA, smoke). `flutter analyze` is clean (0 issues).
-
-## Async / Background Completion (A-PROX integration)
-- **Async endpoints**: CLAN-AI uses A-PROX's `/v1/chat/completions/async` (submit), `/{id}/stream` (resume), `/{id}/result` (fetch), `/{id}/status` (poll), `DELETE /{id}` (cancel).
-- **Persistence**: `pending_requests` table (schema v16) tracks request ID, thread, assistant message, payload, status (pending/streaming/completed/failed), TTL (1h default).
-- **Resume flow**: `doStreamResponse` in `StreamMutationMixin` checks for existing `PendingRequest` by `assistantMessageId` before submitting. If found and not terminal → resumes via `streamAsyncCompletion`. If terminal → submits fresh.
-- **Submit flow**: New request → `submitAsyncCompletion` → saves `PendingRequest` (status=streaming) → streams via `streamAsyncCompletion`.
-- **App lifecycle**: `WidgetsBindingObserver.didChangeAppLifecycleState` in `_ClanAiAppState` scans incomplete `PendingRequest`s on `resumed`/`inactive` and reconnects.
-- **Conflict resolution**: Thread edit/delete during background processing → `cancelAsyncRequest` + submit new (goes to end of queue).
-- **Server requirements**: A-PROX `async` config enabled, `async_requests` table, queue worker running.
-- **Tests**: `_GatedChatRepository` overrides `streamAsyncCompletion` for mid-stream state observation; `FakeChatRepository` implements all async CRUD methods.
