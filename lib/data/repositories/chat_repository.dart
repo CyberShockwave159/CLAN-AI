@@ -6,6 +6,7 @@ import 'package:clan_ai/data/models/chat_message.dart';
 import 'package:clan_ai/data/models/chat_thread.dart';
 import 'package:clan_ai/data/models/server_config.dart';
 import 'package:clan_ai/data/models/server_profile.dart';
+import 'package:clan_ai/data/models/pending_request.dart';
 import 'package:clan_ai/domain/models/generation_params.dart';
 
 class ChatRepository {
@@ -154,6 +155,102 @@ class ChatRepository {
       params: params,
       cancelToken: cancelToken,
       modelContextLength: modelContextLength,
+    );
+  }
+
+  // --- Pending Async Requests ---
+
+  Future<void> savePendingRequest(PendingRequest request) async {
+    await _localDb.savePendingRequest(request);
+  }
+
+  Future<PendingRequest?> getPendingRequest(String requestId) async {
+    return await _localDb.getPendingRequest(requestId);
+  }
+
+  Future<PendingRequest?> getPendingRequestByAssistantMessageId(String assistantMessageId) async {
+    return await _localDb.getPendingRequestByAssistantMessageId(assistantMessageId);
+  }
+
+  Future<List<PendingRequest>> getPendingRequestsByThread(String threadId) async {
+    return await _localDb.getPendingRequestsByThread(threadId);
+  }
+
+  Future<List<PendingRequest>> getPendingRequestsByStatus(PendingRequestStatus status) async {
+    return await _localDb.getPendingRequestsByStatus(status);
+  }
+
+  Future<void> deletePendingRequest(String requestId) async {
+    await _localDb.deletePendingRequest(requestId);
+  }
+
+  Future<void> cleanupExpiredPendingRequests() async {
+    await _localDb.cleanupExpiredPendingRequests();
+  }
+
+  // --- Async Completion API ---
+
+  /// Submits a chat completion request asynchronously.
+  ///
+  /// Returns the request ID that can be used to poll for status or stream the result.
+  Future<String> submitAsyncCompletion({
+    required ServerConfig serverConfig,
+    required ServerProfile? connection,
+    required List<ChatMessage> history,
+    required String? systemPrompt,
+    GenerationParams? params,
+    String? requestId,
+    int? modelContextLength,
+  }) async {
+    return await _apiService.submitAsyncCompletion(
+      serverConfig: serverConfig,
+      connection: connection,
+      history: history,
+      systemPrompt: systemPrompt,
+      params: params,
+      requestId: requestId,
+      modelContextLength: modelContextLength,
+    );
+  }
+
+  /// Streams the result of an async request.
+  Stream<StreamChunk> streamAsyncCompletion({
+    required String cleanBase,
+    required String requestId,
+    required String? apiKey,
+    CancelToken? cancelToken,
+  }) {
+    return _apiService.streamAsyncCompletion(
+      cleanBase: cleanBase,
+      requestId: requestId,
+      apiKey: apiKey,
+      cancelToken: cancelToken,
+    );
+  }
+
+  /// Fetches the final result of a completed async request.
+  Future<Map<String, dynamic>?> fetchAsyncResult({
+    required String cleanBase,
+    required String requestId,
+    required String? apiKey,
+  }) async {
+    return await _apiService.fetchAsyncResult(
+      cleanBase: cleanBase,
+      requestId: requestId,
+      apiKey: apiKey,
+    );
+  }
+
+  /// Cancels an async request.
+  Future<void> cancelAsyncRequest({
+    required String cleanBase,
+    required String requestId,
+    required String? apiKey,
+  }) async {
+    await _apiService.cancelAsyncRequest(
+      cleanBase: cleanBase,
+      requestId: requestId,
+      apiKey: apiKey,
     );
   }
 }

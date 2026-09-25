@@ -141,6 +141,101 @@ class ApiHttpClient {
     }
   }
 
+  /// Sends a POST request to submit an async completion and returns the request ID.
+  Future<Map<String, dynamic>> postAsync(
+    Uri uri, {
+    required Map<String, dynamic> body,
+    String? apiKey,
+    Map<String, String>? extraHeaders,
+  }) async {
+    try {
+      final response = await _client
+          .post(
+            uri,
+            headers: _buildHeaders(apiKey: apiKey, extraHeaders: extraHeaders),
+            body: jsonEncode(body),
+          )
+          .timeout(receiveTimeout);
+
+      return _handleResponse(response, uri) as Map<String, dynamic>;
+    } on SocketException catch (e) {
+      throw HostUnreachableException(host: uri.host, details: e.message);
+    } on TimeoutException {
+      throw NetworkException(
+        message: 'Async request timed out for ${uri.host}',
+        details: 'No response received within ${receiveTimeout.inSeconds} seconds.',
+      );
+    } catch (e) {
+      if (e is AppException) rethrow;
+      throw NetworkException(message: 'Async request failed', details: e.toString());
+    }
+  }
+
+  /// Sends a GET request that returns a streaming response for async result polling.
+  Future<StreamedApiResponse> getStream(
+    Uri uri, {
+    String? apiKey,
+    Map<String, String>? extraHeaders,
+  }) async {
+    try {
+      final request = http.Request('GET', uri)
+        ..headers.addAll(_buildHeaders(apiKey: apiKey, extraHeaders: extraHeaders));
+
+      final streamedResponse = await streamSend(_client, request).timeout(receiveTimeout);
+
+      if (streamedResponse.statusCode >= 400) {
+        String errBody = '';
+        try {
+          errBody = await streamedResponse.bodyToString();
+        } catch (_) {}
+        throwForStatusCode(streamedResponse.statusCode, errBody, uri);
+      }
+
+      return streamedResponse;
+    } on SocketException catch (e) {
+      throw HostUnreachableException(host: uri.host, details: e.message);
+    } on TimeoutException {
+      throw NetworkException(
+        message: 'Streaming GET timed out for ${uri.host}',
+        details: 'No response received within ${receiveTimeout.inSeconds} seconds.',
+      );
+    } catch (e) {
+      if (e is AppException) rethrow;
+      throw NetworkException(message: 'Streaming GET failed', details: e.toString());
+    }
+  }
+
+  /// Sends a DELETE request to cancel an async request.
+  Future<void> delete(
+    Uri uri, {
+    String? apiKey,
+    Map<String, String>? extraHeaders,
+  }) async {
+    try {
+      final response = await _client
+          .delete(
+            uri,
+            headers: _buildHeaders(apiKey: apiKey, extraHeaders: extraHeaders),
+          )
+          .timeout(receiveTimeout);
+
+      if (response.statusCode >= 400) {
+        String errBody = response.body;
+        throwForStatusCode(response.statusCode, errBody, uri);
+      }
+    } on SocketException catch (e) {
+      throw HostUnreachableException(host: uri.host, details: e.message);
+    } on TimeoutException {
+      throw NetworkException(
+        message: 'DELETE request timed out for ${uri.host}',
+        details: 'No response received within ${receiveTimeout.inSeconds} seconds.',
+      );
+    } catch (e) {
+      if (e is AppException) rethrow;
+      throw NetworkException(message: 'DELETE request failed', details: e.toString());
+    }
+  }
+
   dynamic _handleResponse(http.Response response, Uri uri) {
     if (response.statusCode >= 200 && response.statusCode < 300) {
       if (response.body.isEmpty) return null;

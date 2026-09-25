@@ -53,10 +53,12 @@ class _PromptInputBarState extends State<PromptInputBar> {
     try {
       final XFile? image = await _imagePicker.pickImage(
         source: ImageSource.gallery,
-        // Bound dimensions/quality so base64 payloads stay reasonable on
-        // large phone camera images.
-        maxWidth: 2048,
-        maxHeight: 2048,
+        // Bound dimensions/quality so base64 payloads stay within the KV-cache
+        // budget.  A 1024×1024 image at 85 % quality consumes ~7 000 vision
+        // tokens (LLaVA-style patch encoding) versus ~28 000 at 2048 — keeping
+        // the context-fit math in _streamOpenAi from starving history text.
+        maxWidth: 1024,
+        maxHeight: 1024,
         imageQuality: 85,
       );
       if (image == null || !mounted) return;

@@ -16,6 +16,7 @@ import 'package:clan_ai/data/models/persona_template.dart';
 import 'package:clan_ai/data/models/app_mode.dart';
 import 'package:clan_ai/data/models/app_theme_mode.dart';
 import 'package:clan_ai/data/models/custom_theme_colors.dart';
+import 'package:clan_ai/data/models/pending_request.dart';
 
 class LocalDatabase {
   static final LocalDatabase instance = LocalDatabase._init();
@@ -49,7 +50,7 @@ class LocalDatabase {
 
     return await openDatabase(
       path,
-      version: 15,
+      version: 16,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
       onConfigure: (db) async {
@@ -232,6 +233,24 @@ class LocalDatabase {
         await db.execute('ALTER TABLE messages ADD COLUMN image_url TEXT');
       }
     }
+    if (oldVersion < 16) {
+      await db.execute('''
+        CREATE TABLE pending_requests (
+          request_id TEXT PRIMARY KEY,
+          thread_id TEXT NOT NULL,
+          assistant_message_id TEXT NOT NULL,
+          payload TEXT NOT NULL,
+          status TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          expires_at INTEGER NOT NULL,
+          server_base_url TEXT NOT NULL,
+          error TEXT
+        )
+      ''');
+      await db.execute('CREATE INDEX idx_pending_requests_status ON pending_requests (status)');
+      await db.execute('CREATE INDEX idx_pending_requests_thread ON pending_requests (thread_id)');
+    }
   }
 
   /// Test-only entry point that runs the schema migration from [oldVersion] on
@@ -239,7 +258,7 @@ class LocalDatabase {
   /// the private [_upgradeDB] through `onUpgrade`.
   @visibleForTesting
   Future<void> runMigrationForTesting(Database db, int oldVersion) {
-    return _upgradeDB(db, oldVersion, 15);
+    return _upgradeDB(db, oldVersion, 16);
   }
 
   Future<void> _createDB(Database db, int version) async {
@@ -326,6 +345,24 @@ class LocalDatabase {
         updated_at TEXT NOT NULL
       )
     ''');
+
+    // Pending async requests table
+    await db.execute('''
+      CREATE TABLE pending_requests (
+        request_id TEXT PRIMARY KEY,
+        thread_id TEXT NOT NULL,
+        assistant_message_id TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        status TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL,
+        server_base_url TEXT NOT NULL,
+        error TEXT
+      )
+    ''');
+    await db.execute('CREATE INDEX idx_pending_requests_status ON pending_requests (status)');
+    await db.execute('CREATE INDEX idx_pending_requests_thread ON pending_requests (thread_id)');
   }
 
   static Future<void> _migratePreferencesToSqlite(Database db, SharedPreferences prefs) async {
@@ -808,6 +845,77 @@ class LocalDatabase {
   Future<String?> getActiveProfileId() async {
     final p = await prefs;
     return p.getString(_keyActiveProfileId);
+  }
+
+  // --- Pending Async Requests ---
+
+  Future<void> savePendingRequest(PendingRequest request) async {
+    final db = await database;
+    await db.insert(
+      'pending_requests',
+      request.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<PendingRequest?> getPendingRequest(String requestId) async {
+    final db = await database;
+    final result = await db.query(
+      'pending_requests',
+      where: 'request_id = ?',
+      whereArgs: [requestId],
+      limit: 1,
+    );
+    if (result.isEmpty) return null;
+    return PendingRequest.fromMap(result.first);
+  }
+
+  Future<List<PendingRequest>> getPendingRequestsByThread(String threadId) async {
+    final db = await database;
+    final result = await db.query(
+      'pending_requests',
+      where: 'thread_id = ?',
+      whereArgs: [threadId],
+      orderBy: 'created_at DESC',
+    );
+    return result.map((json) => PendingRequest.fromMap(json)).toList();
+  }
+
+  Future<List<PendingRequest>> getPendingRequestsByStatus(PendingRequestStatus status) async {
+    final db = await database;
+    final result = await db.query(
+      'pending_requests',
+      where: 'status = ?',
+      whereArgs: [status.name],
+    );
+    return result.map((json) => PendingRequest.fromMap(json)).toList();
+  }
+
+  Future<void> deletePendingRequest(String requestId) async {
+    final db = await database;
+    await db.delete('pending_requests', where: 'request_id = ?', whereArgs: [requestId]);
+  }
+
+  Future<void> cleanupExpiredPendingRequests() async {
+    final db = await database;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await db.delete(
+      'pending_requests',
+      where: 'expires_at < ?',
+      whereArgs: [now],
+    );
+  }
+
+  Future<PendingRequest?> getPendingRequestByAssistantMessageId(String assistantMessageId) async {
+    final db = await database;
+    final result = await db.query(
+      'pending_requests',
+      where: 'assistant_message_id = ?',
+      whereArgs: [assistantMessageId],
+      limit: 1,
+    );
+    if (result.isEmpty) return null;
+    return PendingRequest.fromMap(result.first);
   }
 
   Future<void> close() async {
