@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:clan_ai/core/constants/app_theme.dart';
 import 'package:clan_ai/core/constants/clan_theme_colors.dart';
+import 'package:clan_ai/ui/shared/widgets/fullscreen_image_viewer.dart';
 
 /// Renders an image referenced by a URL found inside an assistant message's
 /// markdown natively in the chat log, mirroring how user image attachments
@@ -58,20 +59,7 @@ class MarkdownImageView extends StatelessWidget {
 
   /// Opens a fullscreen, zoomable view of the URL image.
   void _showFullscreen(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (ctx) => Dialog(
-        backgroundColor: Colors.black87,
-        insetPadding: const EdgeInsets.all(16),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: InteractiveViewer(
-            maxScale: 6,
-            child: Center(child: _fullscreenImage(ctx)),
-          ),
-        ),
-      ),
-    );
+    FullscreenImageViewer.show(context, _fullscreenImage(context));
   }
 
   Widget _loadingPlaceholder(BuildContext context) {

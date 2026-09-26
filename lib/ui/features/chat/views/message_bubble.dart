@@ -16,6 +16,7 @@ import 'package:clan_ai/ui/features/chat/widgets/reasoning_block.dart';
 import 'package:clan_ai/ui/shared/avatar_utils.dart';
 import 'package:clan_ai/ui/shared/snackbar_helper.dart';
 import 'package:clan_ai/ui/shared/widgets/attachment_image.dart';
+import 'package:clan_ai/ui/shared/widgets/fullscreen_image_viewer.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// Debug context data for message copy-to-clipboard.
@@ -325,35 +326,23 @@ class MessageBubble extends StatelessWidget {
 
   /// Opens a fullscreen, zoomable view of an attached image.
   void _showImageFullscreen(BuildContext context, String path) {
-    showDialog(
-      context: context,
-      builder: (ctx) => Dialog(
-        backgroundColor: Colors.black87,
-        insetPadding: const EdgeInsets.all(16),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: InteractiveViewer(
-            maxScale: 6,
-            child: Center(
-              child: AttachmentImage(
-                ref: path,
-                fit: BoxFit.contain,
-                errorBuilder: (context, error, stackTrace) => Padding(
-                  padding: const EdgeInsets.all(32),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.broken_image_outlined, color: Colors.white70, size: 48),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Image file no longer exists',
-                        style: TextStyle(color: Colors.white70, fontSize: 14),
-                      ),
-                    ],
-                  ),
-                ),
+    FullscreenImageViewer.show(
+      context,
+      AttachmentImage(
+        ref: path,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) => Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.broken_image_outlined, color: Colors.white70, size: 48),
+              const SizedBox(height: 8),
+              Text(
+                'Image file no longer exists',
+                style: TextStyle(color: Colors.white70, fontSize: 14),
               ),
-            ),
+            ],
           ),
         ),
       ),

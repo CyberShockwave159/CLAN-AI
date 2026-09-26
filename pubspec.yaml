@@ -1,7 +1,7 @@
 name: clan_ai
 description: "Frontier-class cross-platform llama.cpp client"
 publish_to: 'none'
-version: 1.9.0+1
+version: 1.9.1+1
 
 environment:
   sdk: ^3.13.0
