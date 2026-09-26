@@ -540,6 +540,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _buildSectionHeader('RAG Memory', Icons.auto_stories_rounded),
             const SizedBox(height: 10),
 
+            // Server-side memory. Only offered against an A-PROX server, since
+            // the setting routes requests with A-PROX's `a-prox-rag` model alias.
+            if (settingsVM.isAproxServer)
+              SwitchListTile(
+                value: settingsVM.config.serverSideRagEnabled,
+                onChanged: settingsVM.toggleServerSideRag,
+                contentPadding: EdgeInsets.zero,
+                title: const Text(
+                  'Use A-PROX server memory',
+                  style: TextStyle(fontSize: 14),
+                ),
+                subtitle: Text(
+                  settingsVM.config.serverSideRagEnabled
+                      ? 'The server stores and recalls roleplay memories. Locally '
+                          'stored memories are left untouched, so you can switch back.'
+                      : 'Keep memories on this device. Turn this on to let the '
+                          'server handle memory instead.',
+                  style: TextStyle(fontSize: 12, color: context.clanTextMuted),
+                ),
+              ),
+
+            if (settingsVM.config.serverSideRagEnabled) ...[
+              Padding(
+                padding: const EdgeInsets.only(top: 4, bottom: 8),
+                child: Text(
+                  'Memories now live on the server, so the per-character counts '
+                  'below reflect only what is still stored locally.',
+                  style: TextStyle(fontSize: 11.5, color: context.clanTextMuted),
+                ),
+              ),
+            ],
+
             FutureBuilder<List<CharacterProfile>>(
               future: context.read<CharacterRepository>().getAllCharacters(),
               builder: (ctx, charSnapshot) {

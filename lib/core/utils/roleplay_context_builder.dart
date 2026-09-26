@@ -88,4 +88,34 @@ class RoleplayContext {
     required this.memories,
     this.memoryInfo = const [],
   });
+
+  /// A context with the standard roleplay prompt and **no** retrieved memories.
+  ///
+  /// Used when memory is handled by the A-PROX server: the prompt is still
+  /// rebuilt (so a thread's stored prompt stays current) but nothing local is
+  /// injected, because A-PROX prepends its own retrieved context to the
+  /// request. Building the local prompt too would inject the same facts twice.
+  factory RoleplayContext.withoutMemories({
+    required String characterName,
+    required String personality,
+    String? setting,
+    String? userPersona,
+    String? personaName,
+    String? characterSystemPrompt,
+    String? postHistoryInstructions,
+  }) {
+    return RoleplayContext(
+      systemPrompt: RoleplayPromptFormatter.buildSystemPrompt(
+        characterName: characterName,
+        personality: personality,
+        setting: setting,
+        userPersona: userPersona,
+        personaName: personaName,
+        retrievedMemories: const [],
+        characterSystemPrompt: characterSystemPrompt,
+        postHistoryInstructions: postHistoryInstructions,
+      ),
+      memories: const [],
+    );
+  }
 }

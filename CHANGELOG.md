@@ -22,6 +22,147 @@ Complete portability refactor enabling a Progressive Web App build of CLAN AI. T
 
 ## [Unreleased]
 
+### ✨ New Features
+
+**Roleplay overhaul — server-side memory & scene image generation**
+
+Roleplay memory can now be handed to an A-PROX server, and any assistant reply
+can be turned into a picture of its scene. See `roleplay_overhaul.md` for the
+full design.
+
+- **Server-side roleplay memory** — a new global `ServerConfig.serverSideRagEnabled`
+  toggle (Settings → RAG Memory, roleplay only, shown only when the connected
+  server advertises the A-PROX capability). Completed turns are pushed to
+  `POST /rag/ingest` in a per-character/per-thread collection; retrieval goes
+  through A-PROX's `a-prox-rag` route with a new `rag` request object carrying
+  `collection` / `top_k` / `min_score`. Existing threads are backfilled once.
+  The client RAG pipeline is **bypassed entirely** — the two backends are
+  mutually exclusive — and `clan_ai_vectors.db` is left untouched so switching
+  back is lossless. The RAG sliders now feed the server query, which also fixes
+  a latent bug where no roleplay call site passed `customParams` and they always
+  resolved to the defaults.
+- **Roleplay tool restriction** — outgoing roleplay messages carry
+  `"roleplay": true`; A-PROX intersects the armed tool set to
+  `rag_search` / `rag_ingest` / `image_generate`, so a roleplay turn can never
+  reach web search, page fetching, the clock, or file writing.
+- **Scene image generation** — a `Generate image` action in the assistant
+  message action row (roleplay only, gated on the server's `image` capability).
+  Two-step: the model drafts a scene prompt from the last three exchanges, then
+  A-PROX's `/image` generates from it. The result becomes a new sibling variant
+  of the message, keeping the dialogue verbatim and adding the picture, so the
+  existing variant arrows flip between "text only" and "text + picture".
+  A-PROX's caption is discarded — it describes the picture request, not the
+  reply. A failed generation reverts the variant rather than leaving an empty
+  one behind.
+- **Character consistency** — reference conditioning via a character portrait
+  (or the card avatar) attached as an `image_url` part, which selects A-PROX's
+  Qwen-Image-Edit-style i2i path; a canonical `appearance` sheet pinned into
+  every image prompt; and a per-character `visual_theme` (anime /
+  semi-realistic / photo-realistic) enforced both in the prompt and via an
+  A-PROX `image_style` field applied at the workflow level. A one-time
+  appearance draft (reviewed before saving) and a *Detect from avatar* style
+  button. Long-pressing a generated image refines from it.
+- **Roleplay is text-only** — the composer's image-attach button is hidden in
+  roleplay, and a user photo can never enter a roleplay turn.
+
+### 🩹 Fixes (scene image generation)
+
+- **Auxiliary single-shot calls now force `reasoning: false`.** `completeOnce`
+  inherited the server config's reasoning flag, so on a reasoning model the
+  image-prompt draft spent its entire token budget thinking and returned an empty
+  `content` — the request looked successful and the feature failed with a
+  generic "could not compose an image prompt". A thinking preamble is pure waste
+  for a call that asks for a one-paragraph artefact.
+- `completeOnce` falls back to `reasoning_content` when `content` is empty, so a
+  server that reasons regardless of the flag can't turn a long chain of thought
+  into a blank result.
+- The image-prompt failure snackbar now distinguishes a transport failure from
+  an empty model response, instead of one unactionable "try again".
+
+- **Scene image generation no longer pays for text it discards.** A new A-PROX
+  `image_only` request field returns the image artifact and stops, skipping the
+  vision-caption turn and the final synthesis turn — measured at ~85s of a ~200s
+  request on a 35B model. Opt-in, so conversational image requests still get
+  their caption.
+
+- **Long auxiliary completions are no longer killed by the shared 60s receive
+  budget.** `ApiHttpClient.post` accepts a per-call `timeout`, threaded through
+  `completeOnce`. A 62-second reasoning call was being aborted client-side *after
+  the server had already answered*, and reported as "the model returned an empty
+  image prompt" — a failure that pointed nowhere near its cause. The scene-image
+  draft now uses a 10-minute ceiling and a 16384-token budget (raised from 4096 on
+  request, to be measured down once real usage is known).
+- **The scene-image prompt draft no longer gets truncated.** `completeOnce` now
+  takes per-call `reasoning` / `maxTokens`. The draft runs with reasoning **on**
+  and a 16384-token budget, so the model deliberates in `reasoning_content` and
+  leaves only the prompt in `content` — previously the channel was forced off, the
+  model narrated a "Here's a thinking process" preamble into the answer, and the
+  prompt was cut off mid-sentence. The cheap auxiliary calls (appearance draft,
+  style detection) keep reasoning off and a tighter 256-token budget. A caller's
+  own `maxTokens` is no longer ignored.
+
+### 🗄 Schema
+
+- **v15 → v16** — `characters.appearance` (TEXT), `characters.identity_portrait_data`
+  (BLOB), `characters.visual_theme` (TEXT). Both `CREATE TABLE characters`
+  blocks and a `PRAGMA table_info`-guarded migration, itself guarded on the
+  table existing.
+
+### 🩹 Fixes (variant navigation & artifact delivery)
+
+Two independent defects made a successfully generated scene image look like it
+had never arrived.
+
+- **`SseClient.filterReasoning` silently dropped artifact-only chunks.** The
+  transform yields only in response to text or reasoning, attaching artifacts to
+  those yields via `_copyArtifacts`, so a chunk carrying an `image_url` /
+  `file_url` and no text produced no yield and was discarded. This was
+  invisible while A-PROX also streamed a vision caption — the artifact rode
+  along on a text-bearing chunk. The new `image_only` mode sends the image event
+  and *nothing else*, which reduced the response to a single artifact-only
+  chunk: the server generated and served a perfectly good image while the client
+  reported "the server returned no image" and reverted the variant. Such chunks
+  now pass straight through.
+- **Variant groups were internally inconsistent.** `doRegenerateMessage` and
+  `doCreateImageVariant` gave every sibling the new `siblingIds` but never
+  updated `totalVariants`, so an older variant displayed "1 / 2" while the group
+  held three. The navigator's count *and* its next-button enabled state both
+  read that field, so the arrow looked live and did nothing.
+  `doRevertVariant` then deleted the failed variant but restored the original
+  still listing the deleted id, stranding the user on the old reply behind a
+  permanently dead "next". And `doSwitchVariant` substituted the current message
+  for any unresolvable sibling id (`orElse: () => currentMsg`), manufacturing a
+  duplicate with the same `variantIndex` so the switch silently no-opped. All
+  three now go through `_syncVariantGroup`, which recomputes `siblingIds` *and*
+  `totalVariants` for every member from the ids actually stored, and
+  `doSwitchVariant` drops ids it cannot resolve. Groups written by the old code
+  heal on the next regeneration in that group.
+- **A dropped image is no longer reported as a server failure.**
+  `downloadImageArtifact` swallowed every exception and returned `null`, which
+  the roleplay flow surfaced as "the server returned no image" — pointing at the
+  server when the fault was a local network or disk error. It now logs and
+  rethrows, and the stream-finalizer download timeout logs too.
+- **Streaming requests can carry their own response-header budget.**
+  `ApiHttpClient.postStream` takes a `timeout` override. A-PROX `/image` stops
+  llama.cpp, cold-starts ComfyUI, runs the diffusion job and restarts llama.cpp
+  before emitting any headers (~195s measured), so
+  `RequestOptions.sceneImageStreamTimeout` applies a 10-minute ceiling instead of
+  the shared 60s budget.
+
+### 🩹 Fixes
+
+- `CharacterProfile.fromMap` no longer throws on a row with missing or
+  non-string `created_at` / `updated_at`; one malformed row could previously
+  take down the whole character list.
+- `RoleplayContextBuilder` retrieval in `editUserPrompt` and `deleteMessage`
+  now scopes to the thread lineage like `sendMessage` does — sibling-branch
+  memories were leaking into context.
+- Removed `_embedMessageAsync`'s unused `isFirstMessage` parameter, which
+  contradicted its own doc comment.
+- `ServerProfile` capabilities are no longer at risk of being persisted; they
+  describe the server reachable *now* and are re-derived by the health poll.
+
+
 ### 🏗 Hardening & Infrastructure
 
 **Dependency Injection**

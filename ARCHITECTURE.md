@@ -97,19 +97,135 @@ ChangeNotifier.notifyListeners() ──▶ UI rebuild
 
 ### Roleplay Mode (RoleplayViewModel)
 
-Same as assistant mode, plus:
+Same as assistant mode, plus, per completed turn:
 
 ```
-Before streaming:
-  RAG ContextBuilder embeds user input → searches vector store → injects top-K memories into system prompt
+Exactly one memory write, chosen by the active backend:
+  client  → onComplete hook embeds user+assistant pair into the vector store
+  server  → onComplete hook POSTs the turn to /rag/ingest (fire-and-forget)
 
-After streaming:
-  onComplete hook embeds user+assistant pair into vector store (fire-and-forget)
+and, before streaming, the request carries RequestOptions:
+  client  → (none; memories are already in the system prompt)
+  server  → model: "a-prox-rag" + rag: {collection, top_k, min_score}
+             + every message tagged "roleplay": true
 ```
+
+Image generation reuses the same streaming path with three deviations, all
+expressed as `doStreamResponse` options rather than a second implementation:
+
+| Option | Value | Why |
+|---|---|---|
+| `historyOverride` | last few messages + a synthetic `/image` turn | the scene is not the whole transcript |
+| `textMode` | `StreamTextMode.discard` | A-PROX's caption describes the picture request, not the reply |
+| `persistOnComplete` | `false` (portraits only) | a scratch message has no thread row, and messages→threads is an enforced FK |
+
+---
+
+## Scene Image Generation (Roleplay Only)
+
+```
+User taps the image action on an assistant message
+    │
+    ├─ resolve identity reference: approved portrait → card avatar → (offer to generate one)
+    │     Reference must be PNG/JPEG/WebP; anything else is transcoded or degrades to t2i
+    │
+    ▼
+STEP 1 — draft the scene prompt  (ChatRepository.completeOnce, non-streaming, discarded)
+  system: "image-prompt writer" (NOT the roleplay prompt — its identity guard
+          would fight an instruction to describe the scene)
+  body:   the last 3 exchanges + the appearance sheet + the visual theme
+          + a final turn prefixed `/bypass`
+  result: a scene description; a failure aborts before any variant is created
+    │
+    ▼
+doCreateImageVariant(messageIndex)
+  books a sibling variant seeded with the ORIGINAL text and NO imagePath
+    │
+    ▼
+STEP 2 — generate  (streamed, textMode: discard)
+  RequestOptions.sceneImage(
+    style: character.visualTheme.wireValue,   → top-level "image_style"
+    referenceImage: <portrait or avatar bytes> → attached as array content
+                                                on the last user message
+  )
+  A-PROX: /image → forced agentic loop → prompt enhancer → image_generate
+          → ComfyUI Qwen-Image 2.1 with `images.image_1` conditioning
+    │
+    ▼
+Mixin captures delta.image_url → downloads → persists imagePath
+    │
+    ├─ image present  → new variant: original text + picture
+    └─ image absent   → doRevertVariant() restores the original message
+```
+
+Notes that constrain this flow:
+
+- **The picture is for the reader only.** `_serializeOpenAiContent` serializes
+  image parts for `MessageRole.user` messages only, so an assistant image is
+  never re-sent and the next reply is driven purely by the text.
+- **Re-tapping the button always restarts from the identity reference**, never
+  from the previous picture (hence not inheriting `imagePath`). Refining from a
+  specific picture is a separate action, bound to a long press on the image.
+- **Image variants never enter memory**, on either RAG backend.
+- The request is **not** tagged `roleplay`: `/image` already forces a loop with
+  only `image_generate` armed, and the roleplay marker would also arm
+  `rag_search` for a picture request.
+
+### Character consistency, three layers
+
+| Layer | Mechanism | Guarantees |
+|---|---|---|
+| Reference conditioning | identity portrait as `image_1` | facial/structural identity — the only thing that actually locks a face |
+| Appearance sheet | `characters.appearance`, pinned into the prompt | hair/eyes/build continuity, no drift |
+| Visual theme | `image_style` resolved at the workflow level | a prompt rewriter cannot dilute the style |
+
+The theme is sent **both** ways on purpose: in the prompt so the enhancer
+elaborates in the right register, and as `image_style` so the workflow enforces
+it after the rewrite.
 
 ---
 
 ## RAG Architecture
+
+Roleplay memory has **two mutually exclusive backends**, selected by
+`ServerConfig.serverSideRagEnabled` *and* the connected server's advertised
+capability. They are never run together — that would inject the same facts
+twice.
+
+```
+                      serverSideRagEnabled?  &&  ServerProfile.isAprox?
+                                  │
+                    ┌─────────────┴─────────────┐
+                    ▼                           ▼
+             CLIENT (default)                SERVER (A-PROX)
+                    │                           │
+   HashEmbedding.embed(user input)      POST /rag/ingest per turn
+   VectorStore.searchSimilar             (fire-and-forget, after stream)
+   inject into SYSTEM PROMPT                  │
+                    │                    next turn sends
+                    │                    model: "a-prox-rag"
+                    │                    + rag: {collection, top_k, min_score}
+                    │                           │
+                    │                    A-PROX retrieves, injects into the
+                    │                    LAST USER MESSAGE, and swaps the
+                    │                    alias back to its upstream model
+                    ▼                           ▼
+            one prompt                    two prompts
+```
+
+| | Client | Server |
+|---|---|---|
+| Embeddings | `HashEmbedding`, on-device | A-PROX's ONNX BGE, CPU |
+| Storage | `clan_ai_vectors.db` | SQLite vector store on the server |
+| Injection point | system prompt | last user message |
+| Scoping | `character_id` + thread lineage | `collection` per character **and** thread |
+| Retrieval knobs | `ragTopK`, `ragMinScore` | same two, via the `rag` object |
+
+Switching backends leaves `clan_ai_vectors.db` untouched, so toggling is
+lossless. When the server backend is active the local pipeline is bypassed
+entirely (`RoleplayContext.withoutMemories`), the per-message memory chip is
+hidden (its `ragMemoryCount` stays null), and "Manage Memories" is hidden while
+Settings keeps the local Clear buttons.
 
 ### Vector Store
 
@@ -170,10 +286,13 @@ RAG behavior is configurable via `GenerationParams`:
 | Parameter | Default | Range | Description |
 |-----------|---------|-------|-------------|
 | `ragTopK` | 3 | 1-10 | Number of memories to retrieve |
-| `ragMinScore` | 0.0 | 0.0-1.0 | Minimum cosine similarity threshold |
-| `ragLimit` | 100 | — | Maximum number of memories returned by the vector store query |
+| `ragMinScore` | 0.0 | 0.0-1.0 | Minimum relevance threshold |
+| `ragLimit` | 100 | — | Hardcoded candidate cap in the vector store query; not user-configurable |
 
-Configuration is exposed in Settings → Generation Parameters with sliders. Values are passed through `RoleplayViewModel` to `RoleplayContextBuilder.build()`.
+Configuration is exposed in Settings → Generation Parameters with sliders. The
+same two sliders drive both backends: the client path reads them through
+`RoleplayContextBuilder.build()`, the server path through the `rag` request
+object.
 
 ### Memory Management
 
@@ -190,6 +309,9 @@ CharacterMemoriesDialog opens
 
 ### Memory Chip Display
 
+Self-gating: the chip renders when `ragMemoryCount > 0`, and that count is null
+on the server backend, so no explicit hide is needed.
+
 Assistant messages include a memory chip when `ragMemoryCount > 0`:
 - Displays count of RAG memories injected into system prompt
 - Tap shows `ragMemoryContents` (JSON-encoded memory strings) in expandable dialog
@@ -199,7 +321,7 @@ Assistant messages include a memory chip when `ragMemoryCount > 0`:
 
 ## SQLite Schema
 
-### Version 14 (Latest)
+### Version 16 (Latest)
 
 ```sql
 -- Thread table: conversation containers
@@ -259,6 +381,9 @@ CREATE TABLE characters (
   system_prompt TEXT,                    -- per-character system prompt override
   post_history_instructions TEXT,        -- text appended after AI responses
   alternate_greetings TEXT,              -- JSON array of alternate opening messages
+  appearance TEXT,                        -- canonical physical description (v16)
+  identity_portrait_data BLOB,            -- approved reference portrait, <=512px JPEG (v16)
+  visual_theme TEXT,                      -- anime | semi-realistic | photo-realistic | NULL (v16)
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -292,6 +417,7 @@ CREATE TABLE persona_templates (
 | v12 → v13 | Added `image_path` column to messages (absolute path to attached image file, user messages only) |
 | v13 → v14 | Added `file_path`, `file_name`, `file_mime` columns to messages (downloaded file artifacts from `image_url`/`file_url` SSE deltas) |
 | v14 → v15 | Added `image_url` column to messages (client-facing artifact URL, always surfaced as a tappable link under the rendered image) |
+| v15 → v16 | Added `appearance`, `identity_portrait_data`, `visual_theme` columns to characters (image-consistency state) |
 
 ---
 
@@ -311,7 +437,7 @@ The underlying transport is a conditional-import facade (`export ... show` on `d
 
 | Variant | Implementation | Notes |
 |---|---|---|
-| `http_transport_io.dart` | `HttpClient()..connectionTimeout` + `IOClient` + `client.send()` | Byte-identical native path; 10s connect / 60s receive budgets |
+| `http_transport_io.dart` | `HttpClient()..connectionTimeout` + `IOClient` + `client.send()` | Byte-identical native path; 10s connect / 60s receive budgets. `postStream` accepts a per-call `timeout` for the response-header wait; `RequestOptions.sceneImageStreamTimeout` (10 min) covers A-PROX `/image`, which withholds headers until ComfyUI finishes (~195s) |
 | `http_transport_web.dart` | `web.window.fetch` + `ReadableStreamDefaultReader` | XHR `BrowserClient` buffers whole responses, so token streaming needs incremental `read()`; consumer cancel aborts the fetch (`AbortController`), mirroring socket teardown. No TCP connect timeout in browsers — the existing `.timeout()` guards are the only bound. |
 
 `postStream()` returns a `StreamedApiResponse { statusCode, stream, bodyToString() }` — the `.stream` member matches `http.StreamedResponse`, so `LlamaApiService` and `SseClient.parseStream()` call sites are untouched.
@@ -330,6 +456,11 @@ SseClient.filterReasoning()
     │
     ├── Processes inline tags: ```xml, <thought>, <reasoning>
     ├── Forwards dedicated fields: reasoning, reasoning_content, thought
+    ├── Passes artifact-only chunks straight through
+    │   └── (no text + no reasoning + image_url/file_url). The transform only
+    │       yields in response to text or reasoning, so such a chunk used to be
+    │       dropped entirely. A-PROX `image_only` mode sends exactly this, and
+    │       losing it looked like "the server returned no image".
     └── Produces StreamChunk + StreamMetrics
 ```
 
@@ -420,7 +551,7 @@ The shared network stack (`ApiHttpClient` → `LatencyMeter` → `LlamaApiServic
 ## Key Constraints & Gotchas
 
 1. **StreamMutationMixin** is shared by ChatViewModel and RoleplayViewModel — all streaming, undo, stopGeneration, and switchVariant logic lives here
-2. **Conversation branching**: Regenerate/edit operations create sibling variants that share a complete `siblingIds` array. `doSwitchVariant` loads siblings from DB via `getAllMessagesForThread()` (bypasses message deduplication), sorts by `variantIndex`, and indexes into the sorted list. Only messages with same `parentId` and `role == assistant` are considered variants. Regenerate builds `allSiblingIds` set (filtered by `role == assistant` and shared `parentId`) and assigns it to every variant in the group. Navigation uses `variantIndex + 1` for next, `variantIndex - 1` for previous. Branches are linked via `branchFromThreadId` on `ChatThread`.
+2. **Conversation branching**: Regenerate/edit operations create sibling variants that share a complete `siblingIds` array. `doSwitchVariant` loads siblings from DB via `getAllMessagesForThread()` (bypasses message deduplication), sorts by `variantIndex`, and indexes into the sorted list. Only messages with same `parentId` and `role == assistant` are considered variants. Regenerate builds the group member set (filtered by `role == assistant` and shared `parentId`) and `_syncVariantGroup` writes **both** `siblingIds` and `totalVariants` to every member, derived from the ids actually stored rather than by incrementing — a group is one consistent snapshot, so a member can never advertise a count or a sibling that disagrees with its peers. `variantGroupFields` applies the same values to a message not yet in the database. `doSwitchVariant` resolves sibling ids strictly and drops any it cannot find, then sorts the resolved list and uses `variantIndex + 1` / `variantIndex - 1`; it never substitutes the current message for a missing one, which would create a duplicate with the same `variantIndex` and make the switch a no-op. Branches are linked via `branchFromThreadId` on `ChatThread`.
 3. **SQLite init** must happen once — `_initSqliteFfi()` (FFI on desktop, `databaseFactoryFfiWeb` on web). Calling the FFI init again triggers "You are changing sqflite default factory" warning
 4. **Thread isolation**: `characterId` null = assistant, non-null = roleplay — ChatViewModel filters by null, RoleplayViewModel filters by non-null
 5. **RAG isolation**: Embeddings stored with `character_id` — queries use `WHERE character_id = ?` — no cross-character leakage

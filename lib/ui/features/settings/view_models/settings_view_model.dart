@@ -64,6 +64,23 @@ class SettingsViewModel extends ChangeNotifier {
     );
   }
 
+  /// Records the capability tags reported by `/health` on the active profile.
+  ///
+  /// Runtime-only state (deliberately not serialized — it describes the server
+  /// that is reachable *now*), refreshed by the 15-second health poll.
+  /// A-PROX-only features read it through [connectionDetails], so they stay
+  /// hidden against llama.cpp and other OpenAI backends. No write to the
+  /// repository: `ServerProfile.toMap` drops the field by design.
+  void _updateCapabilities(PingResult pingRes) {
+    final conn = connectionDetails;
+    if (conn == null) return;
+    if (setEquals(conn.capabilities, pingRes.capabilities)) return;
+    final index = _profiles.indexWhere((p) => p.id == conn.id);
+    if (index == -1) return;
+    _profiles[index] = conn.copyWith(capabilities: pingRes.capabilities);
+    notifyListeners();
+  }
+
   bool _isTestingConnection = false;
   bool get isTestingConnection => _isTestingConnection;
 
@@ -224,6 +241,24 @@ class SettingsViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> toggleServerSideRag(bool value) async {
+    config = config.copyWith(serverSideRagEnabled: value);
+    await _saveConfig();
+    notifyListeners();
+  }
+
+  /// Whether the connected server advertises A-PROX's RAG store.
+  ///
+  /// Gates the "use A-PROX server memory" option: without it the setting would
+  /// route requests with an `a-prox-rag` model alias that a plain backend would
+  /// reject, so the toggle is hidden rather than offered-and-broken.
+  bool get isAproxServer => connectionDetails?.isAprox ?? false;
+
+  /// Whether the connected server can generate images (A-PROX
+  /// `[image_generation]`). Gates the roleplay "Generate image" action.
+  bool get supportsImageGeneration =>
+      connectionDetails?.supportsImageGeneration ?? false;
+
   Future<void> addTemplate(String name, String content) async {
     await _templateRepository.addTemplate(name, content);
     _templates = await _templateRepository.loadTemplates();
@@ -345,6 +380,7 @@ class SettingsViewModel extends ChangeNotifier {
         healthStatus: pingRes.status,
         latencyMs: pingRes.latencyMs,
       );
+      _updateCapabilities(pingRes);
 
       if (pingRes.isHealthy) {
         _testConnectionError = null;
@@ -390,6 +426,7 @@ class SettingsViewModel extends ChangeNotifier {
       final pingRes = await _serverRepository.testConnection(conn.baseUrl, apiKey: conn.apiKey);
       final newStatus = pingRes.status;
       final newLatency = pingRes.latencyMs;
+      _updateCapabilities(pingRes);
       if (config.healthStatus != newStatus || config.latencyMs != newLatency) {
         config = config.copyWith(
           healthStatus: newStatus,

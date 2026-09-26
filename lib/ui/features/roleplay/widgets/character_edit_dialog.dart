@@ -3,12 +3,16 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:clan_ai/core/constants/app_theme.dart';
+import 'package:clan_ai/core/constants/aprox_capabilities.dart';
 import 'package:clan_ai/core/constants/clan_theme_colors.dart';
 import 'package:clan_ai/data/models/character_profile.dart';
 import 'package:clan_ai/data/models/persona_template.dart';
 import 'package:clan_ai/data/repositories/character_repository.dart';
+import 'package:clan_ai/data/repositories/chat_repository.dart';
+import 'package:clan_ai/ui/features/roleplay/services/character_image_assist.dart';
 import 'package:clan_ai/ui/features/roleplay/view_models/persona_template_view_model.dart';
 import 'package:clan_ai/ui/features/roleplay/widgets/persona_template_dialog.dart';
+import 'package:clan_ai/ui/features/settings/view_models/settings_view_model.dart';
 
 /// Dialog for editing an existing [CharacterProfile].
 class CharacterEditDialog extends StatefulWidget {
@@ -35,9 +39,14 @@ class _CharacterEditDialogState extends State<CharacterEditDialog> {
   late TextEditingController _systemPromptCtrl;
   late TextEditingController _postHistoryCtrl;
   late TextEditingController _alternateGreetingsCtrl;
+  late TextEditingController _appearanceCtrl;
 
   String? _selectedTemplateId;
   Uint8List? _avatarPreview;
+  late VisualTheme _visualTheme;
+
+  /// Set while the "detect from avatar" request is in flight.
+  bool _detectingStyle = false;
 
   @override
   void initState() {
@@ -54,6 +63,10 @@ class _CharacterEditDialogState extends State<CharacterEditDialog> {
       text: widget.character.alternateGreetings.join('\n'),
     );
     _avatarPreview = widget.character.avatarData;
+    _appearanceCtrl = TextEditingController(
+      text: widget.character.appearance ?? '',
+    );
+    _visualTheme = widget.character.visualTheme;
   }
 
   @override
@@ -67,6 +80,7 @@ class _CharacterEditDialogState extends State<CharacterEditDialog> {
     _systemPromptCtrl.dispose();
     _postHistoryCtrl.dispose();
     _alternateGreetingsCtrl.dispose();
+    _appearanceCtrl.dispose();
     super.dispose();
   }
 
@@ -81,6 +95,39 @@ class _CharacterEditDialogState extends State<CharacterEditDialog> {
   Color _avatarColor(Uint8List? avatar) {
     if (avatar != null) return Colors.transparent;
     return context.clanSurfaceVariant;
+  }
+
+  /// Asks the model which visual style the current avatar is, and preselects it.
+  ///
+  /// A single cheap vision call, run only on request, and the result is
+  /// *preselected* rather than saved — the user stays in charge of the choice,
+  /// which matters because a wrong style is the thing that quietly breaks
+  /// consistency.
+  Future<void> _detectStyleFromAvatar() async {
+    final avatar = _avatarPreview;
+    if (avatar == null) return;
+    setState(() => _detectingStyle = true);
+    try {
+      final detected = await CharacterImageAssist.detectVisualStyle(
+        chatRepository: context.read<ChatRepository>(),
+        serverConfig: context.read<SettingsViewModel>().config,
+        connection: context.read<SettingsViewModel>().connectionDetails,
+        avatarBytes: avatar,
+      );
+      if (!mounted) return;
+      if (detected == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not detect a style. Pick one manually.'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+        return;
+      }
+      setState(() => _visualTheme = detected);
+    } finally {
+      if (mounted) setState(() => _detectingStyle = false);
+    }
   }
 
   Future<void> _save() async {
@@ -108,6 +155,11 @@ class _CharacterEditDialogState extends State<CharacterEditDialog> {
       systemPrompt: _systemPromptCtrl.text.trim().isEmpty ? null : _systemPromptCtrl.text.trim(),
       postHistoryInstructions: _postHistoryCtrl.text.trim().isEmpty ? null : _postHistoryCtrl.text.trim(),
       alternateGreetings: alternateGreetings,
+      appearance: _appearanceCtrl.text.trim().isEmpty
+          ? null
+          : _appearanceCtrl.text.trim(),
+      identityPortraitData: widget.character.identityPortraitData,
+      visualTheme: _visualTheme,
       createdAt: widget.character.createdAt,
       updatedAt: DateTime.now(),
     );
@@ -207,6 +259,86 @@ class _CharacterEditDialogState extends State<CharacterEditDialog> {
             TextField(
               controller: _nameCtrl,
               decoration: const InputDecoration(labelText: 'Name'),
+            ),
+            const SizedBox(height: 16),
+            // --- Image consistency -----------------------------------------
+            // The avatar doubles as the identity reference for generated scene
+            // images, so these two fields sit directly under it rather than in
+            // a separate settings screen: the connection between them is the
+            // whole point.
+            Text(
+              'Generated Images',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: context.clanTextSecondary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _appearanceCtrl,
+              maxLines: 3,
+              decoration: InputDecoration(
+                labelText: 'Appearance',
+                hintText: 'Stable physical traits: hair, eyes, build, face',
+                helperText: 'Keeps this character recognisable across generated '
+                    'scenes. Clothing and setting are left out on purpose — they '
+                    'change with the scene.',
+                helperMaxLines: 3,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<VisualTheme>(
+                    initialValue: _visualTheme,
+                    decoration: InputDecoration(
+                      labelText: 'Visual Style',
+                      prefixIcon: const Icon(Icons.palette_outlined),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    items: VisualTheme.values
+                        .map((t) => DropdownMenuItem(
+                              value: t,
+                              child: Text(t.label),
+                            ))
+                        .toList(),
+                    onChanged: (t) => setState(() => _visualTheme = t ?? VisualTheme.none),
+                  ),
+                ),
+                if (_avatarPreview != null) ...[
+                  const SizedBox(width: 8),
+                  _detectingStyle
+                      ? const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      : TextButton(
+                          onPressed: _detectStyleFromAvatar,
+                          child: const Text('Detect', style: TextStyle(fontSize: 12)),
+                        ),
+                ],
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                'Applied to every generated image. Match it to your avatar — a '
+                'mismatch makes the reference fight the style and the character '
+                'comes out inconsistent.',
+                style: TextStyle(fontSize: 11, color: context.clanTextMuted),
+              ),
             ),
             const SizedBox(height: 8),
             TextField(

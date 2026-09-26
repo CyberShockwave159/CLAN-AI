@@ -98,7 +98,9 @@ class _PromptInputBarState extends State<PromptInputBar> {
 
   void _handleSend() {
     final text = _controller.text.trim();
-    final imagePath = _imagePath;
+    // Roleplay hides the attach button, so an image here could only be leftover
+    // state; drop it so a photo can never enter a roleplay turn.
+    final imagePath = widget.isRoleplay ? null : _imagePath;
     if ((text.isNotEmpty || imagePath != null) && !widget.isGenerating) {
       widget.onSend(text, imagePath);
       _controller.clear();
@@ -138,20 +140,26 @@ class _PromptInputBarState extends State<PromptInputBar> {
 
             const SizedBox(width: 4),
 
-            // Image Attach Button
-            IconButton(
-              icon: Icon(
-                _imagePath != null
-                    ? Icons.image_rounded
-                    : Icons.add_photo_alternate_outlined,
-                size: 22,
+            // Image Attach Button.
+            // Hidden in roleplay: a user-uploaded photo would enter the model's
+            // context as a real conversational turn, and roleplay is
+            // text-only by design (the character speaks, the user replies).
+            // Scene images generated from a message are a separate, deliberate
+            // action and are never fed back as user input.
+            if (!widget.isRoleplay)
+              IconButton(
+                icon: Icon(
+                  _imagePath != null
+                      ? Icons.image_rounded
+                      : Icons.add_photo_alternate_outlined,
+                  size: 22,
+                ),
+                color: _imagePath != null
+                    ? AppTheme.accentPrimary
+                    : (isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary),
+                onPressed: widget.isGenerating ? null : _pickImage,
+                tooltip: 'Attach image',
               ),
-              color: _imagePath != null
-                  ? AppTheme.accentPrimary
-                  : (isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary),
-              onPressed: widget.isGenerating ? null : _pickImage,
-              tooltip: 'Attach image',
-            ),
 
             const SizedBox(width: 4),
 

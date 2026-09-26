@@ -9,6 +9,14 @@ class ApiEndpoints {
   static const String llamaHealth = '/health';
   static const String llamaProps = '/props';
 
+  // A-PROX direct RAG store access. These bypass the LLM entirely, so A-PROX's
+  // RAG can be used as a memory backend (see AproxRagClient). Absent on plain
+  // llama.cpp / OpenAI backends — every call is capability-gated and
+  // best-effort.
+  static const String ragIngest = '/rag/ingest';
+  static const String ragQuery = '/rag/query';
+  static const String ragCollectionCount = '/rag/collections';
+
   /// Normalizes and cleans a base URL string.
   /// Removes trailing slashes and ensures standard protocol.
   static String normalizeBaseUrl(String rawUrl) {

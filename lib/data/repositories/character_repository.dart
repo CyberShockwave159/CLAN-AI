@@ -1,10 +1,25 @@
 import 'package:clan_ai/data/models/character_profile.dart';
+import 'package:clan_ai/data/datasources/aprox_rag_client.dart';
 import 'package:clan_ai/data/datasources/local_storage.dart';
 import 'package:clan_ai/data/datasources/vector_store.dart';
+
+/// Notified whenever a character's appearance sheet is saved, so the owner can
+/// mirror it into the A-PROX RAG store.
+///
+/// [appearance] is the new canonical text, or null when it was cleared.
+typedef AppearanceSyncCallback = Future<void> Function(
+  CharacterProfile character,
+  String? appearance,
+);
 
 class CharacterRepository {
   final LocalDatabase _localDb;
   final VectorStore _vectorStore;
+
+  /// Optional sink for mirroring the appearance sheet into A-PROX RAG. Set by
+  /// the app so a character edit is reflected in server-side memory without this
+  /// repository taking a dependency on the network stack.
+  AppearanceSyncCallback? onAppearanceChanged;
 
   CharacterRepository({LocalDatabase? localDb, VectorStore? vectorStore})
       : _localDb = localDb ?? LocalDatabase.instance,
@@ -38,18 +53,43 @@ class CharacterRepository {
         systemPrompt: character.systemPrompt ?? duplicate.systemPrompt,
         postHistoryInstructions: character.postHistoryInstructions ?? duplicate.postHistoryInstructions,
         alternateGreetings: character.alternateGreetings.isNotEmpty ? character.alternateGreetings : duplicate.alternateGreetings,
+        appearance: character.appearance ?? duplicate.appearance,
+        identityPortraitData: character.identityPortraitData ?? duplicate.identityPortraitData,
+        visualTheme: character.visualTheme,
       );
       await updateCharacter(merged);
       return merged;
     }
 
     await _localDb.insertCharacter(character);
+    await _syncAppearance(character);
     return character;
   }
 
   Future<void> updateCharacter(CharacterProfile character) async {
     await _localDb.updateCharacter(character);
+    await _syncAppearance(character);
   }
+
+  /// Mirrors the appearance sheet into A-PROX RAG when one is configured.
+  ///
+  /// Best-effort by construction: the callback owns its own error handling, and
+  /// a server that isn't A-PROX (or a timeout) must never block a character
+  /// save. Uses a stable `source_uri`, so A-PROX replaces the previous chunks
+  /// rather than accumulating a new copy on every keystroke-save.
+  Future<void> _syncAppearance(CharacterProfile character) async {
+    final sync = onAppearanceChanged;
+    if (sync == null) return;
+    try {
+      await sync(character, character.appearance);
+    } catch (_) {
+      // Appearance mirroring is an enhancement; never fail a save over it.
+    }
+  }
+
+  /// Collection holding a character's appearance sheet on the A-PROX server.
+  static String visualCollection(String characterId) =>
+      AproxRagClient.visualCollection(characterId);
 
   Future<void> deleteCharacter(String id) async {
     await _localDb.deleteCharacter(id);

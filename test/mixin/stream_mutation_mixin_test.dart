@@ -5,6 +5,7 @@ import 'package:clan_ai/data/models/chat_thread.dart';
 import 'package:clan_ai/data/models/server_config.dart';
 import 'package:clan_ai/data/models/server_profile.dart';
 import 'package:clan_ai/data/repositories/chat_repository.dart';
+import 'package:clan_ai/data/datasources/request_options.dart';
 import 'package:clan_ai/domain/models/generation_params.dart';
 import 'package:clan_ai/ui/shared/mixins/stream_mutation_mixin.dart';
 import 'package:flutter/foundation.dart';
@@ -121,6 +122,7 @@ class _GatedChatRepository extends FakeChatRepository {
     GenerationParams? params,
     CancelToken? cancelToken,
     int? modelContextLength,
+    RequestOptions options = RequestOptions.none,
   }) {
     return controller.stream;
   }
@@ -1080,4 +1082,435 @@ void main() {
       expect(notified, isTrue);
     });
   });
+
+  group('StreamMutationMixin scene-image support', () {
+    test('discard text mode keeps the seeded content and still captures the '
+        'artifact', () async {
+      // The scene-image flow seeds a variant with the original dialogue and
+      // must not let A-PROX's picture caption overwrite it.
+      final repo = FakeChatRepository();
+      final testVm = TestViewModel(repo: repo);
+      final thread = buildThread(title: 'Test');
+      testVm.setThread(thread);
+      repo.setStreamFragments(thread.id, const [
+        StreamChunk(
+          text: 'Here is a picture of a woman in a garden.',
+          imageUrl: 'http://127.0.0.1:8000/images/gen_1.png',
+        ),
+        StreamChunk(text: ' She is smiling warmly.', isDone: true),
+      ]);
+      testVm.stubbedImageRef = '/tmp/attachments/ref.png';
+      testVm.addMessage(buildMessage(
+        threadId: thread.id,
+        id: 'assistant-1',
+        role: MessageRole.assistant,
+        content: 'Alice smiles warmly at Vander.',
+        status: MessageStatus.streaming,
+      ));
+
+      await testVm.doStreamResponse(
+        assistantMessageId: 'assistant-1',
+        serverConfig: buildServerConfig(),
+        connection: null,
+        textMode: StreamTextMode.discard,
+      );
+
+      final message = testVm.getMessageById('assistant-1')!;
+      expect(
+        message.content,
+        'Alice smiles warmly at Vander.',
+        reason: 'the caption describes the picture request, not the reply',
+      );
+      expect(message.imagePath, '/tmp/attachments/ref.png');
+      expect(message.status, MessageStatus.completed);
+      expect(testVm.lastDownloadedImageUrl,
+          'http://127.0.0.1:8000/images/gen_1.png');
+    });
+
+    test('append mode still accumulates text', () async {
+      final repo = FakeChatRepository();
+      final testVm = TestViewModel(repo: repo);
+      final thread = buildThread(title: 'Test');
+      testVm.setThread(thread);
+      repo.setStreamFragments(thread.id, const [
+        StreamChunk(text: 'Hello '),
+        StreamChunk(text: 'there', isDone: true),
+      ]);
+      testVm.addMessage(buildMessage(
+        threadId: thread.id,
+        id: 'assistant-1',
+        role: MessageRole.assistant,
+        content: '',
+        status: MessageStatus.streaming,
+      ));
+
+      await testVm.doStreamResponse(
+        assistantMessageId: 'assistant-1',
+        serverConfig: buildServerConfig(),
+        connection: null,
+      );
+      expect(testVm.getMessageById('assistant-1')!.content, 'Hello there');
+    });
+
+    test('onArtifactResolved reports the stored path, persisted or not', () async {
+      final repo = FakeChatRepository();
+      final testVm = TestViewModel(repo: repo);
+      final thread = buildThread(title: 'Test');
+      testVm.setThread(thread);
+      repo.setStreamFragments(thread.id, const [
+        StreamChunk(
+          text: 'caption',
+          imageUrl: 'http://127.0.0.1:8000/images/gen_2.png',
+        ),
+        StreamChunk(text: '', isDone: true),
+      ]);
+      testVm.stubbedImageRef = '/tmp/attachments/portrait.png';
+      testVm.addMessage(buildMessage(
+        threadId: thread.id,
+        id: 'scratch',
+        role: MessageRole.assistant,
+        content: '',
+        status: MessageStatus.streaming,
+      ));
+
+      String? reported;
+      await testVm.doStreamResponse(
+        assistantMessageId: 'scratch',
+        serverConfig: buildServerConfig(),
+        connection: null,
+        textMode: StreamTextMode.discard,
+        // A scratch message has no thread row, so it must not be written.
+        persistOnComplete: false,
+        onArtifactResolved: (path) => reported = path,
+      );
+
+      expect(reported, '/tmp/attachments/portrait.png');
+      expect(
+        await repo.getAllMessagesForThread(thread.id),
+        isEmpty,
+        reason: 'a scratch portrait must not enter the transcript',
+      );
+    });
+
+    test('historyOverride replaces the derived history slice', () async {
+      final repo = FakeChatRepository();
+      final testVm = TestViewModel(repo: repo);
+      final thread = buildThread(title: 'Test');
+      testVm.setThread(thread);
+      repo.setStreamFragments(thread.id, const [
+        StreamChunk(text: 'ok', isDone: true),
+      ]);
+      testVm.addMessage(buildMessage(
+        threadId: thread.id,
+        id: 'assistant-1',
+        role: MessageRole.assistant,
+        content: 'kept',
+        status: MessageStatus.streaming,
+      ));
+      final override = [
+        buildMessage(
+          threadId: thread.id,
+          role: MessageRole.user,
+          content: '/image a garden',
+        ),
+      ];
+
+      await testVm.doStreamResponse(
+        assistantMessageId: 'assistant-1',
+        serverConfig: buildServerConfig(),
+        connection: null,
+        textMode: StreamTextMode.discard,
+        historyOverride: override,
+      );
+      expect(testVm.getMessageById('assistant-1')!.content, 'kept');
+    });
+  });
+
+  group('StreamMutationMixin doCreateImageVariant', () {
+    test('creates a sibling variant that keeps the original text', () async {
+      final repo = FakeChatRepository();
+      final testVm = TestViewModel(repo: repo);
+      final thread = buildThread(title: 'Test');
+      testVm.setThread(thread);
+      final original = buildMessage(
+        threadId: thread.id,
+        id: 'm1',
+        role: MessageRole.assistant,
+        content: 'Alice smiles warmly at Vander.',
+        status: MessageStatus.completed,
+      );
+      await repo.saveMessage(original);
+      testVm.addMessage(original);
+
+      final result = await testVm.doCreateImageVariant(messageIndex: 0);
+      expect(result, isNotNull);
+      expect(result!.oldMessageId, 'm1');
+
+      final variant = testVm.getMessageById(result.newAssistantId)!;
+      expect(variant.content, 'Alice smiles warmly at Vander.');
+      expect(variant.status, MessageStatus.streaming);
+      expect(variant.variantIndex, 1);
+      expect(variant.totalVariants, 2);
+      expect(variant.siblingIds, containsAll(<String>['m1', result.newAssistantId]));
+      expect(variant.parentId, original.parentId);
+    });
+
+    test('does not inherit an image from the message it replaces', () async {
+      // Each press must be an independent generation from the identity
+      // reference, not a re-edit of the previous picture.
+      final repo = FakeChatRepository();
+      final testVm = TestViewModel(repo: repo);
+      final thread = buildThread(title: 'Test');
+      testVm.setThread(thread);
+      final original = buildMessage(
+        threadId: thread.id,
+        id: 'm1',
+        role: MessageRole.assistant,
+        content: 'text',
+        status: MessageStatus.completed,
+        imagePath: '/tmp/old.png',
+      );
+      await repo.saveMessage(original);
+      testVm.addMessage(original);
+
+      final result = await testVm.doCreateImageVariant(messageIndex: 0);
+      expect(testVm.getMessageById(result!.newAssistantId)!.imagePath, isNull);
+    });
+
+    test('refuses for a user message and while generating', () async {
+      final repo = FakeChatRepository();
+      final testVm = TestViewModel(repo: repo);
+      final thread = buildThread(title: 'Test');
+      testVm.setThread(thread);
+      testVm.addMessage(buildMessage(
+        threadId: thread.id,
+        id: 'u1',
+        role: MessageRole.user,
+        content: 'hi',
+      ));
+      expect(await testVm.doCreateImageVariant(messageIndex: 0), isNull);
+
+      testVm.clearMessages();
+      testVm.addMessage(buildMessage(
+        threadId: thread.id,
+        id: 'a1',
+        role: MessageRole.assistant,
+        content: 'x',
+      ));
+      testVm.isGenerating = true;
+      expect(await testVm.doCreateImageVariant(messageIndex: 0), isNull);
+    });
+
+    test('doRevertVariant puts the original message back', () async {
+      final repo = FakeChatRepository();
+      final testVm = TestViewModel(repo: repo);
+      final thread = buildThread(title: 'Test');
+      testVm.setThread(thread);
+      final original = buildMessage(
+        threadId: thread.id,
+        id: 'm1',
+        role: MessageRole.assistant,
+        content: 'original text',
+        status: MessageStatus.completed,
+      );
+      await repo.saveMessage(original);
+      testVm.addMessage(original);
+
+      final result = await testVm.doCreateImageVariant(messageIndex: 0);
+      await testVm.doRevertVariant(
+        messageIndex: 0,
+        newAssistantId: result!.newAssistantId,
+        oldMessageId: result.oldMessageId,
+      );
+
+      expect(testVm.messages, hasLength(1));
+      expect(testVm.messages.single.id, 'm1');
+      expect(testVm.messages.single.content, 'original text');
+      expect(
+        await repo.getAllMessagesForThread(thread.id),
+        hasLength(1),
+        reason: 'the empty placeholder must not linger in the database',
+      );
+    });
+  });
+  group('variant group consistency', () {
+    /// Seeds a thread with a user turn plus assistant variant `M0`, and returns
+    /// helpers for driving regeneration the way the stream-completion hook does.
+    Future<({FakeChatRepository repo, TestViewModel vm, dynamic thread})> seed()
+        async {
+      final repo = FakeChatRepository();
+      final vm = TestViewModel(repo: repo);
+      final thread = buildThread(title: 'T');
+      vm.setThread(thread);
+      final userMsg = buildMessage(
+          threadId: thread.id, role: MessageRole.user, content: 'hi');
+      final asst = buildMessage(
+          threadId: thread.id,
+          id: 'M0',
+          role: MessageRole.assistant,
+          content: 'v0',
+          status: MessageStatus.completed);
+      await repo.saveMessage(userMsg);
+      await repo.saveMessage(asst);
+      vm.addMessage(userMsg);
+      vm.addMessage(asst);
+      return (repo: repo, vm: vm, thread: thread);
+    }
+
+    /// Mirrors what the stream-completion hook does: finish the streaming
+    /// placeholder and persist it, which is what makes it a real sibling.
+    Future<String> regenerateAndPersist(TestViewModel vm, FakeChatRepository repo) async {
+      final r = await vm.doRegenerateMessage(messageIndex: 1);
+      expect(r, isNotNull);
+      final newId = r!.newAssistantId;
+      final i = vm.messages.indexWhere((m) => m.id == newId);
+      final done =
+          vm.messages[i].copyWith(content: 'reply', status: MessageStatus.completed);
+      vm.messages[i] = done;
+      await repo.saveMessage(done);
+      return newId;
+    }
+
+    test('every member of a 3-variant group reports the same count', () async {
+      final s = await seed();
+      await regenerateAndPersist(s.vm, s.repo);
+      await regenerateAndPersist(s.vm, s.repo);
+
+      final stored = await s.repo.getAllMessagesForThread(s.thread.id);
+      final variants = stored.where((m) => m.role == MessageRole.assistant).toList();
+      expect(variants.length, 3);
+
+      // The regression: siblings used to be handed the new siblingIds but kept
+      // their old totalVariants, so the oldest variant displayed "1 / 2" while
+      // the group held three and the next arrow looked live but did nothing.
+      for (final v in variants) {
+        expect(v.totalVariants, 3,
+            reason: '${v.id} has a stale totalVariants');
+        expect(v.siblingIds.length, 3,
+            reason: '${v.id} has a stale siblingIds list');
+        expect(v.siblingIds.toSet(), variants.map((m) => m.id).toSet());
+      }
+    });
+
+    test('cycles forward and backward through every variant', () async {
+      final s = await seed();
+      await regenerateAndPersist(s.vm, s.repo);
+      final second = await regenerateAndPersist(s.vm, s.repo);
+      expect(s.vm.messages[1].id, second, reason: 'newest variant is visible');
+
+      await s.vm.doSwitchVariant(messageIndex: 1, previous: true);
+      expect(s.vm.messages[1].variantIndex, 1);
+      await s.vm.doSwitchVariant(messageIndex: 1, previous: true);
+      expect(s.vm.messages[1].id, 'M0', reason: 'oldest variant reached');
+
+      // The original complaint: sitting on the oldest, "next" did nothing.
+      await s.vm.doSwitchVariant(messageIndex: 1, previous: false);
+      expect(s.vm.messages[1].variantIndex, 1);
+      await s.vm.doSwitchVariant(messageIndex: 1, previous: false);
+      expect(s.vm.messages[1].id, second, reason: 'newest variant reached');
+
+      // Clamped at the ends rather than wrapping or throwing.
+      await s.vm.doSwitchVariant(messageIndex: 1, previous: false);
+      expect(s.vm.messages[1].id, second);
+    });
+
+    test('survives a reload from the database', () async {
+      final s = await seed();
+      await regenerateAndPersist(s.vm, s.repo);
+      await regenerateAndPersist(s.vm, s.repo);
+
+      // A reload goes through the deduping query, which keeps the newest
+      // variant per group - the state the user actually sees after a restart.
+      final reloaded = await s.repo.getMessagesForThread(s.thread.id);
+      final shown = reloaded.lastWhere((m) => m.role == MessageRole.assistant);
+      final siblings = await s.repo.getAllMessagesForThread(s.thread.id);
+      final byId = {for (final m in siblings) m.id: m};
+
+      final resolved = shown.siblingIds.map((id) => byId[id]).whereType().toList()
+        ..sort((a, b) => a.variantIndex.compareTo(b.variantIndex));
+      expect(resolved.length, 3);
+      expect(resolved.map((m) => m.id).toSet(),
+          byId.keys.where((id) => byId[id]!.role == MessageRole.assistant).toSet());
+      // Dedupe keeps the newest variant, which is the highest index, so the
+      // navigator can walk back to both earlier replies.
+      expect(shown.variantIndex, 2);
+      expect(resolved.last.id, shown.id);
+      expect(resolved.first.id, 'M0');
+    });
+
+    test('image variant is a full sibling, not an unlisted extra', () async {
+      final s = await seed();
+      final r = await s.vm.doCreateImageVariant(messageIndex: 1);
+      expect(r, isNotNull);
+      final i = s.vm.messages.indexWhere((m) => m.id == r!.newAssistantId);
+      final withImage = s.vm.messages[i]
+          .copyWith(status: MessageStatus.completed, imagePath: '/tmp/a.png');
+      s.vm.messages[i] = withImage;
+      await s.repo.saveMessage(withImage);
+
+      final stored =
+          (await s.repo.getAllMessagesForThread(s.thread.id))
+              .where((m) => m.role == MessageRole.assistant)
+              .toList();
+      expect(stored.length, 2);
+      for (final v in stored) {
+        expect(v.totalVariants, 2, reason: '${v.id} has a stale totalVariants');
+        expect(v.siblingIds.length, 2);
+      }
+      // The image variant keeps the dialogue and does not inherit a picture.
+      expect(withImage.content, 'v0');
+      expect(withImage.imagePath, '/tmp/a.png');
+      expect(stored.firstWhere((m) => m.id == 'M0').imagePath, isNull);
+    });
+
+    test('reverting a failed image variant leaves a navigable group', () async {
+      final s = await seed();
+      final r = await s.vm.doCreateImageVariant(messageIndex: 1);
+      await s.vm.doRevertVariant(
+        messageIndex: 1,
+        newAssistantId: r!.newAssistantId,
+        oldMessageId: 'M0',
+      );
+
+      expect(s.vm.messages[1].id, 'M0');
+      // The regression: the restored message used to keep listing the deleted
+      // placeholder, leaving a permanently unreachable "next" arrow.
+      expect(s.vm.messages[1].siblingIds, isNot(contains(r.newAssistantId)));
+      expect(s.vm.messages[1].totalVariants, 1);
+
+      final stored = await s.repo.getAllMessagesForThread(s.thread.id);
+      final variants = stored.where((m) => m.role == MessageRole.assistant).toList();
+      expect(variants.length, 1);
+      for (final v in variants) {
+        expect(v.siblingIds.toSet(), {'M0'});
+        expect(v.totalVariants, 1);
+      }
+
+      await s.vm.doSwitchVariant(messageIndex: 1, previous: false);
+      expect(s.vm.messages[1].id, 'M0', reason: 'no-op instead of a stuck arrow');
+    });
+
+    test('drops a sibling id with no stored row instead of duplicating',
+        () async {
+      final s = await seed();
+      await regenerateAndPersist(s.vm, s.repo);
+      // A dangling id: the other variant was deleted, but this message still
+      // advertises it. Substituting the current message produced a duplicate
+      // with the same variantIndex, so the switch silently did nothing.
+      final newId = s.vm.messages[1].id;
+      final stored = await s.repo.getAllMessagesForThread(s.thread.id);
+      final oldest = stored.firstWhere((m) => m.id == 'M0');
+      // Sit on the oldest variant, which still advertises a sibling that is
+      // gone. With the old `orElse` the ghost resolved to the current message
+      // itself, so the sorted list held [M0, M0, newId] and "next" landed on
+      // M0 again - a silent no-op while the arrow still looked live.
+      s.vm.messages[1] = oldest
+          .copyWith(siblingIds: [...oldest.siblingIds, 'ghost']);
+
+      await s.vm.doSwitchVariant(messageIndex: 1, previous: false);
+      expect(s.vm.messages[1].id, newId, reason: 'next reached the real sibling');
+      expect(s.vm.messages[1].siblingIds, isNot(contains('ghost')));
+    });
+  });
+
 }

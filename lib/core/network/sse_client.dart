@@ -338,6 +338,31 @@ class SseClient {
           ),
           chunk,
         );
+        continue;
+      }
+
+      // 4. An artifact-only chunk carries nothing to filter.
+      //
+      // Every other branch above yields in response to *text* or *reasoning*, and
+      // artifacts merely ride along on those yields via [_copyArtifacts]. So a
+      // chunk with neither — an `image_url`/`file_url` and no text — used to be
+      // dropped on the floor, because there was nothing to flush and therefore
+      // no yield to attach the artifact to.
+      //
+      // That was invisible until A-PROX's `image_only` mode, which sends the
+      // image event and *nothing else*: no vision caption, no synthesis. The
+      // one and only artifact event arrived on an artifact-only chunk and was
+      // silently swallowed, so the server generated and served a perfectly good
+      // image while the client reported "the server returned no image" and threw
+      // the variant away. Pass such chunks straight through instead.
+      if (chunk.text.isEmpty &&
+          (chunk.reasoning == null || chunk.reasoning!.isEmpty) &&
+          !chunk.isDone &&
+          (chunk.imageUrl != null ||
+              chunk.fileUrl != null ||
+              chunk.fileName != null ||
+              chunk.fileMime != null)) {
+        yield chunk;
       }
     }
 

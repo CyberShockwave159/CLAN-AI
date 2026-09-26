@@ -186,6 +186,76 @@ void main() {
       expect(filtered.last.fileName, equals('doc.txt'));
       expect(filtered.last.fileMime, equals('text/plain'));
     });
+
+    // A-PROX `image_only` mode streams the image event and nothing else: no
+    // vision caption, no synthesis turn. That makes the artifact event the only
+    // chunk in the response, carrying no text and no reasoning.
+    test('keeps an artifact-only chunk (image_only mode)', () async {
+      const imageOnlyEvent =
+          'data: {"choices":[{ "delta": { "image_url": { "url": "http://host/gen_1.png" } } }]}\n\n';
+      final fileOnlyEvent =
+          'data: {"choices":[{ "delta": { "file_url": { "url": "http://host/doc.txt", "name": "doc.txt", "mime": "text/plain" } } }]}\n\n';
+
+      for (final enableReasoning in [true, false]) {
+        for (final event in [imageOnlyEvent, fileOnlyEvent]) {
+          final controller = StreamController<List<int>>();
+          controller.add(utf8.encode(event));
+          controller.add(utf8.encode('data: [DONE]\n\n'));
+          controller.close();
+
+          final filtered = await SseClient.filterReasoning(
+            SseClient.parseStream(controller.stream),
+            enableReasoning: enableReasoning,
+          ).toList();
+
+          final artifacts =
+              filtered.where((c) => c.imageUrl != null || c.fileUrl != null);
+          expect(artifacts, hasLength(1),
+              reason: 'artifact-only chunk was dropped '
+                  '(reasoning=$enableReasoning)');
+        }
+      }
+    });
+
+    test('keeps the image event after a long run of keepalive comments',
+        () async {
+      // A real scene-image request spends minutes in ComfyUI before emitting
+      // anything, and A-PROX fills the gap with `: keepalive` comment frames.
+      final controller = StreamController<List<int>>();
+      for (var i = 0; i < 100; i++) {
+        controller.add(utf8.encode(': keepalive\n\n'));
+      }
+      controller.add(utf8.encode(
+          'data: {"choices":[{ "delta": { "image_url": { "url": "http://host/gen_1.png" } } }]}\n\n'));
+      controller.add(utf8.encode('data: [DONE]\n\n'));
+      controller.close();
+
+      final filtered = await SseClient.filterReasoning(
+        SseClient.parseStream(controller.stream),
+        enableReasoning: true,
+      ).toList();
+
+      expect(filtered.where((c) => c.imageUrl != null), hasLength(1));
+      expect(filtered.first.imageUrl, equals('http://host/gen_1.png'));
+    });
+
+    test('does not emit a done chunk twice when it carries an artifact',
+        () async {
+      final controller = StreamController<List<int>>();
+      controller.add(utf8.encode(
+          'data: {"choices":[{ "delta": { "image_url": { "url": "http://host/gen_1.png" } } }]}\n\n'));
+      controller.add(utf8.encode(
+          'data: {"choices":[{"finish_reason":"stop","index":0,"delta":{"image_url":{"url":"http://host/gen_1.png"}}}]}\n\n'));
+      controller.add(utf8.encode('data: [DONE]\n\n'));
+      controller.close();
+
+      final filtered = await SseClient.filterReasoning(
+        SseClient.parseStream(controller.stream),
+        enableReasoning: true,
+      ).toList();
+
+      expect(filtered.where((c) => c.isDone), hasLength(1));
+    });
   });
 }
 

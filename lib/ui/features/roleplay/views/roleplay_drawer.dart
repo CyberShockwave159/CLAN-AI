@@ -486,7 +486,14 @@ class _RoleplayDrawerState extends State<RoleplayDrawer> {
                                       },
                                       itemBuilder: (ctx) => [
                                         const PopupMenuItem(value: 'toggle_favorite', child: Text('Toggle Favorite')),
-                                        const PopupMenuItem(value: 'manage_memories', child: Text('Manage Memories')),
+                                        // The local memory manager is meaningless
+                                        // while A-PROX owns retrieval — the dialog
+                                        // would list embeddings nothing reads.
+                                        if (!context
+                                            .read<SettingsViewModel>()
+                                            .config
+                                            .serverSideRagEnabled)
+                                          const PopupMenuItem(value: 'manage_memories', child: Text('Manage Memories')),
                                         const PopupMenuItem(value: 'export_character', child: Text('Export Character + Memories')),
                                         const PopupMenuItem(value: 'edit', child: Text('Edit')),
                                         const PopupMenuItem(

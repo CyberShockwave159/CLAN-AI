@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:clan_ai/core/network/sse_client.dart';
 import 'package:clan_ai/data/datasources/llama_api_service.dart';
 import 'package:clan_ai/data/datasources/local_storage.dart';
+import 'package:clan_ai/data/datasources/request_options.dart';
 import 'package:clan_ai/data/models/chat_message.dart';
 import 'package:clan_ai/data/models/chat_thread.dart';
 import 'package:clan_ai/data/models/server_config.dart';
@@ -145,6 +146,7 @@ class ChatRepository {
     GenerationParams? params,
     CancelToken? cancelToken,
     int? modelContextLength,
+    RequestOptions options = RequestOptions.none,
   }) {
     return _apiService.streamChatCompletions(
       serverConfig: serverConfig,
@@ -154,6 +156,38 @@ class ChatRepository {
       params: params,
       cancelToken: cancelToken,
       modelContextLength: modelContextLength,
+      options: options,
+    );
+  }
+
+  // --- Auxiliary single-shot completions ---
+
+  /// Runs a non-streaming completion and returns the assistant text. The
+  /// exchange is never persisted, streamed into the UI, or written to RAG.
+  ///
+  /// [reasoning] and [maxTokens] let each caller pick its own trade-off; see
+  /// `LlamaApiService.completeOnce`.
+  Future<String> completeOnce({
+    required ServerConfig serverConfig,
+    required ServerProfile? connection,
+    required String? systemPrompt,
+    required List<Map<String, dynamic>> messages,
+    GenerationParams? params,
+    RequestOptions options = RequestOptions.none,
+    bool? reasoning,
+    int? maxTokens,
+    Duration? timeout,
+  }) {
+    return _apiService.completeOnce(
+      serverConfig: serverConfig,
+      connection: connection,
+      systemPrompt: systemPrompt,
+      messages: messages,
+      params: params,
+      options: options,
+      reasoning: reasoning,
+      maxTokens: maxTokens,
+      timeout: timeout,
     );
   }
 }

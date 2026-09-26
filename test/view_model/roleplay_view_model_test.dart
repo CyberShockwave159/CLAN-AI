@@ -1,6 +1,8 @@
 import 'package:clan_ai/core/utils/conversation_export.dart';
 import 'package:clan_ai/core/network/sse_client.dart';
 import 'package:clan_ai/data/models/chat_message.dart';
+import 'package:clan_ai/data/models/server_config.dart';
+import 'package:clan_ai/data/models/server_profile.dart';
 import 'package:clan_ai/ui/features/roleplay/view_models/roleplay_view_model.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -22,6 +24,11 @@ void main() {
   late FakeCharacterRepository fakeCharRepo;
   late FakeVectorStore fakeVectorStore;
   late RoleplayViewModel vm;
+  // Default config/connection for VM calls. A plain (non-A-PROX) profile means
+  // the local RAG backend stays active, which is what the existing suites
+  // assume; server-side-memory suites pass an A-PROX profile explicitly.
+  late ServerConfig serverConfig;
+  late ServerProfile? connection;
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
@@ -29,6 +36,8 @@ void main() {
     fakeChatRepo = FakeChatRepository();
     fakeCharRepo = FakeCharacterRepository();
     fakeVectorStore = FakeVectorStore();
+    serverConfig = const ServerConfig();
+    connection = ServerProfile(name: 'Test', baseUrl: 'http://localhost:8080');
     vm = RoleplayViewModel(fakeChatRepo, fakeCharRepo);
     // Wait for async loadThreads / loadLastChat to complete
     await Future.delayed(const Duration(milliseconds: 300));
@@ -599,6 +608,8 @@ void main() {
       await vm.editAssistantMessage(
         messageIndex: 0,
         newContent: 'Updated response',
+        serverConfig: serverConfig,
+        connection: connection,
       );
 
       expect(vm.messages[0].content, equals('Updated response'));
@@ -629,6 +640,8 @@ void main() {
       await vm.editAssistantMessage(
         messageIndex: 0,
         newContent: 'Changed',
+        serverConfig: serverConfig,
+        connection: connection,
       );
 
       expect(vm.messages[0].content, equals('Should not change'));
@@ -652,6 +665,8 @@ void main() {
       await vm.editAssistantMessage(
         messageIndex: 0,
         newContent: 'Changed',
+        serverConfig: serverConfig,
+        connection: connection,
       );
     });
 
@@ -673,6 +688,8 @@ void main() {
       await vm.editAssistantMessage(
         messageIndex: 0,
         newContent: 'Changed',
+        serverConfig: serverConfig,
+        connection: connection,
       );
 
       expect(vm.messages[0].content, equals('Hello'));
@@ -998,7 +1015,7 @@ void main() {
         content: 'First variant response',
         variantIndex: 1,
         totalVariants: 2,
-        siblingIds: ['v2'],
+        siblingIds: ['v1', 'v2'],
       );
       final variant2 = buildMessage(
         threadId: thread.id,
@@ -1007,7 +1024,7 @@ void main() {
         content: 'Second variant response',
         variantIndex: 0,
         totalVariants: 2,
-        siblingIds: ['v1'],
+        siblingIds: ['v1', 'v2'],
       );
       await fakeChatRepo.saveMessage(variant1);
       await fakeChatRepo.saveMessage(variant2);

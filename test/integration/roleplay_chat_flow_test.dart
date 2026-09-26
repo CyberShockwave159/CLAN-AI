@@ -102,6 +102,8 @@ void main() {
     await vm.editAssistantMessage(
       messageIndex: 2,
       newContent: 'Edited response',
+      serverConfig: buildServerConfig(),
+      connection: null,
     );
 
     expect(vm.messages[2].content, equals('Edited response'));

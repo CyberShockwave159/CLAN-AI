@@ -66,13 +66,28 @@ class GenerationParams {
     );
   }
 
+  /// Builds the OpenAI-compatible request body.
+  ///
+  /// The three optional arguments carry A-PROX-specific request fields. They are
+  /// merged last so this signature doesn't need to grow for every new field:
+  ///
+  /// * [modelOverride] replaces [model] for this request only. Used to target a
+  ///   routing alias such as `a-prox-rag`, which selects a *strategy* rather
+  ///   than a model — A-PROX swaps it back to its configured upstream model
+  ///   before forwarding. `ServerConfig.selectedModel` is never mutated.
+  /// * [rag] is A-PROX's retrieval-tuning object, scoped to a collection so a
+  ///   roleplay session's memories can't mix with the user's indexed documents.
+  /// * [extraBody] carries other A-PROX-only fields (e.g. `image_style`).
   Map<String, dynamic> toOpenAiPayload({
     required List<Map<String, dynamic>> messages,
     required String model,
     bool stream = true,
+    String? modelOverride,
+    Map<String, dynamic>? rag,
+    Map<String, dynamic>? extraBody,
   }) {
     final payload = <String, dynamic>{
-      'model': model,
+      'model': modelOverride ?? model,
       'messages': messages,
       'stream': stream,
       'temperature': temperature,
@@ -92,6 +107,12 @@ class GenerationParams {
     if (reasoning) {
       payload['reasoning'] = true;
       payload['include_reasoning'] = true;
+    }
+    if (rag != null) {
+      payload['rag'] = rag;
+    }
+    if (extraBody != null) {
+      payload.addAll(extraBody);
     }
     return payload;
   }

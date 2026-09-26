@@ -1,7 +1,7 @@
 name: clan_ai
 description: "Frontier-class cross-platform llama.cpp client"
 publish_to: 'none'
-version: 1.3.0+1
+version: 1.9.0+1
 
 environment:
   sdk: ^3.13.0
@@ -28,6 +28,11 @@ dependencies:
   web: ^1.1.1
   sqflite_common_ffi_web: ^1.2.0
   sqflite_common: ^2.5.13
+  # Pure-Dart image decode/encode. Used to normalise identity-reference
+  # portraits to a format A-PROX accepts (PNG/JPEG/WebP only) and to downscale
+  # them before they are base64-inlined into a request body. No platform
+  # channels, so it works on web/PWA too.
+  image: ^4.5.4
 
 dev_dependencies:
   flutter_test:

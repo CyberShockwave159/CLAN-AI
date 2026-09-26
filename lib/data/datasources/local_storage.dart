@@ -49,7 +49,7 @@ class LocalDatabase {
 
     return await openDatabase(
       path,
-      version: 15,
+      version: 16,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
       onConfigure: (db) async {
@@ -129,6 +129,9 @@ class LocalDatabase {
           system_prompt TEXT,
           post_history_instructions TEXT,
           alternate_greetings TEXT,
+          appearance TEXT,
+          identity_portrait_data BLOB,
+          visual_theme TEXT,
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL
         )
@@ -232,6 +235,33 @@ class LocalDatabase {
         await db.execute('ALTER TABLE messages ADD COLUMN image_url TEXT');
       }
     }
+    if (oldVersion < 16) {
+      // Character-consistency state for generated scene images. `appearance` is
+      // the canonical physical description, `identity_portrait_data` the
+      // approved reference portrait (inline BLOB, mirroring `avatar_data`), and
+      // `visual_theme` the A-PROX `[image_generation.styles]` key.
+      final tables = await db.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type = 'table'",
+      );
+      final hasCharacters = (tables as List<dynamic>).any(
+        (row) => (row as Map<String, dynamic>)['name'] == 'characters',
+      );
+      if (hasCharacters) {
+        final columns = await db.rawQuery("PRAGMA table_info(characters)");
+        final existing = (columns as List<dynamic>)
+            .map((col) => (col as Map<String, dynamic>)['name'] as String)
+            .toSet();
+        if (!existing.contains('appearance')) {
+          await db.execute('ALTER TABLE characters ADD COLUMN appearance TEXT');
+        }
+        if (!existing.contains('identity_portrait_data')) {
+          await db.execute('ALTER TABLE characters ADD COLUMN identity_portrait_data BLOB');
+        }
+        if (!existing.contains('visual_theme')) {
+          await db.execute('ALTER TABLE characters ADD COLUMN visual_theme TEXT');
+        }
+      }
+    }
   }
 
   /// Test-only entry point that runs the schema migration from [oldVersion] on
@@ -239,7 +269,7 @@ class LocalDatabase {
   /// the private [_upgradeDB] through `onUpgrade`.
   @visibleForTesting
   Future<void> runMigrationForTesting(Database db, int oldVersion) {
-    return _upgradeDB(db, oldVersion, 15);
+    return _upgradeDB(db, oldVersion, 16);
   }
 
   Future<void> _createDB(Database db, int version) async {
@@ -310,6 +340,9 @@ class LocalDatabase {
         system_prompt TEXT,
         post_history_instructions TEXT,
         alternate_greetings TEXT,
+        appearance TEXT,
+        identity_portrait_data BLOB,
+        visual_theme TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       )

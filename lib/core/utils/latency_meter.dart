@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:clan_ai/core/constants/api_endpoints.dart';
+import 'package:clan_ai/core/constants/aprox_capabilities.dart';
 import 'package:clan_ai/core/network/http_client.dart';
 
 /// Health status enum for llama.cpp server
@@ -17,14 +18,36 @@ class PingResult {
   final String? errorMessage;
   final Map<String, dynamic>? serverProps;
 
+  /// Capability tags advertised by the server (`rag`, `image`, `file`). Empty
+  /// for every backend that isn't A-PROX, which is how A-PROX-only features
+  /// (server-side RAG, scene image generation) stay hidden elsewhere.
+  final Set<String> capabilities;
+
   const PingResult({
     required this.status,
     required this.latencyMs,
     this.errorMessage,
     this.serverProps,
+    this.capabilities = const {},
   });
 
   bool get isHealthy => status == ServerHealthStatus.connected;
+
+  /// True when the server is an A-PROX instance.
+  bool get isAprox => capabilities.contains(AproxCapabilities.rag);
+
+  /// Extracts the capability set from a `/health` payload, ignoring unknown
+  /// tags so a newer server can add capabilities without breaking the client.
+  static Set<String> parseCapabilities(dynamic response) {
+    if (response is! Map) return const {};
+    final raw = response['capabilities'];
+    if (raw is! List) return const {};
+    return raw
+        .whereType<String>()
+        .map((tag) => tag.trim().toLowerCase())
+        .where((tag) => tag.isNotEmpty)
+        .toSet();
+  }
 
   /// Parses a raw error string into a user-friendly diagnostic message.
   static String parseError(String rawError) {
@@ -84,7 +107,9 @@ class LatencyMeter {
     final cleanBase = ApiEndpoints.normalizeBaseUrl(baseUrl);
     final stopwatch = Stopwatch()..start();
 
-    // Priority 1: Check native llama.cpp /health endpoint
+    // Priority 1: Check native llama.cpp /health endpoint. A-PROX also serves
+    // /health and additionally advertises its capabilities there, so this single
+    // probe doubles as the A-PROX detection point.
     try {
       final healthUri = ApiEndpoints.buildUri(cleanBase, ApiEndpoints.llamaHealth);
       final response = await _httpClient.get(healthUri, apiKey: apiKey);
@@ -95,6 +120,7 @@ class LatencyMeter {
         status: ServerHealthStatus.connected,
         latencyMs: latency,
         serverProps: response is Map<String, dynamic> ? response : null,
+        capabilities: PingResult.parseCapabilities(response),
       );
     } catch (_) {
       // Fallback 1: Try /props (native llama.cpp properties)

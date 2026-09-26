@@ -61,12 +61,18 @@ class ApiHttpClient {
   }
 
   /// Sends a POST request with a JSON payload and parses the JSON response.
+  ///
+  /// [timeout] overrides [receiveTimeout] for calls that legitimately run long
+  /// (e.g. a single-shot completion that reasons for minutes). It is a ceiling,
+  /// not a cost — the future still completes as soon as the server answers.
   Future<dynamic> post(
     Uri uri, {
     required Map<String, dynamic> body,
     String? apiKey,
     Map<String, String>? extraHeaders,
+    Duration? timeout,
   }) async {
+    final effectiveTimeout = timeout ?? receiveTimeout;
     try {
       final response = await _client
           .post(
@@ -74,7 +80,7 @@ class ApiHttpClient {
             headers: _buildHeaders(apiKey: apiKey, extraHeaders: extraHeaders),
             body: jsonEncode(body),
           )
-          .timeout(receiveTimeout);
+          .timeout(effectiveTimeout);
 
       return _handleResponse(response, uri);
     } on SocketException catch (e) {
@@ -82,7 +88,7 @@ class ApiHttpClient {
     } on TimeoutException {
       throw NetworkException(
         message: 'Request timed out for ${uri.host}',
-        details: 'No response received within ${receiveTimeout.inSeconds} seconds.',
+        details: 'No response received within ${effectiveTimeout.inSeconds} seconds.',
       );
     } catch (e) {
       if (e is AppException) rethrow;
@@ -102,18 +108,32 @@ class ApiHttpClient {
   /// servers with a healthy link (low ping, prior exchanges fine) falsely
   /// report a "connection" failure whenever first-token time crept past 10
   /// seconds.
+  ///
+  /// [timeout] overrides [receiveTimeout] for the header wait only, and is
+  /// required for any request whose server deliberately withholds its response
+  /// for a long time. A-PROX does exactly this for `/image`: it stops
+  /// llama.cpp, cold-starts ComfyUI, runs a 20-step diffusion job, restarts
+  /// llama.cpp, and only then writes response headers — measured at ~195s
+  /// end-to-end. The shared 60s budget aborts that client-side *after* the
+  /// server has produced and saved a perfectly good image, and the user sees a
+  /// "no image received" error next to a picture sitting in ComfyUI's output
+  /// folder. The ceiling is a cap, not a cost: headers arrive as soon as the
+  /// job finishes, so the request normally returns well inside it.
   Future<StreamedApiResponse> postStream(
     Uri uri, {
     required Map<String, dynamic> body,
     String? apiKey,
     Map<String, String>? extraHeaders,
+    Duration? timeout,
   }) async {
+    final effectiveTimeout = timeout ?? receiveTimeout;
     try {
       final request = http.Request('POST', uri)
         ..headers.addAll(_buildHeaders(apiKey: apiKey, extraHeaders: extraHeaders))
         ..body = jsonEncode(body);
 
-      final streamedResponse = await streamSend(_client, request).timeout(receiveTimeout);
+      final streamedResponse =
+          await streamSend(_client, request).timeout(effectiveTimeout);
 
       if (streamedResponse.statusCode >= 400) {
         // bytesToString() already drains the response stream to completion
@@ -133,7 +153,7 @@ class ApiHttpClient {
     } on TimeoutException {
       throw NetworkException(
         message: 'Streaming request timed out for ${uri.host}',
-        details: 'No response received within ${receiveTimeout.inSeconds} seconds.',
+        details: 'No response received within ${effectiveTimeout.inSeconds} seconds.',
       );
     } catch (e) {
       if (e is AppException) rethrow;

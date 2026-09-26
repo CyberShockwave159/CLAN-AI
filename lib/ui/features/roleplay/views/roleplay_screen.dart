@@ -5,14 +5,20 @@ import 'package:clan_ai/core/constants/clan_theme_colors.dart';
 import 'package:clan_ai/core/utils/latency_meter.dart';
 
 import 'package:clan_ai/data/models/chat_message.dart';
+import 'package:clan_ai/data/repositories/character_repository.dart';
+import 'package:clan_ai/data/repositories/chat_repository.dart';
 import 'package:clan_ai/ui/features/chat/views/message_bubble.dart';
 import 'package:clan_ai/ui/features/chat/views/prompt_input_bar.dart';
+import 'package:clan_ai/ui/features/roleplay/services/character_image_assist.dart';
 import 'package:clan_ai/ui/features/roleplay/views/roleplay_drawer.dart';
 import 'package:clan_ai/ui/features/roleplay/view_models/roleplay_view_model.dart';
 import 'package:clan_ai/ui/features/settings/view_models/settings_view_model.dart';
 import 'package:clan_ai/ui/features/settings/views/settings_screen.dart';
 import 'package:clan_ai/ui/shared/connection_badge.dart';
+import 'package:clan_ai/core/utils/identity_reference.dart';
+import 'package:clan_ai/core/utils/message_attachment_store.dart';
 import 'package:clan_ai/ui/features/roleplay/widgets/alternate_greeting_selector.dart';
+import 'package:clan_ai/ui/features/roleplay/widgets/portrait_offer_dialog.dart';
 import 'package:clan_ai/ui/shared/mixins/auto_scroll_mixin.dart';
 import 'package:clan_ai/ui/shared/avatar_utils.dart';
 import 'package:clan_ai/ui/shared/delete_message_handler.dart';
@@ -53,6 +59,75 @@ class _RoleplayScreenState extends State<RoleplayScreen> with AutoScrollMixin {
       },
       onThreadDeleted: () => scrollToBottom(false),
     );
+  }
+
+  /// Generates a scene image for the assistant message at [messageIndex].
+  ///
+  /// [refineFromImagePath] is set when the user long-pressed an existing image
+  /// rather than pressing the toolbar button: refining from a picture the user
+  /// chose is how a bad generation gets fixed, whereas the button always starts
+  /// fresh from the character's identity reference.
+  Future<void> _handleGenerateImage(
+    int messageIndex,
+    SettingsViewModel settingsVM, {
+    String? refineFromImagePath,
+  }) async {
+    final roleplayVM = context.read<RoleplayViewModel>();
+
+    IdentityReference? refineFrom;
+    if (refineFromImagePath != null) {
+      final bytes = await MessageAttachmentStore.instance.readBytes(refineFromImagePath);
+      if (bytes != null && bytes.isNotEmpty) {
+        refineFrom = IdentityReferenceResolver.fromPriorGeneration(bytes);
+      }
+      if (!mounted) return;
+    }
+
+    // Offer portrait generation when the character has nothing to condition on,
+    // otherwise the picture would come back with a different face every time.
+    final character = roleplayVM.activeCharacter;
+    if (refineFrom == null && character != null && character.needsIdentityPortrait) {
+      final chatRepo = context.read<ChatRepository>();
+      final charRepo = context.read<CharacterRepository>();
+      final proceed = await showPortraitOfferDialog(
+        context: context,
+        character: character,
+        onGeneratePortrait: () =>
+            roleplayVM.generateIdentityPortrait(
+          serverConfig: settingsVM.config,
+          connection: settingsVM.connectionDetails,
+        ),
+        onDraftAppearance: CharacterImageAssist.canDraftAppearance(character)
+            ? () => CharacterImageAssist.draftAppearance(
+                  chatRepository: chatRepo,
+                  serverConfig: settingsVM.config,
+                  connection: settingsVM.connectionDetails,
+                  character: character,
+                )
+            : null,
+        onSaveAppearance: (appearance) async {
+          // Saving mirrors the sheet into A-PROX RAG via the repository hook, so
+          // later image generations can retrieve it alongside conversation
+          // memories.
+          final updated = character.copyWith(appearance: appearance);
+          await charRepo.updateCharacter(updated);
+          roleplayVM.updateActiveCharacter(updated);
+        },
+      );
+      if (proceed != true || !mounted) return;
+    }
+
+    final result = await roleplayVM.generateImageForMessage(
+      messageIndex: messageIndex,
+      serverConfig: settingsVM.config,
+      connection: settingsVM.connectionDetails,
+      refineFrom: refineFrom,
+    );
+    if (!mounted) return;
+    if (!result.isSuccess && result.message != null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(result.message!)));
+    }
   }
 
   Widget _buildEmptyState(BuildContext context, Color titleColor) {
@@ -244,11 +319,30 @@ class _RoleplayScreenState extends State<RoleplayScreen> with AutoScrollMixin {
                             debugContext: buildMessageDebugContext(message, roleplayVM.activeThread, settingsVM),
                             characterAvatar: avatar,
                             characterName: name,
+                            // Only offered when the server advertises image
+                            // generation; the bubble hides the button when this
+                            // is null, which is also what keeps it out of
+                            // assistant mode.
+                            onGenerateImage: isFirstAssistantMessage ||
+                                    !settingsVM.supportsImageGeneration
+                                ? null
+                                : () => _handleGenerateImage(index, settingsVM),
+                            onRefineImage: isFirstAssistantMessage ||
+                                    !settingsVM.supportsImageGeneration
+                                ? null
+                                : () => _handleGenerateImage(
+                                      index,
+                                      settingsVM,
+                                      // Long-pressing an image means "build on
+                                      // this one", so the tapped picture becomes
+                                      // the reference instead of the character's
+                                      // portrait.
+                                      refineFromImagePath: message.imagePath,
+                                    ),
                             onRegenerate: isFirstAssistantMessage
                                 ? null
                                 : () {
-                                    roleplayVM.regenerateMessage(
-                                      messageIndex: index,
+                                    roleplayVM.regenerateMessage(                                      messageIndex: index,
                                       serverConfig: settingsVM.config,
                                       connection: settingsVM.connectionDetails,
                                       modelContextLength: settingsVM.getSelectedModelContextLength(),
@@ -267,6 +361,8 @@ class _RoleplayScreenState extends State<RoleplayScreen> with AutoScrollMixin {
                               roleplayVM.editAssistantMessage(
                                 messageIndex: index,
                                 newContent: newContent,
+                                serverConfig: settingsVM.config,
+                                connection: settingsVM.connectionDetails,
                               );
                             },
                             onBranch: () {

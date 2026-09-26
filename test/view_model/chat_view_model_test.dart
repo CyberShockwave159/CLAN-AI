@@ -870,7 +870,7 @@ void main() {
         content: 'First variant response',
         variantIndex: 1,
         totalVariants: 2,
-        siblingIds: ['v2'],
+        siblingIds: ['v1', 'v2'],
       );
       final variant2 = buildMessage(
         threadId: thread.id,
@@ -879,7 +879,7 @@ void main() {
         content: 'Second variant response',
         variantIndex: 0,
         totalVariants: 2,
-        siblingIds: ['v1'],
+        siblingIds: ['v1', 'v2'],
       );
       await fakeRepo.saveMessage(variant1);
       await fakeRepo.saveMessage(variant2);

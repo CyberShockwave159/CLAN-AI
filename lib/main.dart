@@ -6,10 +6,12 @@ import 'package:clan_ai/core/network/http_client.dart';
 import 'package:clan_ai/core/utils/latency_meter.dart';
 import 'package:clan_ai/core/utils/pwa_update_checker.dart';
 import 'package:clan_ai/core/utils/web_page_reloader.dart';
+import 'package:clan_ai/data/datasources/aprox_rag_client.dart';
 import 'package:clan_ai/data/datasources/llama_api_service.dart';
 import 'package:clan_ai/data/datasources/local_storage.dart';
 import 'package:clan_ai/data/models/app_mode.dart';
 import 'package:clan_ai/data/models/app_theme_mode.dart';
+import 'package:clan_ai/data/models/character_profile.dart';
 import 'package:clan_ai/data/models/custom_theme_colors.dart';
 import 'package:clan_ai/data/repositories/character_repository.dart';
 import 'package:clan_ai/data/repositories/chat_repository.dart';
@@ -80,6 +82,9 @@ void main() async {
           create: (_) => RoleplayViewModel(chatRepository, characterRepository),
         ),
         Provider<CharacterRepository>.value(value: characterRepository),
+        // Exposed for the auxiliary character-image calls (style detection),
+        // which run outside any view model and need a one-shot completion.
+        Provider<ChatRepository>.value(value: chatRepository),
       ],
       child: DesktopKeyboardShortcuts(
         navigatorKey: navigatorKey,
@@ -119,6 +124,44 @@ class _ClanAiAppState extends State<ClanAiApp> with WidgetsBindingObserver {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _wireAppearanceSync();
+  }
+
+  /// Mirrors a character's appearance sheet into the A-PROX RAG store whenever
+  /// the character is saved.
+  ///
+  /// Wired here rather than in `main()` because it needs both the character
+  /// repository and the *active* server profile, and the profile only exists
+  /// once `SettingsViewModel` has loaded. Idempotent: the callback is installed
+  /// once, and the repository skips the call when no sink is set.
+  void _wireAppearanceSync() {
+    final characterRepository = context.read<CharacterRepository>();
+    if (characterRepository.onAppearanceChanged != null) return;
+
+    final ragClient = AproxRagClient(widget.httpClient);
+    characterRepository.onAppearanceChanged = (character, appearance) async {
+      final settingsVM = context.read<SettingsViewModel>();
+      final connection = settingsVM.connectionDetails;
+      // Only mirror when the server can actually store it.
+      if (!AproxRagClient.isAvailable(connection)) return;
+      if (appearance == null || appearance.trim().isEmpty) return;
+      await ragClient.ingest(
+        connection: connection,
+        collection: AproxRagClient.visualCollection(character.id),
+        sourceUri: AproxRagClient.visualSourceUri(character.id),
+        content: _appearanceDocument(character),
+      );
+    };
+  }
+
+  /// Renders a character's appearance sheet as a retrievable document.
+  ///
+  /// Appearance only — wardrobe deliberately excluded, since it should change
+  /// with the scene rather than being pinned. The name is in the text because
+  /// A-PROX retrieves by embedding similarity, not by exact match.
+  static String _appearanceDocument(CharacterProfile character) {
+    return '[Character Visual Sheet: ${character.name}]\n'
+        '${character.appearance!.trim()}';
   }
 
   Future<void> _loadAppThemeMode() async {

@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:typed_data';
+import 'package:clan_ai/core/constants/aprox_capabilities.dart';
 import 'package:clan_ai/core/utils/latency_meter.dart';
 import 'package:clan_ai/data/models/chat_message.dart';
 import 'package:clan_ai/data/models/chat_thread.dart';
@@ -384,6 +386,68 @@ void main() {
       expect(restored.alternateGreetings, containsAll(['Hi!', 'Hello there!', 'Greetings!']));
     });
 
+
+    test('toMap/fromMap preserves the image-consistency fields', () {
+      final original = CharacterProfile(
+        id: 'char-1',
+        name: 'Sarah',
+        personality: 'An archivist',
+        firstMessage: 'Hello.',
+        appearance: 'Auburn shoulder-length hair, green eyes, small scar '
+            'above the left eyebrow.',
+        identityPortraitData: Uint8List.fromList([0xFF, 0xD8, 0xFF, 0xE0]),
+        visualTheme: VisualTheme.semiRealistic,
+      );
+
+      final restored = CharacterProfile.fromMap(original.toMap());
+      expect(restored.appearance, equals(original.appearance));
+      expect(restored.identityPortraitData, equals(original.identityPortraitData));
+      expect(restored.visualTheme, VisualTheme.semiRealistic);
+      expect(restored.hasAppearance, isTrue);
+      expect(restored.hasIdentityReference, isTrue);
+      expect(restored.needsIdentityPortrait, isFalse);
+    });
+
+    test('a character with no consistency state loads cleanly', () {
+      // A v15 row (or a fresh install) must produce nulls and VisualTheme.none
+      // rather than throwing on the missing columns.
+      final restored = CharacterProfile.fromMap({
+        'id': 'char-1',
+        'name': 'Sarah',
+        'personality': 'p',
+        'first_message': 'f',
+      });
+      expect(restored.appearance, isNull);
+      expect(restored.identityPortraitData, isNull);
+      expect(restored.visualTheme, VisualTheme.none);
+      expect(restored.hasAppearance, isFalse);
+      expect(restored.needsIdentityPortrait, isTrue);
+    });
+
+    test('an unrecognised visual theme degrades to none', () {
+      // A server with a styles table this build doesn't know about must not
+      // break loading a character.
+      final restored = CharacterProfile.fromMap({
+        'id': 'char-1',
+        'name': 'S',
+        'personality': 'p',
+        'first_message': 'f',
+        'visual_theme': 'watercolour',
+      });
+      expect(restored.visualTheme, VisualTheme.none);
+    });
+
+    test('appearance and portrait are omitted from the map when unset', () {
+      final map = CharacterProfile(
+        name: 'S',
+        personality: 'p',
+        firstMessage: 'f',
+      ).toMap();
+      expect(map['appearance'], isNull);
+      expect(map['identity_portrait_data'], isNull);
+      expect(map['visual_theme'], isNull);
+    });
+
     test('toMap/fromMap serializes alternateGreetings as JSON', () {
       final original = CharacterProfile(
         name: 'Test',
@@ -593,6 +657,28 @@ void main() {
       expect(config.reasoning, isFalse);
       expect(config.healthStatus, equals(ServerHealthStatus.offline));
       expect(config.latencyMs, equals(-1));
+      // Off by default so existing users keep the local RAG backend.
+      expect(config.serverSideRagEnabled, isFalse);
+    });
+
+    test('toMap/fromMap preserves the server-side RAG toggle', () {
+      final config = ServerConfig(name: 'A-PROX', serverSideRagEnabled: true);
+      final restored = ServerConfig.fromMap(config.toMap());
+      expect(restored.serverSideRagEnabled, isTrue);
+    });
+
+    test('a config predating the toggle loads with it off', () {
+      // SharedPreferences / older rows simply lack the key.
+      final restored = ServerConfig.fromMap({'name': 'Old', 'base_url': 'x'});
+      expect(restored.serverSideRagEnabled, isFalse);
+    });
+
+    test('copyWith toggles server-side RAG without touching other fields', () {
+      const config = ServerConfig(name: 'Keep', reasoning: true);
+      final updated = config.copyWith(serverSideRagEnabled: true);
+      expect(updated.serverSideRagEnabled, isTrue);
+      expect(updated.name, 'Keep');
+      expect(updated.reasoning, isTrue);
     });
 
     test('toMap/fromMap preserves all fields', () {

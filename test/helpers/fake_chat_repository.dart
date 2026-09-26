@@ -3,6 +3,7 @@ import 'package:clan_ai/data/models/chat_thread.dart';
 import 'package:clan_ai/data/models/server_config.dart';
 import 'package:clan_ai/data/models/server_profile.dart';
 import 'package:clan_ai/data/repositories/chat_repository.dart';
+import 'package:clan_ai/data/datasources/request_options.dart';
 import 'package:clan_ai/core/network/sse_client.dart';
 import 'package:clan_ai/domain/models/generation_params.dart';
 
@@ -15,6 +16,28 @@ class FakeChatRepository implements ChatRepository {
   ChatMessage? _lastSavedMessage;
   ChatMessage? _lastUpdatedMessage;
   bool _shouldThrowStreamError = false;
+
+  /// Options passed to the most recent [streamCompletion] call.
+  RequestOptions? lastStreamOptions;
+
+  /// Arguments passed to the most recent [completeOnce] call.
+  List<Map<String, dynamic>>? lastCompleteOnceMessages;
+  String? lastCompleteOnceSystemPrompt;
+  RequestOptions? lastCompleteOnceOptions;
+
+  /// Per-call reasoning override, recorded so tests can assert the draft call
+  /// asks for the reasoning channel while the cheap auxiliary calls do not.
+  bool? lastCompleteOnceReasoning;
+
+  /// Per-call token-budget override.
+  int? lastCompleteOnceMaxTokens;
+
+  /// Per-call receive-timeout override.
+  Duration? lastCompleteOnceTimeout;
+
+  /// Canned reply for [completeOnce]. Tests set this to stand in for a model's
+  /// response to an auxiliary single-shot call.
+  String nextCompletionResponse = '';
 
   ChatMessage? get lastSavedMessage => _lastSavedMessage;
   ChatMessage? get lastUpdatedMessage => _lastUpdatedMessage;
@@ -172,7 +195,11 @@ class FakeChatRepository implements ChatRepository {
     GenerationParams? params,
     CancelToken? cancelToken,
     int? modelContextLength,
+    RequestOptions options = RequestOptions.none,
   }) {
+    // Recorded so tests can assert on the A-PROX request fields (the routing
+    // alias, the rag object, the roleplay marker) without a real server.
+    lastStreamOptions = options;
     final threadId = history.isNotEmpty
         ? history.first.threadId
         : 'unknown';
@@ -192,5 +219,26 @@ class FakeChatRepository implements ChatRepository {
     }
 
     return Stream.fromIterable(fragments);
+  }
+
+  @override
+  Future<String> completeOnce({
+    required ServerConfig serverConfig,
+    required ServerProfile? connection,
+    required String? systemPrompt,
+    required List<Map<String, dynamic>> messages,
+    GenerationParams? params,
+    RequestOptions options = RequestOptions.none,
+    bool? reasoning,
+    int? maxTokens,
+    Duration? timeout,
+  }) async {
+    lastCompleteOnceMessages = messages;
+    lastCompleteOnceSystemPrompt = systemPrompt;
+    lastCompleteOnceOptions = options;
+    lastCompleteOnceReasoning = reasoning;
+    lastCompleteOnceMaxTokens = maxTokens;
+    lastCompleteOnceTimeout = timeout;
+    return nextCompletionResponse;
   }
 }

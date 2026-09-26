@@ -15,6 +15,17 @@ class ServerConfig {
   final bool confirmDeleteMessage;
   final bool reasoning;
 
+  /// When true, roleplay memory is handled by the A-PROX server instead of the
+  /// client-side vector store: retrieval happens through A-PROX's `a-prox-rag`
+  /// route, and completed turns are pushed into a per-thread A-PROX collection.
+  ///
+  /// The two backends are mutually exclusive — turning this on bypasses the
+  /// client RAG pipeline entirely rather than running both (double-retrieval
+  /// would inject the same facts twice). Locally stored embeddings are left
+  /// untouched, so flipping back is lossless. Only meaningful against an
+  /// A-PROX server; the UI hides it otherwise.
+  final bool serverSideRagEnabled;
+
   const ServerConfig({
     this.name = defaultServerName,
     this.baseUrl = defaultBaseUrl,
@@ -26,6 +37,7 @@ class ServerConfig {
     this.systemPrompt = defaultSystemPrompt,
     this.confirmDeleteMessage = true,
     this.reasoning = false,
+    this.serverSideRagEnabled = false,
   });
 
   ServerConfig copyWith({
@@ -39,6 +51,7 @@ class ServerConfig {
     String? systemPrompt,
     bool? confirmDeleteMessage,
     bool? reasoning,
+    bool? serverSideRagEnabled,
   }) {
     return ServerConfig(
       name: name ?? this.name,
@@ -51,6 +64,7 @@ class ServerConfig {
       systemPrompt: systemPrompt ?? this.systemPrompt,
       confirmDeleteMessage: confirmDeleteMessage ?? this.confirmDeleteMessage,
       reasoning: reasoning ?? this.reasoning,
+      serverSideRagEnabled: serverSideRagEnabled ?? this.serverSideRagEnabled,
     );
   }
 
@@ -64,6 +78,7 @@ class ServerConfig {
       'system_prompt': systemPrompt,
       'confirm_delete_message': confirmDeleteMessage ? 1 : 0,
       'reasoning': reasoning ? 1 : 0,
+      'server_side_rag_enabled': serverSideRagEnabled ? 1 : 0,
     };
   }
 
@@ -87,6 +102,7 @@ class ServerConfig {
       systemPrompt: map['system_prompt'] as String? ?? defaultSystemPrompt,
       confirmDeleteMessage: (map['confirm_delete_message'] as int?) == 1,
       reasoning: (map['reasoning'] as int?) == 1,
+      serverSideRagEnabled: (map['server_side_rag_enabled'] as int?) == 1,
     );
   }
 }

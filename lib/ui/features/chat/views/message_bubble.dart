@@ -87,6 +87,24 @@ class MessageBubble extends StatelessWidget {
   final VoidCallback? onBranch;
   final VoidCallback? onDelete;
   final Function(String newContent)? onEditAssistant;
+
+  /// Generates an image of the scene described by this message, as a new
+  /// sibling variant that keeps the text and gains the picture.
+  ///
+  /// Always starts from the character's identity reference — never from a
+  /// previously generated image, so each press is an independent generation.
+  /// Null disables the action. Only roleplay supplies it, and only when the
+  /// server advertises image generation.
+  final VoidCallback? onGenerateImage;
+
+  /// Generates a new image *using this message's existing picture as the
+  /// reference* — the "this one's good, try again from here" action, bound to a
+  /// long press on the picture.
+  ///
+  /// Kept separate from [onGenerateImage] because the two mean opposite things:
+  /// the button restarts from the character's portrait, while this continues
+  /// from a picture the user chose. Falls back to [onGenerateImage] when null.
+  final VoidCallback? onRefineImage;
   final Uint8List? characterAvatar;
   final String? characterName;
   final MessageDebugContext? debugContext;
@@ -103,6 +121,8 @@ class MessageBubble extends StatelessWidget {
     this.onBranch,
     this.onDelete,
     this.onEditAssistant,
+    this.onGenerateImage,
+    this.onRefineImage,
     this.characterAvatar,
     this.characterName,
     this.debugContext,
@@ -556,6 +576,16 @@ class MessageBubble extends StatelessWidget {
                         padding: const EdgeInsets.only(bottom: 6),
                         child: GestureDetector(
                           onTap: () => _showImageFullscreen(context, message.imagePath!),
+                          // Long-press refines from *this* image: the user has
+                          // told us this one is worth building on, which is the
+                          // only reliable way to recover from a bad generation.
+                          // Short tap stays "view fullscreen".
+                          onLongPress: onGenerateImage == null
+                              ? null
+                              : () {
+                                  HapticFeedback.selectionClick();
+                                  (onRefineImage ?? onGenerateImage!)();
+                                },
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(10),
                             child: AttachmentImage(
@@ -835,6 +865,26 @@ class MessageBubble extends StatelessWidget {
                         color: context.clanTextMuted,
                         onPressed: onRegenerate,
                         tooltip: 'Regenerate response',
+                      ),
+                    ),
+
+                  // Generate Scene Image Action (assistant messages only).
+                  // Null unless the caller supports it — roleplay passes this
+                  // only when the server advertises A-PROX image generation, so
+                  // the bubble needs no mode flag of its own (same pattern as
+                  // characterName / onEditAssistant).
+                  if (!isUser &&
+                      message.status != MessageStatus.streaming &&
+                      onGenerateImage != null)
+                    Semantics(
+                      label: 'Generate image of this scene',
+                      child: IconButton(
+                        icon: const Icon(Icons.auto_awesome_rounded, size: 16),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                        color: context.clanTextMuted,
+                        onPressed: onGenerateImage,
+                        tooltip: 'Generate image of this scene',
                       ),
                     ),
 

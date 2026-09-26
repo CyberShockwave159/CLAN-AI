@@ -6,12 +6,31 @@ import 'package:clan_ai/core/errors/app_exception.dart';
 import 'package:clan_ai/core/network/sse_client.dart';
 import 'package:clan_ai/core/utils/message_attachment_store.dart';
 import 'package:clan_ai/core/utils/text_sanitizer.dart';
+import 'package:clan_ai/data/datasources/request_options.dart';
 import 'package:clan_ai/data/models/chat_message.dart';
 import 'package:clan_ai/data/models/chat_thread.dart';
 import 'package:clan_ai/data/models/server_config.dart';
 import 'package:clan_ai/data/models/server_profile.dart';
 import 'package:clan_ai/data/repositories/chat_repository.dart';
 import 'package:clan_ai/domain/models/generation_params.dart';
+
+/// How a streamed response's *text* is treated.
+///
+/// Artifacts (images, files) and metrics are captured either way; this only
+/// governs whether the model's words become the message body.
+enum StreamTextMode {
+  /// Accumulate deltas into the message content. The normal chat path.
+  append,
+
+  /// Ignore deltas entirely and leave the message's seeded content alone.
+  ///
+  /// Used by the scene-image flow, where A-PROX's prompt enhancer streams a
+  /// caption describing the picture it just made. That caption describes the
+  /// *request*, not the roleplay reply, so folding it into the message would
+  /// replace the character's dialogue with a picture description. The image
+  /// artifact still flows through the normal capture path.
+  discard,
+}
 
 /// Shared streaming and mutation logic for ChatViewModel and RoleplayViewModel.
 /// Eliminates ~150 lines of near-identical code between the two VMs.
@@ -34,6 +53,28 @@ mixin StreamMutationMixin on ChangeNotifier {
 
   /// Streams a response for the given assistant message ID.
   /// Concrete VMs call this from their _streamResponse methods.
+  ///
+  /// [options] carries A-PROX-specific request fields (routing alias, rag
+  /// object, roleplay marker, image style). Inert by default.
+  ///
+  /// [textMode] defaults to [StreamTextMode.append]. [StreamTextMode.discard]
+  /// keeps the message's seeded content and ignores streamed text, which the
+  /// scene-image flow uses so A-PROX's picture caption never overwrites the
+  /// character's dialogue.
+  ///
+  /// [historyOverride] replaces the message slice that would otherwise be
+  /// derived from the in-memory list. The scene-image flow needs this: its
+  /// request carries a short hand-built context plus a synthetic `/image` turn
+  /// rather than the thread's real history, and the full history would push the
+  /// conversation further from the scene being illustrated.
+  ///
+  /// [persistOnComplete] writes the finished message to the database. Set false
+  /// for a scratch message that must not outlive the request (a generated
+  /// reference portrait, for instance) — such a message has no thread row, and
+  /// messages→threads is an enforced foreign key.
+  ///
+  /// [onArtifactResolved] receives the local path of an image artifact once it
+  /// has been downloaded and stored, whether or not the message is persisted.
   Future<void> doStreamResponse({
     required String assistantMessageId,
     required ServerConfig serverConfig,
@@ -42,6 +83,12 @@ mixin StreamMutationMixin on ChangeNotifier {
     int? upToIndex,
     int? modelContextLength,
     Future<void> Function(String assistantMessageId)? onComplete,
+    RequestOptions options = RequestOptions.none,
+    StreamTextMode textMode = StreamTextMode.append,
+    List<ChatMessage>? historyOverride,
+    String? systemPromptOverride,
+    bool persistOnComplete = true,
+    void Function(String? imagePath)? onArtifactResolved,
   }) async {
     isGenerating = true;
     currentCancelToken = CancelToken();
@@ -56,8 +103,10 @@ mixin StreamMutationMixin on ChangeNotifier {
       return;
     }
 
-    final historySlice = _messagesSublist(upToIndex, assistantMessageId);
-    final effectiveSystemPrompt = activeThread?.systemPrompt ?? serverConfig.systemPrompt;
+    final historySlice =
+        historyOverride ?? _messagesSublist(upToIndex, assistantMessageId);
+    final effectiveSystemPrompt =
+        systemPromptOverride ?? activeThread?.systemPrompt ?? serverConfig.systemPrompt;
 
         uiThrottleTimer = Timer.periodic(uiThrottleInterval, (_) {
             final currentMsgIndex = messages.indexWhere((m) => m.id == assistantMessageId);
@@ -65,9 +114,11 @@ mixin StreamMutationMixin on ChangeNotifier {
           currentMsgIndex >= 0 &&
           currentMsgIndex < messages.length) {
         final currentMsg = messages[currentMsgIndex];
-        messages[currentMsgIndex] = currentMsg.copyWith(
-          content: currentMsg.content + pendingStreamBuffer,
-        );
+        if (textMode == StreamTextMode.append) {
+          messages[currentMsgIndex] = currentMsg.copyWith(
+            content: currentMsg.content + pendingStreamBuffer,
+          );
+        }
         pendingStreamBuffer = '';
         notifyListeners();
       }
@@ -107,6 +158,7 @@ mixin StreamMutationMixin on ChangeNotifier {
         params: customParams ?? activeThread?.customParams ?? serverConfig.defaultParams,
         cancelToken: currentCancelToken,
         modelContextLength: modelContextLength,
+        options: options,
       );
 
       await for (final chunk in stream) {
@@ -190,8 +242,11 @@ mixin StreamMutationMixin on ChangeNotifier {
         try {
           await imageDownload.timeout(const Duration(seconds: 30));
           resolvedImagePath = imageArtifactRef;
-        } catch (_) {
-          // Artifact download failure is non-fatal — the caption still saves.
+        } catch (e) {
+          // Non-fatal: the caption/reasoning still saves. Logged, because a
+          // dropped image is otherwise indistinguishable from "the server never
+          // sent one" and gets reported as exactly that.
+          debugPrint('Image artifact did not attach in time: $e');
         }
       }
       if (fileDownload != null) {
@@ -206,7 +261,9 @@ mixin StreamMutationMixin on ChangeNotifier {
       final finalMsgIndex = messages.indexWhere((m) => m.id == assistantMessageId);
       if (finalMsgIndex >= 0 && finalMsgIndex < messages.length) {
         final currentMsg = messages[finalMsgIndex];
-                var finalContent = currentMsg.content + pendingStreamBuffer;
+                var finalContent = textMode == StreamTextMode.append
+            ? currentMsg.content + pendingStreamBuffer
+            : currentMsg.content;
         // Ensure no orphaned image URL survives in the saved caption when the
         // URL was only fully formed right at stream end.
         if (downloadedImageUrl != null) {
@@ -231,7 +288,13 @@ mixin StreamMutationMixin on ChangeNotifier {
         );
 
         messages[finalMsgIndex] = completedMsg;
-        await chatRepository.saveMessage(completedMsg);
+        if (persistOnComplete) {
+          await chatRepository.saveMessage(completedMsg);
+        }
+      }
+
+      if (onArtifactResolved != null) {
+        onArtifactResolved(resolvedImagePath);
       }
 
       pendingReasoningBuffer = '';
@@ -371,8 +434,14 @@ mixin StreamMutationMixin on ChangeNotifier {
         data: bytes,
         extension: MessageAttachmentStore.extensionForUrl(url),
       );
-    } catch (_) {
-      return null;
+    } catch (e) {
+      // Deliberately not swallowed. A failure here leaves `imagePath` null, and
+      // the roleplay image flow then reports "the server returned no image" and
+      // discards the variant — a message that points at a network or disk
+      // problem, not at the server having failed to generate anything. That
+      // misdiagnosis cost a full debugging cycle once already.
+      debugPrint('Image artifact download failed for $url: $e');
+      rethrow;
     }
   }
 
@@ -434,6 +503,74 @@ mixin StreamMutationMixin on ChangeNotifier {
     }
   }
 
+  /// Recomputes a variant group's membership and persists it consistently.
+  ///
+  /// Every member is written with the same complete `siblingIds` list *and* the
+  /// same `totalVariants`, derived from [memberIds] rather than by incrementing.
+  ///
+  /// Deriving it is what makes the group self-healing. Two bugs came from
+  /// incrementing and only partially updating members:
+  ///
+  /// * Siblings were given the new `siblingIds` but kept their old
+  ///   `totalVariants`, so an older variant displayed "1 / 2" while the group
+  ///   held three. The navigator's count and its next-button enabled state both
+  ///   read that field, so the UI advertised navigation it could not perform.
+  /// * Reverting a variant deleted the row but left the original still listing
+  ///   the deleted id, producing a permanently unreachable "next" — the `prev`
+  ///   arrow worked, `next` silently did nothing.
+  ///
+  /// [memberIds] is authoritative: a member not yet written to the database (the
+  /// freshly created placeholder, or a message held only in memory) still counts
+  /// toward the total, and its corrected fields are returned so the caller can
+  /// apply them in memory.
+  ///
+  /// Returns the members that were found and corrected, newest fields included.
+  Future<List<ChatMessage>> _syncVariantGroup({
+    required String threadId,
+    required Set<String> memberIds,
+  }) async {
+    if (memberIds.isEmpty) return const [];
+    final total = memberIds.length;
+    final siblingIds = memberIds.toList()..sort();
+
+    final all = await chatRepository.getAllMessagesForThread(threadId);
+    final updated = <ChatMessage>[];
+    for (final member in all) {
+      if (!memberIds.contains(member.id)) continue;
+      if (member.role != MessageRole.assistant) continue;
+      final fixed = member.copyWith(
+        totalVariants: total,
+        siblingIds: siblingIds,
+      );
+      if (fixed.totalVariants == member.totalVariants &&
+          _sameIds(fixed.siblingIds, member.siblingIds)) {
+        continue;
+      }
+      await chatRepository.saveMessage(fixed);
+      updated.add(fixed);
+    }
+    return updated;
+  }
+
+  /// The group fields implied by [memberIds], for applying to a message that is
+  /// not (yet) in the database.
+  ({int totalVariants, List<String> siblingIds}) variantGroupFields(
+    Set<String> memberIds,
+  ) {
+    return (
+      totalVariants: memberIds.length,
+      siblingIds: memberIds.toList()..sort(),
+    );
+  }
+
+  static bool _sameIds(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
   Future<void> doSwitchVariant({
     required int messageIndex,
     required bool previous,
@@ -444,16 +581,25 @@ mixin StreamMutationMixin on ChangeNotifier {
     if (currentMsg.siblingIds.isEmpty) return;
 
     final allSiblings = await chatRepository.getAllMessagesForThread(currentMsg.threadId);
-    final mapped = currentMsg.siblingIds.map((id) => allSiblings.firstWhere(
-      (m) => m.id == id,
-      orElse: () => currentMsg,
-    )).toList();
-    final sortedSiblings = mapped..sort((a, b) => a.variantIndex.compareTo(b.variantIndex));
+    // Resolve strictly: an id with no row (a variant that was deleted, or one
+    // belonging to another thread) is dropped, never substituted with the
+    // current message. Substituting produced a duplicate with the same
+    // variantIndex, so the target index landed on the message already displayed
+    // and the switch became a silent no-op while the button still looked live.
+    final byId = {for (final m in allSiblings) m.id: m};
+    final mapped = currentMsg.siblingIds
+        .map((id) => byId[id])
+        .whereType<ChatMessage>()
+        .toList()
+      ..sort((a, b) => a.variantIndex.compareTo(b.variantIndex));
+    if (mapped.length < 2) return;
 
-    final siblingIndex = previous ? currentMsg.variantIndex - 1 : currentMsg.variantIndex + 1;
-    if (siblingIndex < 0 || siblingIndex >= sortedSiblings.length) return;
+    final target = previous
+        ? currentMsg.variantIndex - 1
+        : currentMsg.variantIndex + 1;
+    if (target < 0 || target >= mapped.length) return;
 
-    final siblingMsg = sortedSiblings[siblingIndex];
+    final siblingMsg = mapped[target];
     if (siblingMsg.id != currentMsg.id) {
       messages[messageIndex] = siblingMsg;
       notifyListeners();
@@ -539,28 +685,34 @@ mixin StreamMutationMixin on ChangeNotifier {
     final parentId = targetMsg.parentId;
     final newAssistantId = const Uuid().v4();
     final nextVariantIndex = targetMsg.totalVariants;
-    final newTotalVariants = targetMsg.totalVariants + 1;
 
     final existingSiblings = await chatRepository.getAllMessagesForThread(targetMsg.threadId);
-    final variantSiblings = existingSiblings.where((m) => m.role == MessageRole.assistant && m.parentId == targetMsg.parentId);
-    final allSiblingIds = {...variantSiblings.map((m) => m.id), targetMsg.id, newAssistantId};
-    final completeSiblingList = allSiblingIds.toList()..sort();
-
-    final updatedOldMsg = targetMsg.copyWith(
-      variantIndex: targetMsg.variantIndex,
-      totalVariants: newTotalVariants,
-      siblingIds: completeSiblingList,
+    final variantSiblings = existingSiblings.where(
+      (m) => m.role == MessageRole.assistant && m.parentId == parentId,
     );
-    messages[messageIndex] = updatedOldMsg;
-    await chatRepository.saveMessage(updatedOldMsg);
+    final memberIds = {
+      ...variantSiblings.map((m) => m.id),
+      targetMsg.id,
+      newAssistantId,
+    };
 
-    for (final siblingMsg in existingSiblings) {
-      if (siblingMsg.id != targetMsg.id) {
-        await chatRepository.saveMessage(siblingMsg.copyWith(
-          siblingIds: completeSiblingList,
-        ));
-      }
-    }
+    // Persist the placeholder first so the group sync sees it, then normalise
+    // every member's sibling list and count from what is actually stored.
+    await chatRepository.saveMessage(ChatMessage(
+      id: newAssistantId,
+      threadId: targetMsg.threadId,
+      parentId: parentId,
+      role: MessageRole.assistant,
+      content: '',
+      status: MessageStatus.streaming,
+      variantIndex: nextVariantIndex,
+      siblingIds: memberIds.toList()..sort(),
+    ));
+    final group = variantGroupFields(memberIds);
+    await _syncVariantGroup(
+      threadId: targetMsg.threadId,
+      memberIds: memberIds,
+    );
 
     final newAssistantMsg = ChatMessage(
       id: newAssistantId,
@@ -570,8 +722,8 @@ mixin StreamMutationMixin on ChangeNotifier {
       content: '',
       status: MessageStatus.streaming,
       variantIndex: nextVariantIndex,
-      totalVariants: newTotalVariants,
-      siblingIds: completeSiblingList,
+      totalVariants: group.totalVariants,
+      siblingIds: group.siblingIds,
     );
 
     // Replace current visible message with new streaming message
@@ -579,6 +731,142 @@ mixin StreamMutationMixin on ChangeNotifier {
     notifyListeners();
 
     return (newAssistantId: newAssistantId, oldMessageId: targetMsg.id);
+  }
+
+  /// Creates a sibling variant of an assistant message that **keeps the original
+  /// text** and streams an artifact into it.
+  ///
+  /// Same variant bookkeeping as [doRegenerateMessage], but the new message is
+  /// seeded with the target's content instead of an empty string, and any image
+  /// the source already carried is deliberately *not* copied.
+  ///
+  /// Used by the roleplay scene-image flow: tapping "Generate image" produces a
+  /// new variant holding the identical dialogue plus a freshly generated picture,
+  /// so the user can flip between "text only" and "text + picture" with the
+  /// existing variant arrows, exactly as they can with regenerations. Not
+  /// inheriting the old image is what makes each tap a fresh generation from the
+  /// identity reference rather than a re-edit of the previous picture.
+  ///
+  /// Returns the new message id and the id of the message it replaced, or null
+  /// when the guard blocks the action.
+  Future<({String newAssistantId, String oldMessageId})?> doCreateImageVariant({
+    required int messageIndex,
+  }) async {
+    if (isGenerating || messageIndex < 0 || messageIndex >= messages.length) return null;
+
+    final targetMsg = messages[messageIndex];
+    if (targetMsg.role != MessageRole.assistant) return null;
+
+    final newAssistantId = const Uuid().v4();
+    final nextVariantIndex = targetMsg.totalVariants;
+
+    final existingSiblings = await chatRepository.getAllMessagesForThread(targetMsg.threadId);
+    final variantSiblings = existingSiblings.where(
+      (m) => m.role == MessageRole.assistant && m.parentId == targetMsg.parentId,
+    );
+    final memberIds = {
+      ...variantSiblings.map((m) => m.id),
+      targetMsg.id,
+      newAssistantId,
+    };
+
+    // Persist the placeholder first so the group sync sees it, then normalise
+    // every member's sibling list and count from what is actually stored.
+    await chatRepository.saveMessage(ChatMessage(
+      id: newAssistantId,
+      threadId: targetMsg.threadId,
+      parentId: targetMsg.parentId,
+      role: MessageRole.assistant,
+      content: targetMsg.content,
+      status: MessageStatus.streaming,
+      variantIndex: nextVariantIndex,
+      siblingIds: memberIds.toList()..sort(),
+    ));
+    final group = variantGroupFields(memberIds);
+    await _syncVariantGroup(
+      threadId: targetMsg.threadId,
+      memberIds: memberIds,
+    );
+
+    final newAssistantMsg = ChatMessage(
+      id: newAssistantId,
+      threadId: targetMsg.threadId,
+      parentId: targetMsg.parentId,
+      role: MessageRole.assistant,
+      content: targetMsg.content,
+      status: MessageStatus.streaming,
+      variantIndex: nextVariantIndex,
+      totalVariants: group.totalVariants,
+      siblingIds: group.siblingIds,
+    );
+
+    messages[messageIndex] = newAssistantMsg;
+    notifyListeners();
+
+    return (newAssistantId: newAssistantId, oldMessageId: targetMsg.id);
+  }
+
+  /// Reverts a failed [doCreateImageVariant], restoring the original message.
+  ///
+  /// Called when a generation produces no image: leaving the empty placeholder
+  /// (or worse, a caption-only message) behind would strand a variant the user
+  /// has to navigate away from.
+  ///
+  /// The variant group is re-synced after the delete. Restoring the original
+  /// with the bookkeeping it had *before* the placeholder existed is not enough:
+  /// the original's own copy in the database already listed the placeholder as a
+  /// sibling, so restoring it verbatim left a group advertising a variant that no
+  /// longer existed — a live-looking "next" arrow that did nothing, with the user
+  /// stranded on the old reply.
+  Future<void> doRevertVariant({
+    required int messageIndex,
+    required String newAssistantId,
+    required String oldMessageId,
+  }) async {
+    final idx = messages.indexWhere((m) => m.id == newAssistantId);
+    if (idx == -1) return;
+    // Only revert if our placeholder is still the one on screen; the user may
+    // have navigated to another variant while the request was in flight.
+    if (idx != messageIndex) return;
+    final threadId = messages[idx].threadId;
+    final parentId = messages[idx].parentId;
+
+    await chatRepository.deleteMessage(newAssistantId);
+
+    final remaining = (await chatRepository.getAllMessagesForThread(threadId))
+        .where((m) => m.role == MessageRole.assistant && m.parentId == parentId)
+        .map((m) => m.id)
+        .toSet();
+
+    ChatMessage? original;
+    for (final msg in await chatRepository.getAllMessagesForThread(threadId)) {
+      if (msg.id == oldMessageId) {
+        original = msg;
+        break;
+      }
+    }
+    if (original == null) {
+      // The original is gone too (deleted mid-flight); drop the placeholder.
+      messages.removeAt(idx);
+      notifyListeners();
+      return;
+    }
+
+    // Recompute the surviving group from what is actually stored, so the
+    // restored message no longer advertises the deleted placeholder.
+    final fields = variantGroupFields(remaining);
+    await _syncVariantGroup(
+      threadId: threadId,
+      memberIds: remaining,
+    );
+    final finalMessage = original.copyWith(
+      totalVariants: fields.totalVariants,
+      siblingIds: fields.siblingIds,
+    );
+    if (idx < messages.length) {
+      messages[idx] = finalMessage;
+    }
+    notifyListeners();
   }
 
   /// Shared head of `deleteMessage` for both VMs: guard, per-message database
